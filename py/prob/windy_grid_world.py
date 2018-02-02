@@ -1,0 +1,166 @@
+from __future__ import absolute_import, division, print_function
+from interface import Space, Problem
+import numpy as np
+from cog import draw
+
+
+def maze_from_string(maze_string,
+                     intable = " +^<>V",
+                     outtable = range(6)):
+    r"""
+    >>> maze_from_string("  +  \n  ^  \n ^^^ \n ^^^ \n  +  ")
+    array([[0, 0, 1, 0, 0],
+           [0, 0, 2, 0, 0],
+           [0, 2, 2, 2, 0],
+           [0, 2, 2, 2, 0],
+           [0, 0, 1, 0, 0]], dtype=uint8)
+
+    >>> maze_from_string("  +  \n  ^  \n < > \n ^V^ \n  +  ")
+    array([[0, 0, 1, 0, 0],
+           [0, 0, 2, 0, 0],
+           [0, 3, 0, 4, 0],
+           [0, 2, 5, 2, 0],
+           [0, 0, 1, 0, 0]], dtype=uint8)
+    """
+    maze_bytes = maze_string.encode("ascii")
+    maze_lines = maze_string.split("\n")
+    nrows = len(maze_lines)
+    ncols = max(map(len, maze_lines))
+    maze_arr = np.zeros((len(maze_lines), ncols), dtype='u1')
+    for line in maze_lines:
+        if len(line) < ncols:
+            line += ' ' * (ncols - len(line))
+    maze_ch = np.frombuffer(''.join(maze_lines).encode('ascii'), dtype='u1'
+                ).reshape(nrows, ncols)
+    for ch, replace in zip(intable, outtable):
+        maze_arr[maze_ch == ord(ch)] = replace
+    return maze_arr
+
+
+class Act2DSpace(Space):
+    NAMES = ["NORTH", "EAST", "SOUTH", "WEST"]
+    VECTORS = np.array([[0, 1], [-1, 0], [0, -1], [1, 0]])
+    def __init__(self, seed):
+        self.rng = np.random.RandomState()
+        self.rng.seed(seed)
+        
+    def sample(self):
+        return self.rng.randint(0, len(self.NAMES))
+
+    def contains(self, x):
+        return x in range(len(self.NAMES))
+
+
+class Loc2DSpace(Space):
+    def __init__(self, lower_bound, upper_bound, seed):
+        self.rng = np.random.RandomState()
+        self.rng.seed(seed)
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+        
+    def sample(self):
+        return np.array([
+            self.rng.randint(self.lower_bound[0], self.upper_bound[0]),
+            self.rng.randint(self.lower_bound[1], self.upper_bound[1])])
+
+    def contains(self, x):
+        xint = np.int64(x)
+        return np.all((self.lower_bound <= x) & (x < self.upper_bound))
+        
+
+class WindyGridWorld(object):
+    CELL_FREE = 0
+    CELL_WALL = 1
+    CELL_WIND_NEWS = [2, 3, 4, 5]
+    WIND_NEWS_NAMES = "NORTH EAST WEST SOUTH".split()
+    WIND_NEWS_VECTORS = np.array([[0, 1], [-1, 0], [1, 0], [0, -1]])
+    def __init__(self, seed, maze=None, wind_strength=0.5):
+        self.maze = maze if maze is not None else self.default_maze()
+        self.rng = np.random.RandomState()
+        self.rng.seed(seed)
+        self.wind_strength = wind_strength
+
+    def wind_dir(self, xy):
+        row, col = xy[::-1]
+        return self.wind_vectors(self.maze[row, col])
+
+    def next_pose(self, pose, act_vec):
+        wind_prob = 1 if (self.rng.uniform() < self.wind_strength) else 0
+        potential_pose = (pose + act_vec
+                          + wind_prob * self.wind_dir(pose))
+        return pose if self.iswall(potential_pose) else potential_pose
+
+    def iswall(self, xy):
+        row, col = xy[::-1]
+        try:
+            return self.maze[row, col] == self.CELL_WALL
+        except IndexError as e:
+            return True
+        
+
+    def wind_vectors(self, cell_code):
+        if cell_code not in  self.CELL_WIND_NEWS:
+            return np.array([0, 0])
+        else:
+            return self.WIND_NEWS_VECTORS[cell_code - self.CELL_WIND_NEWS[0]]
+
+    def render(self, canvas, grid_size):
+        nrows, ncols = self.maze.shape
+        for r, c in np.ndindex(*self.maze.shape):
+            bottom_left = np.array([c, (nrows - r)]) * grid_size
+            if iswall((c,r)):
+                draw.rectangle(canvas, bottom_left, bottom_left + grid_size,
+                               color=draw.color_from_rgb((0,0,0)),
+                               thickness = -1)
+            elif np.any(self.wind_dir((c,r))):
+                center = bottom_left + 0.5 * grid_size
+                wind_dir = self.wind_dir((c,r))
+                pt1 = center - 0.5*wind_dir
+                pt2 = center + 0.5*wind_dir
+                draw.arrowedLine(canvas, pt1, pt2)
+                
+        return canvas
+
+    @property
+    def shape(self):
+        return self.maze.shape
+
+        
+
+    @classmethod
+    def default_maze(self):
+        return maze_from_string("\n".join([
+            "  +  ",
+            "  ^  ",
+            " ^^^ ",
+            " ^^^ ",
+            "  +  "]))
+        
+
+class AgentInGridWorld(Problem):
+    def __init__(self, seed, grid_world, pose):
+        self.grid_world        = grid_world
+        self.pose              = pose
+        self.action_space      = Act2DSpace(seed)
+        self.observation_space = Loc2DSpace(
+            lower_bound = np.array([0, 0]),
+            upper_bound = np.array(grid_world.shape),
+            seed        = seed) 
+
+    def step(self, act):
+        self.pose = self.grid_world.next_pose(
+            self.pose,
+            self.action_space.VECTORS[act])
+        return self.pose
+
+    def observation(self):
+        return self.pose
+
+    def render(self, canvas, grid_size=100):
+        self.grid_world.render(canvas, grid_size)
+        draw.rectangle(canvas, self.pose, self.pose + grid_size,
+                       color=draw.color_from_rgb(255, 0, 0),
+                       thickness = -1)
+        return canvas
+
+        
