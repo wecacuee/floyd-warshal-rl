@@ -1,5 +1,5 @@
 from __future__ import absolute_import, division, print_function
-from interface import Space, Problem
+from game.interface import Space, Problem
 import numpy as np
 from cog import draw
 
@@ -38,8 +38,8 @@ def maze_from_string(maze_string,
 
 
 class Act2DSpace(Space):
-    NAMES = ["NORTH", "EAST", "SOUTH", "WEST"]
-    VECTORS = np.array([[0, 1], [-1, 0], [0, -1], [1, 0]])
+    NAMES = ["NORTH", "EAST", "WEST",  "SOUTH"]
+    VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
     def __init__(self, seed):
         self.rng = np.random.RandomState()
         self.rng.seed(seed)
@@ -73,7 +73,7 @@ class WindyGridWorld(object):
     CELL_WALL = 1
     CELL_WIND_NEWS = [2, 3, 4, 5]
     WIND_NEWS_NAMES = "NORTH EAST WEST SOUTH".split()
-    WIND_NEWS_VECTORS = np.array([[0, 1], [-1, 0], [1, 0], [0, -1]])
+    WIND_NEWS_VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
     def __init__(self, seed, maze=None, wind_strength=0.5):
         self.maze = maze if maze is not None else self.default_maze()
         self.rng = np.random.RandomState()
@@ -88,10 +88,13 @@ class WindyGridWorld(object):
         wind_prob = 1 if (self.rng.uniform() < self.wind_strength) else 0
         potential_pose = (pose + act_vec
                           + wind_prob * self.wind_dir(pose))
-        return pose if self.iswall(potential_pose) else potential_pose
+        next_p = pose if self.iswall(potential_pose) else potential_pose
+        return next_p
 
     def iswall(self, xy):
         row, col = xy[::-1]
+        if np.any(np.asarray(xy) < 0):
+            return True
         try:
             return self.maze[row, col] == self.CELL_WALL
         except IndexError as e:
@@ -105,27 +108,34 @@ class WindyGridWorld(object):
             return self.WIND_NEWS_VECTORS[cell_code - self.CELL_WIND_NEWS[0]]
 
     def render(self, canvas, grid_size):
+        if canvas is None:
+            canvas = draw.white_img(self.maze.shape)
+
         nrows, ncols = self.maze.shape
         for r, c in np.ndindex(*self.maze.shape):
-            bottom_left = np.array([c, (nrows - r)]) * grid_size
-            if iswall((c,r)):
+            bottom_left = np.array([c, r]) * grid_size
+            if self.iswall((c,r)):
                 draw.rectangle(canvas, bottom_left, bottom_left + grid_size,
                                color=draw.color_from_rgb((0,0,0)),
                                thickness = -1)
-            elif np.any(self.wind_dir((c,r))):
+            else:
+                draw.rectangle(canvas, bottom_left, bottom_left + grid_size,
+                               color=draw.color_from_rgb((0,0,0)),
+                               thickness = 1)
+
+            if np.any(self.wind_dir((c,r))):
                 center = bottom_left + 0.5 * grid_size
                 wind_dir = self.wind_dir((c,r))
                 pt1 = center - 0.5*wind_dir
                 pt2 = center + 0.5*wind_dir
-                draw.arrowedLine(canvas, pt1, pt2)
+                draw.arrowedLine(canvas, pt1, pt2,
+                                 draw.color_from_rgb((0,0,0)))
                 
         return canvas
 
     @property
     def shape(self):
         return self.maze.shape
-
-        
 
     @classmethod
     def default_maze(self):
@@ -140,7 +150,7 @@ class WindyGridWorld(object):
 class AgentInGridWorld(Problem):
     def __init__(self, seed, grid_world, pose):
         self.grid_world        = grid_world
-        self.pose              = pose
+        self.pose              = np.asarray(pose)
         self.action_space      = Act2DSpace(seed)
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
@@ -156,11 +166,25 @@ class AgentInGridWorld(Problem):
     def observation(self):
         return self.pose
 
-    def render(self, canvas, grid_size=100):
+    def render(self, canvas=None, grid_size=100):
+        if canvas is None:
+            canvas = draw.white_img(self.grid_world.shape)
         self.grid_world.render(canvas, grid_size)
-        draw.rectangle(canvas, self.pose, self.pose + grid_size,
-                       color=draw.color_from_rgb(255, 0, 0),
+        top_left = self.pose * grid_size
+        draw.rectangle(canvas, top_left, top_left + grid_size,
+                       color=draw.color_from_rgb((255, 0, 0)),
                        thickness = -1)
         return canvas
 
         
+if __name__ == '__main__':
+    agent = AgentInGridWorld(
+        0,
+        grid_world=WindyGridWorld(0, WindyGridWorld.default_maze()),
+        pose=[1, 1])
+
+    for i in range(10):
+        pose = agent.step(np.random.randint(4))
+        cnvs = agent.render(canvas=draw.white_img(agent.grid_world.shape))
+        draw.imshow("c", cnvs)
+        draw.waitKey(2000)

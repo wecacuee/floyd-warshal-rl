@@ -21,13 +21,17 @@ white_img
 circle
 fillConvexPoly
 line
+arrowedLine
 rectangle
 polylines
 putText
 imshow
 imwrite
 waitKey
-namedWindow""".split()
+namedWindow
+destroyWindow
+destroyAllWindows
+""".split()
 for n in IMPORT_NAMES:
     globals()[n] = getattr(backend, n)
 
