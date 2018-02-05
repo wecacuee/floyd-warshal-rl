@@ -5,10 +5,12 @@ import numpy as np
 import matplotlib as mpl
 from matplotlib.figure import Figure
 
+
 def is_cv2_matplotlib(cv2):
     if hasattr(cv2, 'am_i_matplotlib'):
         return cv2.am_i_matplotlib
     return False
+
 
 class MPLAsCV(object):
     """
@@ -32,8 +34,6 @@ class MPLAsCV(object):
         ax.axis('equal')
         ax.set_xlim(0, imgsize[1])
         ax.set_ylim(0, imgsize[0])
-        #ax.set_xticks([])
-        #ax.set_yticks([])
         return ax
 
     def namedWindow(self, name, flags=None):
@@ -132,15 +132,22 @@ class MPLAsCV(object):
         self.fig_manager[name].canvas.draw()
         self.fig_manager[name].show()
 
-
     def waitKey(self, milliseconds):
         from matplotlib.backends.backend_tkagg import Tk
+        key_pressed = [None]
+        def callback(event):
+            key_pressed[0] = event.key
+        
         if milliseconds <= 0:
-            for manager in self.fig_manager.values():
-                manager.show()
-            Tk.mainloop()
+            while key_pressed[0] is None:
+                for manager in self.fig_manager.values():
+                    manager.show()
+                    manager.canvas.mpl_connect('key_press_event', callback)
+                    manager.canvas._master.update()
+                time.sleep(1e-8)
         else:
             time.sleep(milliseconds/1000.)
+        return key_pressed[0]
 
     def imwrite(self, filename, ax):
         fig = plt.gcf()
@@ -168,6 +175,7 @@ class MPLAsCV(object):
 
     def __del__(self):
         self.destroyAllWindows()
+
 
 if __name__ == '__main__':
     WAIT_msecs = 1000

@@ -183,8 +183,11 @@ if __name__ == '__main__':
         grid_world=WindyGridWorld(0, WindyGridWorld.default_maze()),
         pose=[1, 1])
 
+    direc_ = dict(w=0, a=1, d=2, x=3)
+    k = np.random.randint(4)
     for i in range(10):
-        pose = agent.step(np.random.randint(4))
+        pose = agent.step(k)
         cnvs = agent.render(canvas=draw.white_img(agent.grid_world.shape))
         draw.imshow("c", cnvs)
-        draw.waitKey(2000)
+        k = direc_[draw.waitKey(-1)]
+        print(f"key = {k}")
