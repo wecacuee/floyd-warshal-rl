@@ -149,10 +149,12 @@ class WindyGridWorld(object):
         
 
 class AgentInGridWorld(Problem):
-    def __init__(self, seed, grid_world, pose):
+    def __init__(self, seed, grid_world, pose, goal_pose, goal_reward):
         self.grid_world        = grid_world
         self.pose              = np.asarray(pose)
         self.action_space      = Act2DSpace(seed)
+        self.goal_pose         = np.asarray(goal_pose)
+        self.goal_reward       = goal_reward
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
@@ -164,13 +166,23 @@ class AgentInGridWorld(Problem):
             self.action_space.VECTORS[act])
         return self.pose
 
+    def reward(self):
+        return self.goal_reward if (np.all(self.goal_pose == self.pose)) else 0
+
     def observation(self):
         return self.pose
 
-    def render(self, canvas=None, grid_size=100):
+    def render(self, canvas, grid_size):
         if canvas is None:
             canvas = draw.white_img(self.grid_world.shape)
         self.grid_world.render(canvas, grid_size)
+        # Render goal
+        goal_top_left = self.goal_pose * grid_size
+        draw.rectangle(canvas, goal_top_left, goal_top_left + grid_size,
+                       color=draw.color_from_rgb((0, 255, 0)),
+                       thickness=-1)
+
+        # Render agent
         top_left = self.pose * grid_size
         draw.rectangle(canvas, top_left, top_left + grid_size,
                        color=draw.color_from_rgb((255, 0, 0)),
@@ -179,16 +191,18 @@ class AgentInGridWorld(Problem):
 
         
 if __name__ == '__main__':
-    agent = AgentInGridWorld(
-        0,
-        grid_world=WindyGridWorld(0, WindyGridWorld.default_maze()),
-        pose=[1, 1])
+    agent = AgentInGridWorld(0,
+        grid_world  = WindyGridWorld(0, WindyGridWorld.default_maze()),
+        pose        = [1, 1],
+        goal_pose   = [3, 4],
+        goal_reward = 10)
 
     direc_ = dict(w=0, a=1, d=2, x=3)
     k = np.random.randint(4)
     for i in range(10):
         pose = agent.step(k)
-        cnvs = agent.render(canvas=draw.white_img(agent.grid_world.shape))
+        rew = agent.reward()
+        print(f"rew = {rew}")
+        cnvs = agent.render(canvas=draw.white_img(agent.grid_world.shape), grid_size=100)
         draw.imshow("c", cnvs)
         k = direc_[draw.waitKey(-1)]
-        print(f"key = {k}")
