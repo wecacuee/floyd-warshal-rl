@@ -1,8 +1,16 @@
 from __future__ import absolute_import, division, print_function
 
 class Space(object):
+    def values():
+        raise NotImplementedError()
+
+    @property
+    def size():
+        raise NotImplementedError()
+
     def sample(self):
         raise NotImplementedError()
+
     def contains(self, x):
         raise NotImplementedError()
 
@@ -25,6 +33,9 @@ class Problem(object):
     def reset(self):
         raise NotImplementedError()
 
+    def episode_reset(self):
+        raise NotImplementedError()
+
     def render(self):
         raise NotImplementedError()
 
@@ -45,13 +56,16 @@ class Alg(object):
     action_space = Space()
     observation_space = Space()
     reward_range = Space()
-    def step(self, obs, reward):
+    def update(self, obs, act, reward):
         raise NotImplementedError()
 
-    def action(self):
+    def policy(self, obs):
         raise NotImplementedError()
 
     def reset(self):
+        raise NotImplementedError()
+
+    def episode_reset(self):
         raise NotImplementedError()
 
     def close(self):
@@ -73,10 +87,20 @@ def play(alg, prob, nepisodes):
         play_episode(alg, prob)
 
 def play_episode(alg, prob):
+    obs, rew = prob.observation()
+    action = prob.action_space.sample()
     while not (prob.done() or alg.done()):
-        obs, rew = prob.observation()
-        action = alg.step(obs, rew)
-        prob.step(action)
-    prob.reset()
-    alg.reset()
+        alg.update(obs, action, rew)
+        action = alg.policy(obs)
+        obs, rew = prob.step(action)
+    prob.episode_reset()
+    alg.episode_reset()
         
+def play_from_conf(conf):
+    play(conf.alg, conf.prob, conf.nepisodes)
+
+if __name__ == '__main__':
+    import sys
+    from conf.default import Conf
+    conf = Conf.parse_all_args(sys.argv[1:])
+    play_from_conf(conf)

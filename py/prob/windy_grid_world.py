@@ -49,15 +49,22 @@ class Act2DSpace(Space):
         return self.rng.randint(0, len(self.NAMES))
 
     def contains(self, x):
-        return x in range(len(self.NAMES))
+        return x in self.values()
+
+    def values(self):
+        return range(self.size)
+
+    @property
+    def size(self):
+        return len(self.NAMES)
 
 
 class Loc2DSpace(Space):
     def __init__(self, lower_bound, upper_bound, seed):
         self.rng = np.random.RandomState()
         self.rng.seed(seed)
-        self.lower_bound = lower_bound
-        self.upper_bound = upper_bound
+        self.lower_bound = np.asarray(lower_bound)
+        self.upper_bound = np.asarray(upper_bound)
         
     def sample(self):
         return np.array([
@@ -149,21 +156,24 @@ class WindyGridWorld(object):
         
 
 class AgentInGridWorld(Problem):
-    def __init__(self, seed, grid_world, pose, goal_pose, goal_reward):
+    def __init__(self, seed, grid_world, start_pose, goal_pose, goal_reward, max_steps):
         self.grid_world        = grid_world
-        self.pose              = np.asarray(pose)
+        self.pose              = np.asarray(start_pose)
         self.action_space      = Act2DSpace(seed)
         self.goal_pose         = np.asarray(goal_pose)
         self.goal_reward       = goal_reward
+        self.max_steps         = max_steps
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
             seed        = seed) 
+        self.episode_reset()
 
     def step(self, act):
         self.pose = self.grid_world.next_pose(
             self.pose,
             self.action_space.VECTORS[act])
+        self.steps += 1
         return self.pose
 
     def reward(self):
@@ -188,6 +198,12 @@ class AgentInGridWorld(Problem):
                        color=draw.color_from_rgb((255, 0, 0)),
                        thickness = -1)
         return canvas
+
+    def episode_reset(self):
+        self.steps = 0
+
+    def done(self):
+        return self.steps >= self.max_steps
 
         
 if __name__ == '__main__':
