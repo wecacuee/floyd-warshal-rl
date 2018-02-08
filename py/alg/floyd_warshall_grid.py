@@ -26,7 +26,7 @@ class FloydWarshallAlgDiscrete(Alg):
         self.reset()
 
     def episode_reset(self):
-        self.state_value    = self._default_state_value((0,))
+        self.state_value[:]    = 0
         self.top_m_states   = PriorityQueue(maxsize=self.top_value_queue_size)
         self.last_state_idx = None
 
@@ -35,6 +35,7 @@ class FloydWarshallAlgDiscrete(Alg):
         self.rng.seed(self.seed)
         self.path_value     = self._default_path_value(
             (0, self.action_space.size, 0))
+        self.state_value    = self._default_state_value((0,))
         self.hash_state     = dict()
         self.episode_reset()
 
@@ -50,18 +51,17 @@ class FloydWarshallAlgDiscrete(Alg):
         if self.path_value.size:
             new_path_value[:self.path_value.shape[0],
                            : ,
-                           :self.path_value.shape[1]] = self.path_value
+                           :self.path_value.shape[2]] = self.path_value
         return new_path_value
 
-    def _resize_state_value(self, new_shape):
-        new_state_value = self._default_state_value(new_shape)
+    def _resize_state_value(self, new_size):
+        new_state_value = self._default_state_value((new_size, ))
         if self.state_value.size:
-            new_state_value[:self.state.shape[0]
-                        , :self.state_value.shape[1]] = self.state_value
+            new_state_value[:self.state_value.shape[0]] = self.state_value
         return new_state_value
     
     def egreedy(self, greedy_act):
-        sample_egreedy = (self.rng.rand() <= egreedy_epsilon)
+        sample_egreedy = (self.rng.rand() <= self.egreedy_epsilon)
         return self.action_space.sample() if sample_egreedy else greedy_act
 
     def _state_from_obs(self, obs):
@@ -69,13 +69,13 @@ class FloydWarshallAlgDiscrete(Alg):
         return state
 
     def _state_idx_from_obs(self, obs):
-        state = self._state_from_obs(obs)
+        state = tuple(self._state_from_obs(obs))
         if state not in self.hash_state:
             # A new state has been visited
             state_idx = self.hash_state[state] = max(
                 self.hash_state.values(), default=-1) + 1
             self.path_value = self._resize_path_value(state_idx + 1)
-            self.state_value = self._resize_state_value((state_idx + 1,))
+            self.state_value = self._resize_state_value(state_idx + 1)
         else:
             state_idx = self.hash_state[state]
         return state_idx
@@ -85,9 +85,9 @@ class FloydWarshallAlgDiscrete(Alg):
 
     def policy(self, obs):
         state = self._state_from_obs(obs)
-        state_idx = self.hash_state[state]
+        state_idx = self.hash_state[tuple(state)]
         value_per_action = lambda a : max(
-            self.top_m_states, key = lambda s: self._value(state, a, s))
+            self.top_m_states.queue, key = lambda s: self._value(state_idx, a, s[1]))
         return max(self.action_space.values(), key = value_per_action)
 
     def update(self, obs, act, rew):
@@ -112,22 +112,20 @@ class FloydWarshallAlgDiscrete(Alg):
 
         # Update the top m states
         if not self.top_m_states.full():
-            self.top_m_states.put(self.state_value[state_idx], state_idx)
+            self.top_m_states.put((self.state_value[state_idx], state_idx))
 
-        if self.state_value[state_idx] > self.top_m_states.get()[0]:
-            _ = self.top_m_states.pop()
-            self.top_m_states.push(self.state_value[state_idx], state_idx)
+        top_value, top_state_idx = self.top_m_states.get()
+        if self.state_value[state_idx] > top_value:
+            self.top_m_states.put((self.state_value[state_idx], state_idx))
+        else:
+            self.top_m_states.put((top_value, top_state_idx))
 
         # Update step from Floyd Warshall algorithm
         # This is an expensive step depending up on the number of states
         self.path_value = np.maximum(
             self.path_value,
             self.path_value[..., -1:] + self.path_value[-1:, :, :])
-
-        greedy_act = self.policy(state_idx)
-        self.act = self.egreedy(greedy_act)
         self.last_state_idx = state_idx
-        return self.act
 
     def close(self):
         pass

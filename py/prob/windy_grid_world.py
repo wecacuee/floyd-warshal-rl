@@ -46,7 +46,8 @@ class Act2DSpace(Space):
         self.rng.seed(seed)
         
     def sample(self):
-        return self.rng.randint(0, len(self.NAMES))
+        act = self.rng.randint(self.size)
+        return act
 
     def contains(self, x):
         return x in self.values()
@@ -72,6 +73,9 @@ class Loc2DSpace(Space):
             self.rng.randint(self.lower_bound[1], self.upper_bound[1])])
 
     def contains(self, x):
+        ndim = self.lower_bound.ndim
+        if x.shape[-ndim:] != self.lower_bound.shape:
+            return False
         xint = np.int64(x)
         return np.all((self.lower_bound <= x) & (x < self.upper_bound))
         
@@ -107,7 +111,6 @@ class WindyGridWorld(object):
             return self.maze[row, col] == self.CELL_WALL
         except IndexError as e:
             return True
-        
 
     def wind_vectors(self, cell_code):
         if cell_code not in  self.CELL_WIND_NEWS:
@@ -167,6 +170,7 @@ class AgentInGridWorld(Problem):
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
             seed        = seed) 
+        assert self.observation_space.contains(self.pose)
         self.episode_reset()
 
     def step(self, act):
@@ -174,7 +178,7 @@ class AgentInGridWorld(Problem):
             self.pose,
             self.action_space.VECTORS[act])
         self.steps += 1
-        return self.pose
+        return self.pose, self.reward()
 
     def reward(self):
         return self.goal_reward if (np.all(self.goal_pose == self.pose)) else 0
@@ -182,7 +186,7 @@ class AgentInGridWorld(Problem):
     def observation(self):
         return self.pose
 
-    def render(self, canvas, grid_size):
+    def render(self, canvas, grid_size, wait_time=0):
         if canvas is None:
             canvas = draw.white_img(self.grid_world.shape)
         self.grid_world.render(canvas, grid_size)
@@ -197,6 +201,8 @@ class AgentInGridWorld(Problem):
         draw.rectangle(canvas, top_left, top_left + grid_size,
                        color=draw.color_from_rgb((255, 0, 0)),
                        thickness = -1)
+        if wait_time != 0:
+            draw.imshow(self.__class__.__name__, canvas)
         return canvas
 
     def episode_reset(self):

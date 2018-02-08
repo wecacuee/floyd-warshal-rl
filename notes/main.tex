@@ -1,0 +1,79 @@
+\documentclass{article} % For LaTeX2e
+\pdfoutput=1
+\pdfpagewidth=8.5in
+\pdfpageheight=11in
+\usepackage{times}
+\usepackage[utf8]{inputenc}
+\usepackage[small]{caption}
+\usepackage{natbib}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+% Default for LaTeX is to allow up to 70% of the top of a page to be float (set by \topfraction as .7); up to 30% of the bottom of the page (set by \bottomfraction as .3) and at least 20% text (set by \textfraction as .2). Perhaps increase \topfraction using \renewcommand{\topfraction}{.75} as a start.
+%  I was able to specify that only pages with more than 80% of floats, will become pure float-only pages. The default is 0.6 so if a figure consumes 60% of the page it will get its own float-page. 
+\renewcommand{\topfraction}{0.8}%
+\renewcommand{\floatpagefraction}{.8}%
+\input{phd-proposal-preamble}
+\title{A differentiable Floyd Warshall algorithm}
+
+\newif\iffinal
+\finalfalse
+
+\iffinal
+\author{Vikas Dhiman$^1$\footnotemark[1],%
+  \, Shurjo Banerjee$^1$\thanks{The first two authors contributed equally.},%
+  \, Jeffrey M Siskind$^2$,%
+  \, Jason J Corso$^1$\\
+$^1$EECS, University of Michigan,
+Ann Arbor, MI
+\and
+$^2$ECE, Purdue University,
+West Lafayette, IN\\
+\texttt{$^1$\{dhiman,shurjo,jjcorso\}@umich.edu,$^2$qobi@purdue.edu} \\
+}
+\else
+\author{Anonymized}
+\fi
+
+% The \author macro works with any number of authors. There are two commands
+% used to separate the names and addresses of multiple authors: \And and \AND.
+%
+% Using \And between authors leaves it to \LaTeX{} to determine where to break
+% the lines. Using \AND forces a linebreak at that point. So, if \LaTeX{}
+% puts 3 of 4 authors names on the first line, and the last on the second
+% line, try using \AND instead of \And before the third author name.
+
+%\iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
+
+% Document Outline
+% - Summary and marketing
+% - Short tutorial on Deep reinforcement learning upto Nav-A3C
+% - Describe the setup:
+%    + What is the game
+%       * What are the constants
+%       * What are the variables that will be varied
+%    + Reward design
+% - How the setup is varied for various arguments
+% - What are the questions that we want to answer?
+% - Why do we do the experiments that we do?
+% - What do the experiments tell us?
+% - Summary
+\begin{document}
+\maketitle
+\begin{abstract}
+  If Value iteration is a generalization of Dijkstra's algorithm.
+  The what is the generalization of Floyd-Warshall algorithm.
+\end{abstract}
+
+\input{diff-floyd-warshall}
+
+{\small
+\IfFileExists{/z/home/dhiman/wrk/group-bib/shared.bib}{
+  \bibliography{/z/home/dhiman/wrk/group-bib/shared,main,main_filtered}
+}{
+  \bibliography{main,main_filtered}
+}
+\bibliographystyle{named}
+}
+
+\end{document}

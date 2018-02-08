@@ -1,0 +1,83 @@
+Let the reward be generated from two functions $\Rew_{e} : \State \rightarrow [0, \infty)$ and
+  $ \Rew_{\text{map}} : \State \times \Action \rightarrow [0, \infty) $.
+    Let the $\Rew_{e}$ be volatile, i.e. it changes for each episode $e$.
+    Let $\Rew_{\text{map}}$ be stationary i.e. it be stable for the map.
+\begin{figure}%[14]{r}{0.5\textwidth}
+  \begin{minipage}[t]{0.5\textwidth}
+    \begin{algorithm}[H]
+      \KwData{Graph $\graph = (\vtces, \edges)$\;
+      Distance between vertices $\wts(\edges)$ \;
+      }
+      Let $\distM^{(0)}(i, j) = \wts(\edges)$ be the shortest known path from point $i$ and point $j$. \;
+      If $(i, j) \notin \edges$ then $\distM^{(0)}(\edges) = \infty$ \;
+      \For{$k \leftarrow 1$ \KwTo $|\vtces|$}{
+        $\distM^{(k)}(i, j) = \min(\distM^{(k)}(i, j), \distM^{(k-1)}(i, k) + \distM^{(k-1)}(k, j))$
+        $\forall i,j \in V$
+        \;
+      }
+      \KwResult{To follow the shortest path $i$ to $j$, follow the
+        neighbors that smallest $\distM^{(|V|)}$\;
+        $\policy(i) = \arg \min_{k \in N(i)} \distM^{(|V|)}(k, j)$\;
+      }
+      \caption{\small Floyd-Warshall Algorithm for shortest distance between all point pairs.}
+      \label{alg:floyd-warshall}
+    \end{algorithm}
+  \end{minipage}%
+  \begin{minipage}[t]{0.5\textwidth}
+  \end{minipage}
+  \caption{Floyd-Warshall algorithm converted to a differentiable soft version}
+\end{figure}%
+
+    \begin{algorithm}
+      \KwData{Graph $\graph_0 = (\vtces_0, \edges_0)$\;
+        $\vtces_0 = \nil$, $\edges_0 = \nil$\;
+      }
+      Let $\prew(\state_i, \act_i, \state_j)$ be the path reward for going from $\state_i$ to state $\state_j$ \;
+      Initialize $\prew(\state_i, \act_i, \state_j; \param_{\prew}) = 0$ \;
+      Initialize $\Value(\state_i; \param_{\Value}) = \Value_{\text{max}}$ \;
+      Initialize $\vma = 0.1$, $\prewma = 0.9$ \;
+      \tcc{Keep a record of most favourable states}
+      Initialize $\maxValueBeam = \{ s_k \}_{k=1}^{m}$ \;
+      Observe $\meas_0$ from environment\;
+      \For{$t \leftarrow 1$ \KwTo $\epiT$}{
+        Take action $\act_{t-1}$\;
+        Observe $\meas_t$, $\rew_t$\;
+        Encode state $\state_t = \ObsEnc(\measurements; \param_E)$\;
+        $\vtces_t = \vtces_{t-1} \cup \{ \state_t \}$\;
+        $\edges_t = \edges_{t-1} \cup \{ (\state_{t-1}, \act_{t-1}, \state_t, \rew_t) \}$\;
+        \For{$(\state_i, \act_i, \state_j, \rew_j)$ in replay memory $\edges_t$}{
+          \tcc{Split $\rew$ into two parts path value and state value.}
+            $\prew(\state_{i}, \act_i, \state_{j}) = (1-\prewma)\rew_j + \prewma \prew(\state_{i}, \act_i, \state_{j}) $\;
+            $\Value(\state_{i}) = (1-\vma) (\rew_j - \prew(\state_{i}, \act_i, \state_{j})) + \vma \Value(\state_{i})$\;
+            \If{ $\exists \state_m \in \maxValueBeam \mid \Value(\state_i) > \Value(\state_m)$  }{
+              
+              Replace $\state_m$ in $\maxValueBeam$ with $\state_i$\;
+            }
+        }
+      }
+      \KwResult{To follow the shortest path $\state_i$ to $\state_j$, follow the
+        neighbors with highest $\prew$\;
+        $\policy(\state_k) = \arg \max_{\act_k \in \Action, \state_m \in \maxValueBeam} \prew(\state_k, \act_k, \state_m) + \Value(\state_m)$\;
+      }
+      \caption{\small An online version of Floyd-Warshall algorithm}
+      \label{alg:floyd-warshall}
+    \end{algorithm}
+
+What do we learn from this?
+
+\subsection{Pros and Cons}
+\begin{tabular}{p{0.5\textwidth}p{0.5\textwidth}}
+  \toprule
+  Pros & Cons \\
+  \midrule
+\begin{enumerate}
+  \item Some problems might need decomposition of short term value of the state space vs long term value of the state space.
+  \item Temporal decomposition of value space.
+\end{enumerate}
+ & 
+\begin{enumerate}
+  \item It is slow
+\end{enumerate}
+
+\\ \bottomrule
+\end{tabular}

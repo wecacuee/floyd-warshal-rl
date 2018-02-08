@@ -87,12 +87,14 @@ def play(alg, prob, nepisodes):
         play_episode(alg, prob)
 
 def play_episode(alg, prob):
-    obs, rew = prob.observation()
+    obs = prob.observation()
+    rew = prob.reward()
     action = prob.action_space.sample()
     while not (prob.done() or alg.done()):
         alg.update(obs, action, rew)
-        action = alg.policy(obs)
+        action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
+        prob.render(None, 100, wait_time=30)
     prob.episode_reset()
     alg.episode_reset()
         

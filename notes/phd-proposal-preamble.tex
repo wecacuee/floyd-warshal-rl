@@ -1,0 +1,384 @@
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{bbm}
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{pifont}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{bbm}
+\usepackage{bm}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage[font={scriptsize}]{caption}
+\usepackage{pgfgantt}
+\usetikzlibrary{shadows,trees,calc}
+
+\SetAlFnt{\scriptsize}
+\graphicspath{{./mutloc-files/diagrams/}{./mutloc-files/media/}{./media/}{BaDhGrICLR2018/gennav/exp-results/}}
+
+\newcommand\Chapter[3]{
+  \chapter[#1]{{#1}}
+}
+
+
+% Reconciling notation used in the papers
+% mutloc-files/preamble.tex
+\newcommand{\pdftexprefix}{./mutloc-files/media/}
+\newcommand{\pdftexprefixdiagrams}{./mutloc-files/diagrams}
+\newcommand{\mediaprefix}[1]{\pdftexprefix/}
+\newcommand{\tickYes}{\checkmark}
+\newcommand{\tickNo}{\hspace{1pt}\ding{55}}
+
+\newcommand{\improvementfolds}{ten}
+\newcommand{\meanartktranserr}{0.57m}
+\newcommand{\meanmutloctranserr}{0.016m}
+\newcommand{\meanbundlertranserr}{0.20m}
+\newcommand{\meanartkroterr}{$9.2^\circ$}
+\newcommand{\meanmutlocroterr}{$0.33^\circ$}
+\newcommand{\meanbundlerroterr}{$0.016^\circ$}
+% Vector
+\newcommand{\vect}[1]{\mathbf{#1}}
+\newcommand{\hvect}[1]{\bar{\vect{#1}}}
+% unit vector
+\newcommand{\uvect}[1]{\hat{\vect{#1}}}
+% Field
+\newcommand{\field}[1]{\mathbb{#1}}
+% Trace
+\DeclareMathOperator{\Tr}{Tr}
+\DeclareMathOperator{\Ml}{Ml}
+
+% Robot p and robot 
+\newcommand{\robp}{p}
+\newcommand{\robq}{q}
+\newcommand{\cam}{C}
+\newcommand{\camp}{C_\robp}
+\newcommand{\camq}{C_\robq}
+\newcommand{\mrkr}{M}
+\newcommand{\posD}[1]{\vect{#1}}
+\newcommand{\posDp}{\posD{\robp}}
+\newcommand{\posDq}{\posD{\robq}}
+\newcommand{\imgp}[1]{\hvect{#1}}
+\newcommand{\imgpp}{\imgp{\robp}}
+\newcommand{\imgpq}{\imgp{\robq}}
+\newcommand{\intm}{K}
+\newcommand{\intmp}{\intm_p}
+\newcommand{\intmq}{\intm_q}
+\newcommand{\bear}[1]{\uvect{#1}}
+\newcommand{\bearp}{\bear{\robp}}
+\newcommand{\bearq}{\bear{\robq}}
+\newcommand{\noise}{\eta}
+\newcommand{\rot}{R} % FIXME: conflicts with reward \Rew
+\newcommand{\trans}{\vect{t}} % time?
+\newcommand{\proj}{\pi}
+\newcommand{\dist}{\gamma}
+\newcommand{\sylvD}{\text{SD}}
+
+% occgrid-files/preamble.tex
+\newcommand{\Real}[0]{\field{R}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+% Map
+\def\map{\vect{x}}
+\newcommand{\est}[1]{\hat{#1}}
+\newcommand{\mapest}{\est{\vect{x}}}
+% Measurement or observation
+\newcommand{\meas}{z}
+\newcommand{\measurements}{\vect{\meas}_{1:t}}
+\newcommand{\meast}[1][t]{\meas_{#1}}
+
+% Measurement or observation robot 2
+\newcommand{\measrii}{y}
+\newcommand{\measurementsrii}{\vect{\measrii}_{1:t}}
+\newcommand{\measriit}[1][t]{\measrii_{#1}}
+% Pose
+\newcommand{\pose}{g}
+\newcommand{\poset}[1][t]{\pose_{#1}}
+\newcommand{\posetn}{\pose_{t+1}}
+\newcommand{\posetp}{\pose_{t-1}}
+\newcommand{\poses}{\vect{\pose}_{1:t}}
+\newcommand{\posest}{\est{\pose}}
+\newcommand{\posestt}{\est{\pose}_t}
+
+% Pose robot 2
+\newcommand{\poserii}{h}
+\newcommand{\poseriit}[1][t]{\poserii_{#1}}
+\newcommand{\poseriitn}{\poserii_{t+1}}
+\newcommand{\poseriitp}{\poserii_{t-1}}
+\newcommand{\posesrii}{\vect{\poserii}}
+\newcommand{\posestriit}{\est{\poserii}_t}
+
+% Pose goal 
+\newcommand{\posegoal}{d}
+
+\newcommand{\unaryminus}{\scalebox{0.5}[0.5]{\( - \)}}
+\newcommand{\prevtime}{1:t\unaryminus1}
+\newcommand{\pastposes}{\vect{\pose}_{\prevtime}}
+\newcommand{\pastmeas}{\vect{\meas}_{\prevtime}}
+\newcommand{\pastobs}{\pastmeas, \pastposes}
+
+\newcommand{\mutlocest}{f_{\text{mutloc}}}
+\newcommand{\epiT}{T}
+\newcommand{\spawnP}{P_{\text{spawn}}}
+
+\newcommand{\param}{\theta}
+\newcommand{\policy}{\chi}
+
+% CVPR16
+%\DeclareMathSymbol{\Tangent}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\sech}{sech}
+\DeclareMathOperator{\poly}{poly}
+%\DeclareMathOperator*{\argmin}{\arg\min}
+
+\newcommand{\ptD}{\posDp} % FIXME: conflicts with \map, this should be \posDp
+\newcommand{\Obj}{C} % In mutloc C_p and C_q used for robots
+\newcommand{\ObjMu}{\vect{m}} % FIXME: in mutloc used as 3D pos of markers in frame 1, this should \pose
+\newcommand{\ObjR}{\bm{\omega}}
+\newcommand{\ObjSigma}{\bm{\Sigma}}
+\newcommand{\Logst}{\mathcal{L}}
+\newcommand{\OccF}{f_{\text{occ}}}
+\newcommand{\gOccF}{\nabla \OccF}
+\newcommand{\gOccFi}{\nabla \OccF^i}
+\newcommand{\impt}{\imgp{\ptD}}
+% Mahalonobis distance between to points
+\newcommand{\mahaF}{\zeta} % FIXME: use some greek letter
+\newcommand{\LogstIm}{\Logst_u}
+\newcommand{\tImMu}{\bm{\mu}}
+\newcommand{\tImS}{\bm{\Gamma}}
+\newcommand{\LogstD}{\Logst_{\dist}}
+\newcommand{\tDMu}{\nu}
+\newcommand{\meandepth}[1]{\tDMu_{#1}}
+
+\newcommand{\BB}{\mathbf{B}}
+\newcommand{\imBB}{\imgp{\BB}}
+\newcommand{\camO}{\mathbf{p}^c}
+\newcommand{\camR}{\bm{\omega}^c}
+
+\newcommand{\bepsilon}{\bm{\epsilon}}
+
+% 3D pose of the cars and ego motion
+\newcommand{\pos}[2]{\ObjMu^{#1}({#2})}
+\newcommand{\ori}[2]{\ObjR^{#1}(#2)}
+\newcommand{\state}[2]{\mathbf{s}^{#1}(#2)}
+
+% ego pose
+\newcommand{\egop}[1][t]{\pos{c}{#1}}
+\newcommand{\egoo}[1][t]{\ori{c}{#1}}
+\newcommand{\egos}[1][t]{\state{c}{#1}}
+
+% relative pose between camera and car $i$
+\newcommand{\posealt}{\pose} % FIXME: Consider unifying with \pose
+\newcommand{\relp}[2]{\posealt^{#1}(#2)}
+\newcommand{\relpz}[2]{\posealt_z^{#1}(#2)}
+
+% 3D tracks on car $i$ in its own coordinate frame
+\newcommand{\tracklets}{\mathbf{X}^{i}_o}
+\newcommand{\tracklet}[1]{\ptD^{i}_{#1}}
+% track projections on camera
+\newcommand{\trackpit}[2]{\impt_{#1}(#2)}
+\newcommand{\trackp}[1]{\impt_j(#1)}
+\newcommand{\trackpj}[1]{\impt_j(#1)}
+% Unclassified track point projected on camera
+\newcommand{\ucTrackp}{\impt(t)}
+
+
+% dimensions of car $i$
+\newcommand{\dimsn}[1]{\BB^{#1}}
+\newcommand{\expDimsn}{\hat{\BB}}
+
+% projection function
+\newcommand{\projectionOf}[1]{\proj_{\relp{i}{t}}\left(#1\right)}
+\newcommand{\projectionOft}[1]{\proj_{\relp{i}{t+1}}\left(#1\right)}
+\newcommand{\centerProj}{\bar{\proj}_{\relp{i}{t}}(\dimsn{i})}
+\newcommand{\cornerProj}[1]{\proj^{#1}_{\relp{i}{t}}(\dimsn{i})}
+\newcommand{\triangleProj}[1]{\triangle^{#1}_{\relp{i}{t}}(\dimsn{i})}
+
+% bounding box corners on image
+\newcommand{\bbt}[2]{\imBB^{#1}({#2})}
+\newcommand{\bb}[1]{\imBB^{#1}(t)}
+
+\newcommand{\bbMu}{\bm{\mu}} % FIXME: conflicts with logistic mean of trans prob
+\newcommand{\bbS}{\bm{\Lambda}}
+
+
+\newcommand{\Energy}[1]{\mathcal{E}^{it}_{\text{#1}}}
+\newcommand{\pEnergy}[1]{\mathcal{E}^{ijt}_{\text{#1}}}
+% Weighted energy
+\newcommand{\WEnergy}[1]{\lambda_{\text{#1}}\Energy{#1}}
+\newcommand{\WpEnergy}[1]{\lambda_{\text{#1}}\pEnergy{#1}}
+\newcommand{\EnergyCol}{\mathcal{E}^{ijt}_{\text{col}}}
+\newcommand{\WEnergyCol}{\lambda_{\text{col}}\EnergyCol}
+
+\newcommand{\EnergyBBoxNoOcc}{\Energy{detectNoOcc}}
+\newcommand{\EnergyBBox}{\Energy{detect}}
+\newcommand{\EnergyTrack}{ \pEnergy{track}}
+\newcommand{\EnergyTrackNoOcc}{\pEnergy{trackNoOcc}}
+\newcommand{\EnergyLane}{\Energy{lane}}
+\newcommand{\EnergySize}{\Energy{size}}
+\newcommand{\EnergyDyn}{\Energy{dyn}}
+\newcommand{\EnergyDynHol}{\Energy{dyn-hol}}
+\newcommand{\EnergyDynOri}{\Energy{dyn-ori}}
+\newcommand{\EnergyDynVel}{\Energy{dyn-vel}}
+
+\newcommand{\occFreeProj}[1]{\Pi_{\relp{i}{t}}(#1)}
+\newcommand{\minx}{x_{\text{min}}}
+\newcommand{\miny}{y_{\text{min}}}
+\newcommand{\maxx}{x_{\text{max}}}
+\newcommand{\maxy}{y_{\text{max}}}
+\newcommand{\frontface}{F^i_\text{FF}(t)}
+
+\newcommand{\occ}[1]{o({#1})}
+\newcommand{\face}{F^i_k(t)}
+
+\newcommand{\invProjectionOf}[1]{\pi^{-1}_{\relp{i}{t}}\left(#1\right)}
+\newcommand{\invProjectionOftm}[1]{\pi^{-1}_{\relp{i}{t-1}}\left(#1\right)}
+\newcommand{\occf}{\OccF^i(\ptD_j)}
+\newcommand{\occftot}{\OccF(\ptD_j)}
+\newcommand{\occft}[1]{\OccF(#1)}
+
+\newcommand{\ray}{\uvect{\ptD}_j}
+\newcommand{\occfray}{f_{occ}(\lambda\ray)}
+\newcommand{\lambdadist}{f_{\lambda}(\trackpj{t-1}, \lambda)}
+
+\newcommand{\occfxi}{L(\mathbf{x}; \pos{i}{t-1}, \Sigma_i)}
+\newcommand{\occfi}{L(\lambda \ray; \pos{i}{t-1}, \Sigma_i)}
+
+\newcommand{\PreflR}{P^{ij}_{\text{reflection}}}
+\newcommand{\Pobs}{P^{ij}_{\text{observation}}}
+\newcommand{\PtransR}{P^{j}_{\text{transmission}}}
+\newcommand{\PassocR}{P^{ij}_{\text{assoc}}}
+\newcommand{\assoc}{a^{ij}}
+\newcommand{\assocP}{\assoc(\lambda)}
+\newcommand{\assocPk}{\assoc(\lambda_k)}
+\newcommand{\Ereproj}{E^{ij}_{\text{reproj}}}
+\newcommand{\Ptransarg}[1]{\PtransR(#1)}
+\newcommand{\Ptrans}{\Ptransarg{\lambda}}
+\newcommand{\Ptransmud}{\Ptransarg{\mu^{i}_d}}
+\newcommand{\Prefl}{\PreflR(\lambda)}
+\newcommand{\Zrefl}{Z_{\text{refl}}}
+\newcommand{\dishort}{d_i(\mathbf{x})}
+
+\newcommand{\Lu}{\LogstIm(\impt, \tImMu^i,\tImS^i)}
+\newcommand{\Llambda}{\LogstD(\impt, \dist; \tDMu^i)}
+
+\newcommand{\Gauss}{\mathcal{N}}
+\newcommand{\PropDist}{\mathcal{W}_j}
+
+\newcommand{\muijl}{\mu^{ij}_{\dist}}
+\newcommand{\sigmaijl}{\sigma^{ij}_{\dist}}
+
+\newcommand{\Sigmait}{\bSigma^{i^{-1}}_o}
+
+\newcommand{\muit}{\bmu^{i}_o}
+\newcommand{\Sigmaic}{\bSigma'^{i^{-1}}_c}
+
+\newcommand{\muic}{{\bmu^{i}_c}}
+\newcommand{\Sigmaicf}{\bSigma^{i^{-1}}_c}
+\newcommand{\Sigmaicfinv}{\Sigma^{i}_c}
+
+\newcommand{\muiu}{\mu^{i}_t}
+\newcommand{\Sigmaiu}{\Sigma^{i^{-1}}_u}
+
+\newcommand{\uv}[1]{\hat{\mathbf{#1}}}
+\newcommand{\Trr}[3]{{}^{#1}{#2}_{#3}}
+\newcommand{\xymin}[1]{#1_{\text{min}}}
+\newcommand{\xymax}[1]{#1_{\text{max}}}
+
+\newcommand{\xt}{\mathbf{x}_t}
+\newcommand{\xc}{\mathbf{x}_c}
+
+\newcommand{\Rctot}{\bR}
+\newcommand{\tctot}{\bt}
+
+\newcommand{\tcmut}{\bt'}
+
+
+\newcommand{\Beizer}{B\'eizer }
+
+\newcommand{\LaneUncertainty}[1]{\Sigma_{L_m}(#1)}
+\newcommand{\projOnLane}[1]{\pi_{L_m(k)}(#1)}
+
+\newlength{\eqs}
+\setlength{\eqs}{-0.04in}
+
+\setitemize[0]{leftmargin=15pt}
+
+\newenvironment{tight_itemize}{
+\begin{itemize}[leftmargin=10pt]
+  \setlength{\topsep}{0pt}
+  \setlength{\itemsep}{0pt}
+  \setlength{\parskip}{0pt}
+  \setlength{\parsep}{0pt}
+}{\end{itemize}}
+
+
+
+% DRL
+\def\state{s}
+\def\statet{\state_t}
+\def\statetp{\state_{t-1}}
+\def\statehist{\state_{1:t-1}}
+\def\statetn{\state_{t+1}}
+\def\obs{\meas}
+\def\obst{\obs_t}
+\def\act{a}
+\def\actt{\act_t}
+\def\acttp{\act_{t-1}}
+\def\acttn{\act_{t+1}}
+\def\Obs{\mathcal{O}}
+\def\ObsEnc{\Phi_o}
+\def\ObsProb{P_o}
+\def\ObsFunc{C}
+\def\ObsFuncFull{\ObsFunc(\statet, \actt) \rightarrow \obst}
+\def\ObsFuncInv{\ObsFunc^{-1}}
+\def\ObsFuncInvFull{\ObsFuncInv(\obst, \statetp, \actt) \rightarrow \statet}
+\def\State{\mathcal{S}}
+\def\Action{\mathcal{A}}
+\def\TransP{P_{T}}
+\def\Trans{T}
+\def\TransFull{\Trans(\statet, \actt) \rightarrow \statetn}
+\def\TransObs{T_c}
+\def\Rew{R}
+\def\rew{r}
+\def\rewards{\vect{r}_{1:t}}
+\def\rewt{\rew_t}
+\def\rewtp{\rew_{t-1}}
+\def\rewtn{\rew_{t+1}}
+\def\RewFull{\Rew(\statet, \actt) \rightarrow \rewtn}
+\def\TransObsFull{\TransObs(\statet, \obst, \actt, \rewt; \theta_T) \rightarrow \statetn}
+\def\Value{V}
+\def\pit{\pi_t}
+\def\piDef{\pi(\acttn|\statet, \obst, \actt, \rewt; \theta_\pi) \rightarrow \pit(\acttn ; \theta_\pi)}
+\def\Valuet{\Value_t}
+\def\ValueDef{\Value(\statet, \obst, \actt, \rewt; \theta_\Value) \rightarrow \Valuet(\theta_\Value)}
+\def\R{\mathbb{R}}
+\def\E{\mathbb{E}}
+
+
+\newcommand{\LatencyOneGtOne}{Latency $1:>1$}
+\newcommand{\NavAiiiCDiDiiL}{NavA3C+D\textsubscript{1}D\textsubscript{2}L}
+
+\newcounter{Benchmark}
+\newcounter{BenchmarkB}[Benchmark]
+\newcommand{\ditem}[1]{\refstepcounter{Benchmark}\item[\arabic{Benchmark}. {#1}]}
+\newcommand{\dditem}[1]{\refstepcounter{BenchmarkB}\item[\arabic{Benchmark}.\alph{BenchmarkB}. {#1}]}
+\newcommand{\DistanceInefficiency}{Distance-inefficiency}
+
+% Observation probability
+% forward sensor model
+
+% Differentiable Floyd Warshall algorithm
+\newcommand{\graph}{G}
+\newcommand{\vtces}{V}
+\newcommand{\edges}{E}
+%\newcommand{\policy}{\Pi}
+\newcommand{\wts}{W}
+\newcommand{\distM}{D}
+\newcommand{\prew}{\Upsilon}
+\newcommand{\vma}{\alpha_\Value}
+\newcommand{\prewma}{\alpha_\prew}
+\newcommand{\maxValueBeam}{\vect{\state}_{\Value:\text{max}(m)}}
+\newcommand{\nil}{\emptyset}
