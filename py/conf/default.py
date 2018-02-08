@@ -74,8 +74,9 @@ class DefaultConf(Conf):
     def defaults(self):
         from alg.floyd_warshall_grid import FloydWarshallAlgDiscrete
         from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld)
-        defaults = dict(
-            alg_class                = FloydWarshallAlgDiscrete,
+        defaults      = dict(
+            alg_class = FloydWarshallAlgDiscrete,
+
             alg_kwargs               = Conf(
                 egreedy_epsilon      = 0.5,
                 path_value_momentum  = 0.9, # High momemtum changes less frequently
@@ -86,17 +87,21 @@ class DefaultConf(Conf):
 
             grid_world_maze_string = None,
             grid_world_class       = WindyGridWorld,
-            grid_world_kwargs      = Conf(
-                wind_strength      = 0.5),
-            prob_class             = AgentInGridWorld,
-            prob_kwargs            = Conf(
-                start_pose         = [2, 3],
-                goal_pose          = [3, 4],
-                goal_reward        = 10,
-                max_steps          = 100
+
+            grid_world_kwargs = Conf(
+                wind_strength = 0.5),
+
+            prob_class = AgentInGridWorld,
+
+            prob_kwargs     = Conf(
+                start_pose  = [2, 3],
+                goal_pose   = [3, 4],
+                goal_reward = 10,
+                max_steps   = 100
             ),
-            nepisodes              = 2,
-            seed                   = 0)
+
+            nepisodes = 2,
+            seed      = 0)
         return defaults
 
     @property
