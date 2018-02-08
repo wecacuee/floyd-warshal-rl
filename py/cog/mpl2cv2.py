@@ -159,8 +159,9 @@ class MPLAsCV(object):
         del self.fig_manager[name]
 
     def destroyAllWindows(self):
-        for manager in self.fig_manager.values():
-            manager.destroy()
+        names = list(self.fig_manager.keys())
+        for name in names:
+            self.destroyWindow(name)
 
     def from_ndarray(self, arr):
         ax = white_img(arr.shape[:2])
