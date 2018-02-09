@@ -65,12 +65,12 @@ def init_class_stack(classes, class_kwargs_list):
     obj = None
     for class_, kwargs in zip(classes, class_kwargs_list):
         required_args = list(inspect.signature(class_).parameters.keys())
-        if alg_obj is None:
+        if obj is None:
             kw = { k : kwargs[k] for k in required_args }
             obj = class_(** kw )
         else:
             kw = { k : kwargs[k] for k in required_args[1:] }
-            obj = class_(alg_obj, **kw)
+            obj = class_(obj, **kw)
 
     return obj
     

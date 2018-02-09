@@ -58,7 +58,7 @@ class FloydWarshallAlgDiscrete(Alg):
         return new_path_cost
 
     def _resize_action_value(self, new_size):
-        new_action_value = self._default_action_value(0)
+        new_action_value = self._default_action_value(new_size)
         if self.action_value.size:
             new_action_value[:self.action_value.shape[0], :] = self.action_value
         return new_action_value
@@ -137,6 +137,7 @@ class FloydWarshallAlgDiscrete(Alg):
         # Linear in the number of states
 
         #for (si, sj) in self.state_pairs_iter():
+        # O(n^2) step to update all path_costs and action_values
         self.path_cost = np.minimum(
             self.path_cost,
             self.path_cost[..., -1:] + self.path_cost[-1:, ...])

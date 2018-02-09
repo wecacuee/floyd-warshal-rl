@@ -129,6 +129,7 @@ class MPLAsCV(object):
             self.fig_manager[name].canvas.figure = ax.get_figure()
             ax.get_figure().canvas = self.fig_manager[name].canvas
 
+        self.fig_manager[name].canvas.set_window_title(name)
         self.fig_manager[name].canvas.draw()
         self.fig_manager[name].show()
 

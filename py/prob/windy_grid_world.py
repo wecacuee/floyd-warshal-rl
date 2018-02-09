@@ -154,7 +154,7 @@ class WindyGridWorld(object):
     def default_maze(self):
         return maze_from_string("\n".join([
             "  +  ",
-            "  ^  ",
+            "  +  ",
             " ^^^ ",
             " ^^^ ",
             "  +  "]))
