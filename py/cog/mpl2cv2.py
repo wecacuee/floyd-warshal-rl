@@ -108,16 +108,16 @@ class MPLAsCV(object):
             mpl.patches.Polygon(np.asarray(pts) , facecolor=color
                                , linewidth=0))
 
-    def putText(self, ax, text, xy, org, fontFace, fontScale, color):
+    def putText(self, ax, text, xy, fontFace, fontScale, color):
         color = self._mpl_color(color)
-        xy, org = (self._mpl_color(ax, x) for x in (xy, org))
-        ax.add_patch(
-            mpl.patches.Text(x      = xy[0],
-                             y      = xy[1],
-                             text   = text,
-                             color  = color,
-                             family = fontFace,
-                             size   = fontScale))
+        xy = self._mpl_coord(ax, xy)
+        mpl.text.Text(axes   = ax,
+                      x      = xy[0],
+                      y      = xy[1],
+                      text   = text,
+                      color  = color,
+                      family = fontFace,
+                      size   = fontScale)
 
     def imshow(self, name, ax):
         self.namedWindow(name)

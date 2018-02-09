@@ -191,7 +191,12 @@ class FloydWarshallVisualizer(object):
     def visualize_path_cost(self, ax, path_cost, hash_state, wait_time):
         if ax is None:
             ax = draw.white_img(self.grid_shape)
-        ax.matshow(self._path_cost_to_mat(path_cost, hash_state))
+        path_cost_mat = self._path_cost_to_mat(path_cost, hash_state)
+        ax.matshow(path_cost_mat)
+        for i, j in np.ndindex(path_cost_mat.shape):
+            draw.putText(ax, f"{path_cost_mat[i, j]}",
+                         np.array((i*100, j*100)), None, None,
+                         (0, 0, 0))
         draw.imshow("path_cost", ax)
 
     def visualize_action_value(self, ax, action_value, hash_state, wait_time):
