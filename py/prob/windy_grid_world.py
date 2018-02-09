@@ -100,8 +100,10 @@ class WindyGridWorld(object):
         wind_prob = 1 if (self.rng.uniform() < self.wind_strength) else 0
         potential_pose = (pose + act_vec
                           + wind_prob * self.wind_dir(pose))
-        next_p = pose if self.iswall(potential_pose) else potential_pose
-        return next_p
+        next_p, hit_wall = ((pose, True)
+                            if self.iswall(potential_pose)
+                            else (potential_pose, False))
+        return next_p, hit_wall
 
     def iswall(self, xy):
         row, col = xy[::-1]
@@ -166,6 +168,8 @@ class AgentInGridWorld(Problem):
         self.goal_pose         = np.asarray(goal_pose)
         self.goal_reward       = goal_reward
         self.max_steps         = max_steps
+        self._hit_wall_penality= 1
+        self._last_reward     = 0
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
@@ -174,14 +178,15 @@ class AgentInGridWorld(Problem):
         self.episode_reset()
 
     def step(self, act):
-        self.pose = self.grid_world.next_pose(
+        self.pose, hit_wall = self.grid_world.next_pose(
             self.pose,
             self.action_space.VECTORS[act])
+        self._last_reward = -self._hit_wall_penality if hit_wall else 0
         self.steps += 1
         return self.pose, self.reward()
 
     def reward(self):
-        return self.goal_reward if (np.all(self.goal_pose == self.pose)) else 0
+        return self.goal_reward if (np.all(self.goal_pose == self.pose)) else self._last_reward
 
     def observation(self):
         return self.pose
@@ -207,6 +212,7 @@ class AgentInGridWorld(Problem):
 
     def episode_reset(self):
         self.steps = 0
+        self._last_reward     = 0
 
     def done(self):
         return self.steps >= self.max_steps

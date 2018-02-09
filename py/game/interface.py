@@ -91,6 +91,7 @@ def play_episode(alg, prob):
     rew = prob.reward()
     action = prob.action_space.sample()
     while not (prob.done() or alg.done()):
+        print(f"obs = {obs}; action = {action}; rew = {rew}")
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
