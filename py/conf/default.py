@@ -41,7 +41,7 @@ class DefaultConf(Conf):
                 )(egreedy_epsilon       = 0.1,
                   path_cost_momentum    = 0.9,  # High momemtum changes less frequently
                   action_value_momentum = 0.1, # Low momentum changes more frequently
-                  init_value            = 100,
+                  init_value            = 1,
                   top_value_queue_size  = 5,
                   per_edge_reward       = -1),
 

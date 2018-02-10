@@ -64,8 +64,8 @@ class FloydWarshallAlgDiscrete(Alg):
         return new_action_value
     
     def egreedy(self, greedy_act):
-        sample_egreedy = (self.rng.rand() <= self.egreedy_epsilon)
-        return self.action_space.sample() if sample_egreedy else greedy_act
+        sample_greedy = (self.rng.rand() >= self.egreedy_epsilon)
+        return self.action_space.sample() if sample_greedy else greedy_act
 
     def _state_from_obs(self, obs):
         state = obs # fully observed system
@@ -107,6 +107,7 @@ class FloydWarshallAlgDiscrete(Alg):
         # Encoding state_hash from observation
         state_idx = self._state_idx_from_obs(obs)
         if self.last_state_idx is None:
+            self.last_state_idx = state_idx
             return
 
         # Abbreviate the variables
@@ -144,7 +145,7 @@ class FloydWarshallAlgDiscrete(Alg):
         V = np.max(self.action_value, axis=1)
         self.action_value = np.maximum(
             self.action_value,
-            np.max(V - self.path_cost, axis=1))
+            np.max(V - self.path_cost, axis=1, keepdims=True))
 
     def close(self):
         pass
