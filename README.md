@@ -10,8 +10,8 @@
 
   * The exploration is happening right but the visualization is not.
     Fix the visualization.
-
-
+* TODO Fix the visualization.
+* TODO Fix the respawning on hitting the goal.
 
 ## Experimental setup
 
