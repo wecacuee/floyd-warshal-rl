@@ -16,6 +16,9 @@ else:
     to_ndarray = lambda im : im
     from_ndarray = lambda arr : arr
 
+def not_implemented(*args, **kwargs):
+    raise NotImplementedError()
+
 IMPORT_NAMES = """
 white_img
 circle
@@ -31,9 +34,10 @@ waitKey
 namedWindow
 destroyWindow
 destroyAllWindows
+matshow
 """.split()
 for n in IMPORT_NAMES:
-    globals()[n] = getattr(backend, n)
+    globals()[n] = getattr(backend, n, not_implemented)
 
 def color_from_rgb(rgb):
     return rgb[::-1]

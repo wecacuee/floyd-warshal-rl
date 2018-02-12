@@ -25,7 +25,7 @@ class DefaultConf(Conf):
                                              FloydWarshallVisualizer)
         from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld)
         defaults      = dict(
-            nepisodes = 2,
+            nepisodes = 5,
             seed      = 0,
 
             alg_class_stack = [FloydWarshallAlgDiscrete,
@@ -37,13 +37,13 @@ class DefaultConf(Conf):
                     "FloydWarshallAlgDiscreteConf",
                     action_space        = lambda s: self.prob.action_space,
                     observation_space   = lambda s: self.prob.observation_space,
-                    seed                = lambda s: self._next_seed()
-                )(egreedy_epsilon       = 0.1,
+                    seed                = lambda s: self._next_seed(),
+                    per_edge_cost       = lambda s: self.init_value / 2,
+                )(egreedy_epsilon       = 0.2,
                   path_cost_momentum    = 0.9,  # High momemtum changes less frequently
                   action_value_momentum = 0.1, # Low momentum changes more frequently
-                  init_value            = 1,
-                  top_value_queue_size  = 5,
-                  per_edge_reward       = -1),
+                  init_value            =   1,
+                  top_value_queue_size  =   5),
 
                 # FloydWarshallVisualizer
                 NewConfClass(
@@ -57,15 +57,15 @@ class DefaultConf(Conf):
             grid_world_class       = WindyGridWorld,
 
             grid_world_kwargs = Conf(
-                wind_strength = 0.5),
+                wind_strength = 0.1),
 
             prob_class = AgentInGridWorld,
 
             prob_kwargs     = Conf(
-                start_pose  = [2, 3],
-                goal_pose   = [3, 4],
-                goal_reward = 10,
-                max_steps   = 100
+                start_pose_gen = lambda prob: prob.grid_world.valid_random_pos(),
+                goal_pose      = [3, 4],
+                goal_reward    = 10,
+                max_steps      = 1000
             ))
 
         return defaults

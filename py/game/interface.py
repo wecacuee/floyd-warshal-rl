@@ -95,7 +95,7 @@ def play_episode(alg, prob):
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        prob.render(None, 100, wait_time=30)
+        prob.render(None, 100, wait_time=1)
     prob.episode_reset()
     alg.episode_reset()
         

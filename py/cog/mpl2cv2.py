@@ -26,9 +26,9 @@ class MPLAsCV(object):
         self.am_i_matplotlib = True
         self.fig_manager = dict()
 
-    def white_img(self, imgsize, dpi = 100.0):
-        fig = Figure(figsize = (imgsize[1], imgsize[0])
-            , dpi = dpi)
+    def white_img(self, imgsize, dpi = 200.0):
+        fig = Figure(figsize = (imgsize[1] / dpi, imgsize[0] / dpi) ,
+                     dpi = dpi)
         ax = fig.gca() if fig.axes else fig.add_axes([0, 0, 1, 1])
         ax.clear()
         ax.axis('equal')
@@ -46,12 +46,19 @@ class MPLAsCV(object):
                 else color
 
     def _mpl_coord(self, ax, xy):
-        xy_dpi = xy / ax.figure.dpi
-        _, h = ax.get_figure().get_size_inches()
+        xy_dpi = xy
+        _, h = self._ax_imshape(ax)
         return [0, h] + xy_dpi * [1, -1]
 
     def _mpl_scale(self, ax, length):
         return length / ax.figure.dpi
+
+    def _ax_imshape(self, ax):
+        return (ax.get_xlim()[1], ax.get_ylim()[1])
+
+    def matshow(self, ax, mat):
+        w, h = self._ax_imshape(ax)
+        ax.imshow(mat.T, extent = [0, w, 0, h])
 
     def rectangle(self, ax, x1, x2, color, thickness=1):
         color = self._mpl_color(color)
@@ -62,7 +69,7 @@ class MPLAsCV(object):
                                   , abs(x2[0]-x1[0])
                                   , abs(x2[1]-x1[1])
                                   , edgecolor=color
-                                  , facecolor=color if thickness < 0 else 'w'
+                                  , facecolor=color if thickness < 0 else 'none'
                                   , linewidth=thickness))
 
     def circle(self, ax, center, radius, color, thickness=1):
@@ -108,16 +115,14 @@ class MPLAsCV(object):
             mpl.patches.Polygon(np.asarray(pts) , facecolor=color
                                , linewidth=0))
 
-    def putText(self, ax, text, xy, fontFace, fontScale, color):
-        color = self._mpl_color(color)
+    def putText(self, ax, text, xy, **kw):
+        kwargs = dict()
+        if "color" in kw:
+            kwargs["color"] = self._mpl_color(kw["color"])
+        kwargs["fontsize"] = kw["fontScale"]
+
         xy = self._mpl_coord(ax, xy)
-        mpl.text.Text(axes   = ax,
-                      x      = xy[0],
-                      y      = xy[1],
-                      text   = text,
-                      color  = color,
-                      family = fontFace,
-                      size   = fontScale)
+        ax.text(xy[0], xy[1], text, horizontalalignment='center', **kwargs)
 
     def imshow(self, name, ax):
         self.namedWindow(name)

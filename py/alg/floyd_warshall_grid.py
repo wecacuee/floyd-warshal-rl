@@ -2,6 +2,9 @@ from game.interface import Space, Alg
 import numpy as np
 from queue import PriorityQueue
 import cog.draw as draw
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class FloydWarshallAlgDiscrete(Alg):
     def __init__(self,
@@ -12,49 +15,50 @@ class FloydWarshallAlgDiscrete(Alg):
                  path_cost_momentum,
                  action_value_momentum,
                  init_value,
-                 top_value_queue_size,
-                 per_edge_reward
+                 top_value_queue_size
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
         self.seed                 = seed
         self.egreedy_epsilon      = egreedy_epsilon
         self.path_cost_momentum   = path_cost_momentum
-        self.action_value_momentum = action_value_momentum
+        self.action_value_momentum= action_value_momentum
         self.init_value           = init_value
         self.top_value_queue_size = top_value_queue_size
-        self.per_edge_reward      = per_edge_reward
+        self.per_edge_cost        = init_value / 20
         self.reset()
 
     def episode_reset(self):
-        self.action_value[:]    = 0
+        self.action_value[:]= self.init_value
         self.top_m_states   = PriorityQueue(maxsize=self.top_value_queue_size)
-        self.last_state_idx = None
+        self.last_state_idx_act = None
 
     def reset(self):
         self.rng            = np.random.RandomState()
         self.rng.seed(self.seed)
-        self.path_cost     = self._default_path_cost(
-            (0, 0))
+        self.path_cost     = self._default_path_cost(0)
         self.action_value    = self._default_action_value(0)
         self.hash_state     = dict()
         self.episode_reset()
 
-    def _default_path_cost(self, shape):
-        path_cost = -self.per_edge_reward * np.ones(shape)
+    def _default_path_cost(self, new_state_size):
+        act_size = self.action_space.size
+        shape = (new_state_size, act_size, new_state_size)
+        path_cost = 10 * np.ones(shape)
         # make staying at the same place very expensive
-        np.fill_diagonal(path_cost, 100)
+        # for act in self.action_space.values():
+        #     np.fill_diagonal(path_cost[:, act, :], 100)
         return path_cost
 
     def _default_action_value(self, state_size):
         return self.init_value * np.ones((state_size, self.action_space.size))
 
     def _resize_path_cost(self, new_state_size):
-        new_path_cost = self._default_path_cost(
-            (new_state_size, new_state_size))
+        new_path_cost = self._default_path_cost(new_state_size)
         if self.path_cost.size:
             new_path_cost[:self.path_cost.shape[0],
-                           :self.path_cost.shape[1]] = self.path_cost
+                          :self.path_cost.shape[1],
+                          :self.path_cost.shape[2]] = self.path_cost
         return new_path_cost
 
     def _resize_action_value(self, new_size):
@@ -65,13 +69,13 @@ class FloydWarshallAlgDiscrete(Alg):
     
     def egreedy(self, greedy_act):
         sample_greedy = (self.rng.rand() >= self.egreedy_epsilon)
-        return self.action_space.sample() if sample_greedy else greedy_act
+        return greedy_act if sample_greedy else self.action_space.sample()
 
     def _state_from_obs(self, obs):
         state = obs # fully observed system
         return state
 
-    def _state_idx_from_obs(self, obs):
+    def _state_idx_from_obs(self, obs, act, rew):
         state = tuple(self._state_from_obs(obs))
         if state not in self.hash_state:
             # A new state has been visited
@@ -84,7 +88,7 @@ class FloydWarshallAlgDiscrete(Alg):
         return state_idx
 
     def _value(self, state_s, act_s, state_g):
-        return (self.path_cost[state_s, act_s, state_g]
+        return (self.path_cost[state_s, state_g]
                 + self.action_value[state_g])
 
     def policy(self, obs):
@@ -93,6 +97,8 @@ class FloydWarshallAlgDiscrete(Alg):
         # desirable_dest = max(
         #     self.top_m_states.queue,
         #     key = lambda s: self.action_value[s[1]])[1]
+        logger.info(
+            f"state = {state}; action_values = {self.action_value[state_idx, :]}")
         return np.argmax(self.action_value[state_idx, :])
 
     def state_pairs_iter(self):
@@ -100,27 +106,41 @@ class FloydWarshallAlgDiscrete(Alg):
             for sj in self.hash_state.values():
                 yield (si, sj)
 
+    def _hit_goal(self, rew):
+        return rew >= 9
+
     def update(self, obs, act, rew):
         if not self.observation_space.contains(obs):
             raise ValueError(f"Bad observation {obs}")
 
         # Encoding state_hash from observation
-        state_idx = self._state_idx_from_obs(obs)
-        if self.last_state_idx is None:
-            self.last_state_idx = state_idx
+        state_idx = self._state_idx_from_obs(obs, act, rew)
+        stm1, am1 = self.last_state_idx_act or (None, None)
+        st = state_idx
+        self.last_state_idx_act = state_idx, act
+        if stm1 is None:
             return
+
+        if self._hit_goal(rew):
+            #import pdb; pdb.set_trace()
+            self.last_state_idx_act = None
 
         # Abbreviate the variables
         pm = self.path_cost_momentum
         qm = self.action_value_momentum
         F = self.path_cost
         Q = self.action_value
-        stm1 = self.last_state_idx
-        st = state_idx
+        print(f"Q in ({np.min(Q[:])}, {np.max(Q[:])})")
+        print(f"F in ({np.min(F[:])}, {np.max(F[:])})")
+        print(f"stm1, act -> st, rew  in {stm1}, {act} -> {st}, {rew}")
 
         # Update step from online observed reward
-        F[stm1, st] = (1-pm)* (-rew) + pm * F[stm1, st]
-        Q[stm1, act] = (1-qm) * (rew + np.max(Q[st, :])) + qm * Q[stm1, act]
+        #F[stm1, st] = (1-pm)* (-rew) + pm * F[stm1, st]
+        F[stm1, act, st] = self.per_edge_cost
+        F[:, :, st] = np.minimum(
+            F[:, :, st], F[:, :, stm1] + F[stm1, am1, st])
+        Q[stm1, act] = (1-qm) * (
+            (rew-self.per_edge_cost) + np.max(Q[st, :])) + qm * Q[stm1, act]
 
         # # TODO: Disabled for small state spaces. Re-enable for larger ones
         # # Update the top m states
@@ -141,11 +161,15 @@ class FloydWarshallAlgDiscrete(Alg):
         # O(n^2) step to update all path_costs and action_values
         self.path_cost = np.minimum(
             self.path_cost,
-            self.path_cost[..., -1:] + self.path_cost[-1:, ...])
+            (np.min(self.path_cost[:, :, st:st+1], axis=1, keepdims=True)
+             + self.path_cost[st:st+1, act:act+1, :]))
+        state_action_size = self.action_value.size
         V = np.max(self.action_value, axis=1)
         self.action_value = np.maximum(
             self.action_value,
-            np.max(V - self.path_cost, axis=1, keepdims=True))
+            np.max(V[None, :]
+                - self.path_cost.reshape(state_action_size, -1)
+                , axis=-1).reshape(self.action_value.shape))
 
     def close(self):
         pass
@@ -161,6 +185,8 @@ class FloydWarshallAlgDiscrete(Alg):
 
 class FloydWarshallVisualizer(object):
     def __init__(self, fwalg, goal_pose, grid_shape):
+        if not isinstance(fwalg, FloydWarshallAlgDiscrete):
+            raise NotImplementedError()
         self.fwalg = fwalg
         self.goal_pose = goal_pose
         self.grid_shape = grid_shape
@@ -175,35 +201,75 @@ class FloydWarshallVisualizer(object):
         return self._invert_hash_state(hash_state)[state_idx]
 
     def _path_cost_to_mat(self, path_cost, hash_state):
-        mat = np.zeros(self.grid_shape)
-        if path_cost.size:
-            goal_state_idx = hash_state.get(tuple(self.goal_pose), 0)
-            for state_pose, state_idx in hash_state.items():
-                mat[state_pose] = path_cost[state_idx, goal_state_idx]
-        return mat
+        big_mat = np.zeros(np.array(self.grid_shape) * 2)
+        if self.action_space.size != 4:
+            raise NotImplementedError("Do not know how to visualize")
+        for act in range(4):
+            mat = np.zeros(self.grid_shape)
+            if path_cost.size:
+                goal_state_idx = hash_state.get(tuple(self.goal_pose), -1)
+                for state_pose, state_idx in hash_state.items():
+                    mat[state_pose] = np.min(
+                        path_cost[state_idx, act, goal_state_idx])
+            big_r = act // 2
+            big_c = act % 2
+            big_mat[big_r::2, big_c::2] = mat
+        return big_mat
 
     def _action_value_to_mat(self, action_value, hash_state):
-        mat = np.zeros(self.grid_shape)
+        mat = np.ones(self.grid_shape) * self.fwalg.init_value
         if action_value.size:
             for state_pose, state_idx in hash_state.items():
                 mat[state_pose] = np.max(action_value[state_idx, :])
         return mat
+
+    def _action_value_to_matrices(self, action_value, hash_state):
+        big_mat = np.zeros(np.array(self.grid_shape) * 2)
+        if self.action_space.size != 4:
+            raise NotImplementedError("Do not know how to visualize")
+
+        for act in range(4):
+            mat = np.ones(self.grid_shape) * self.fwalg.init_value
+            if action_value.size:
+                for state_pose, state_idx in hash_state.items():
+                    mat[state_pose] = action_value[state_idx, act]
+            big_r = act // 2
+            big_c = act % 2
+            big_mat[big_r::2, big_c::2] = mat
+        return big_mat
+        
         
     def visualize_path_cost(self, ax, path_cost, hash_state, wait_time):
         if ax is None:
-            ax = draw.white_img(self.grid_shape)
+            ax = draw.white_img(np.array(self.grid_shape)*100)
         path_cost_mat = self._path_cost_to_mat(path_cost, hash_state)
-        ax.matshow(path_cost_mat)
+        max_val = np.max(path_cost_mat[:])
+        second_max = np.max(path_cost_mat[path_cost_mat != max_val])
+        path_cost_mat[path_cost_mat == max_val] = second_max
+        draw.matshow(ax, path_cost_mat)
         for i, j in np.ndindex(path_cost_mat.shape):
-            draw.putText(ax, f"{path_cost_mat[i, j]}",
-                         np.array((i*100, j*100)), None, None,
-                         (0, 0, 0))
+            cellsize = 50
+            center = (np.array((i, j)) + 0.5) * cellsize
+            if i % 2 == 0 and j % 2 == 0:
+                draw.rectangle(ax, center - cellsize/2, center + cellsize*3/2,
+                               (0, 0, 0))
+            draw.putText(ax, f"{path_cost_mat[i, j]:.3}",
+                         center, fontScale=2)
         draw.imshow("path_cost", ax)
 
     def visualize_action_value(self, ax, action_value, hash_state, wait_time):
         if ax is None:
-            ax = draw.white_img(self.grid_shape)
-        ax.matshow(self._action_value_to_mat(action_value, hash_state))
+            ax = draw.white_img(np.array(self.grid_shape) * 100)
+        action_value_mat = self._action_value_to_matrices(
+            action_value, hash_state)
+        action_value_mat += np.min(action_value_mat[:])
+        draw.matshow(ax, action_value_mat)
+        for i, j in np.ndindex(action_value_mat.shape):
+            center = np.array((i*50 + 25, j*50 + 25))
+            if i % 2 == 0 and j % 2 == 0:
+                draw.rectangle(ax, center - 25, center + 75, (0, 0, 0))
+            draw.putText(ax, f"{action_value_mat[i, j]:.3}",
+                         center, fontScale=2)
         draw.imshow("action_value", ax)
 
     def visualize(self, action_value, path_cost, hash_state, wait_time):

@@ -1,3 +1,4 @@
+-*- mode: org; -*-
 # Floyd-Warshall algorithm
 
 ## Log
@@ -10,7 +11,8 @@
 
   * The exploration is happening right but the visualization is not.
     Fix the visualization.
-* TODO Fix the visualization.
+    py/alg/floyd_warshall_grid.py
+* DONE Fix the visualization.
 * TODO Fix the respawning on hitting the goal.
 
 ## Experimental setup

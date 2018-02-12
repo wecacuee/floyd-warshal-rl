@@ -122,7 +122,7 @@ class WindyGridWorld(object):
 
     def render(self, canvas, grid_size):
         if canvas is None:
-            canvas = draw.white_img(self.maze.shape)
+            canvas = draw.white_img(np.array(self.maze.shape) * grid_size)
 
         nrows, ncols = self.maze.shape
         for r, c in np.ndindex(*self.maze.shape):
@@ -138,13 +138,24 @@ class WindyGridWorld(object):
 
             if np.any(self.wind_dir((c,r))):
                 center = bottom_left + 0.5 * grid_size
-                wind_dir = self.wind_dir((c,r))
+                wind_dir = self.wind_dir((c,r)) * grid_size / 4
                 pt1 = center - 0.5*wind_dir
                 pt2 = center + 0.5*wind_dir
                 draw.arrowedLine(canvas, pt1, pt2,
-                                 draw.color_from_rgb((0,0,0)))
+                                 draw.color_from_rgb((0,0,0)), thickness=5)
                 
         return canvas
+
+    def random_pos(self):
+        x = self.rng.randint(0, self.shape[1])
+        y = self.rng.randint(0, self.shape[0])
+        return np.array((x,y))
+
+    def valid_random_pos(self):
+        pos = self.random_pos()
+        while self.iswall(pos):
+            pos = self.random_pos()
+        return pos
 
     @property
     def shape(self):
@@ -158,42 +169,57 @@ class WindyGridWorld(object):
             " ^^^ ",
             " ^^^ ",
             "  +  "]))
-        
 
 class AgentInGridWorld(Problem):
-    def __init__(self, seed, grid_world, start_pose, goal_pose, goal_reward, max_steps):
+    def __init__(self, seed, grid_world, start_pose_gen, goal_pose,
+                 goal_reward, max_steps):
         self.grid_world        = grid_world
-        self.pose              = np.asarray(start_pose)
+        self.start_pose_gen    = start_pose_gen
         self.action_space      = Act2DSpace(seed)
         self.goal_pose         = np.asarray(goal_pose)
         self.goal_reward       = goal_reward
         self.max_steps         = max_steps
         self._hit_wall_penality= 1
+        self._travel_cost     = 0.05
+        self._last_travel_cost= 0
         self._last_reward     = 0
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
             seed        = seed) 
-        assert self.observation_space.contains(self.pose)
         self.episode_reset()
 
     def step(self, act):
+        if self._hit_goal():
+            self._respawn()
+            return self.pose, self.reward()
+
+        old_pose = self.pose
         self.pose, hit_wall = self.grid_world.next_pose(
             self.pose,
             self.action_space.VECTORS[act])
+        self._last_travel_cost = np.any(self.pose != old_pose) * self._travel_cost
         self._last_reward = -self._hit_wall_penality if hit_wall else 0
         self.steps += 1
         return self.pose, self.reward()
 
+    def _respawn(self):
+        self.pose          = self.start_pose_gen(self)
+
+    def _hit_goal(self):
+        return self.reward() >= 9
+
     def reward(self):
-        return self.goal_reward if (np.all(self.goal_pose == self.pose)) else self._last_reward
+        return (self.goal_reward
+                if (np.all(self.goal_pose == self.pose))
+                else self._last_reward)
 
     def observation(self):
         return self.pose
 
     def render(self, canvas, grid_size, wait_time=0):
         if canvas is None:
-            canvas = draw.white_img(self.grid_world.shape)
+            canvas = draw.white_img(np.array(self.grid_world.shape) * 100)
         self.grid_world.render(canvas, grid_size)
         # Render goal
         goal_top_left = self.goal_pose * grid_size
@@ -211,8 +237,9 @@ class AgentInGridWorld(Problem):
         return canvas
 
     def episode_reset(self):
-        self.steps = 0
-        self._last_reward     = 0
+        self.steps         = 0
+        self._last_reward  = 0
+        self.pose          = self.start_pose_gen(self)
 
     def done(self):
         return self.steps >= self.max_steps
@@ -231,6 +258,9 @@ if __name__ == '__main__':
         pose = agent.step(k)
         rew = agent.reward()
         print(f"rew = {rew}")
-        cnvs = agent.render(canvas=draw.white_img(agent.grid_world.shape), grid_size=100)
+        grid_size=100
+        cnvs = agent.render(
+            canvas=draw.white_img(np.array(agent.grid_world.shape) * grid_size),
+            grid_size=grid_size)
         draw.imshow("c", cnvs)
         k = direc_[draw.waitKey(-1)]
