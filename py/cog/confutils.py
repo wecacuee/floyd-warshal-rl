@@ -3,6 +3,14 @@ from argparse import Namespace, ArgumentParser
 import inspect
 
 class Conf(Namespace):
+    def __init__(self, **kw):
+        defaults = self.defaults()
+        updated_kw = dict_update_recursive(defaults, kw)
+        super().__init__(**updated_kw)
+
+    def defaults(self):
+        return dict()
+
     def items(self):
         return vars(self).items()
 

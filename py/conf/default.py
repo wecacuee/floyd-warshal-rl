@@ -2,6 +2,17 @@ from cog.confutils import (Conf, dict_update_recursive,
                            init_class_stack, NewConfClass)
 import numpy as np
 
+QLearningDiscreteDefaultConf = NewConfClass(
+                    "QLearningDiscreteConf",
+                    action_space        = lambda s: self.prob.action_space,
+                    observation_space   = lambda s: self.prob.observation_space,
+                    seed                = lambda s: self._next_seed(),
+                )(egreedy_epsilon       = 0.2,
+                  action_value_momentum = 0.1, # Low momentum changes more frequently
+                  init_value            =   1,
+                  discount              = 0.99,
+                )
+
 class PlayConf(Conf):
     """
     Follow the principle of delayed execution.
@@ -12,9 +23,7 @@ class PlayConf(Conf):
     3. Use class stacks for additional properties on the base classes.
     """
     def __init__(self, **kw):
-        defaults = self.defaults()
-        updated_kw = dict_update_recursive(defaults, kw)
-        super().__init__(**updated_kw)
+        super().__init__(**kw)
         self.rng = np.random.RandomState(self.seed)
 
     def _next_seed(self):
@@ -33,18 +42,7 @@ class PlayConf(Conf):
             alg_class_stack = [QLearningDiscrete, FloydWarshallAlgDiscrete],
 
             alg_kwargs_stack            = [
-
-                # QLearningDiscrete
-                NewConfClass(
-                    "QLearningDiscreteConf",
-                    action_space        = lambda s: self.prob.action_space,
-                    observation_space   = lambda s: self.prob.observation_space,
-                    seed                = lambda s: self._next_seed(),
-                )(egreedy_epsilon       = 0.2,
-                  action_value_momentum = 0.1, # Low momentum changes more frequently
-                  init_value            =   1,
-                  discount              = 0.99,
-                ),
+                QLearningDiscreteDefaultConf,
 
                 # FloydWarshallAlgDiscrete
                 Conf(
@@ -100,3 +98,23 @@ class PlayConf(Conf):
             self.grid_world,
             **vars(self.prob_kwargs))
 
+class QLearningPlayConf(PlayConf):
+    def defaults(self):
+        from alg.qlearning import QLearningDiscrete
+        play_conf_defaults = super().defaults()
+        play_conf_defaults["alg_class_stack"] = [QLearningDiscrete]
+        play_conf_defaults["alg_kwargs_stack"] = [QLearningDiscreteDefaultConf]
+        return play_conf_defaults
+
+class MultiPlayConf(PlayConf):
+    def defaults(self):
+        from game.play import NoOPObserver
+        return dict(trials_classes = [QLearningPlayConf, PlayConf],
+                    observer = NoOPObserver )
+
+    @property
+    def trials(self):
+        return [class_(**vars(self)) for class_ in self.trials_classes]
+
+
+        

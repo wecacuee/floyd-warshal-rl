@@ -96,14 +96,8 @@ class NoOPObserver(object):
     def set_alg(self, alg):
         self.alg = alg
 
-    def on_new_episode(self, episode_n):
-        pass
-
-    def on_new_step(self, obs, rew, action):
-        pass
-
-    def on_play_end(self):
-        pass
+    def getattr(self, attr):
+        return lambda *args, **kwargs : 0
 
 
 class MultiObserver(object):
@@ -187,8 +181,14 @@ def play_episode(alg, prob, observer, episode_n):
 def play_from_conf(conf):
     play(conf.alg, conf.prob, conf.observer, conf.nepisodes)
 
+def multiplay(multiconf):
+    observer = multiconf.observer
+    for conf in multiconf.trials:
+        observer.on_new_trial(conf)
+        play_from_conf(conf)
+
 if __name__ == '__main__':
     import sys
-    from conf.default import Conf
-    conf = Conf.parse_all_args("conf.default:PlayConf", sys.argv[1:])
-    play_from_conf(conf)
+    from cog.confutils import Conf
+    conf = Conf.parse_all_args("conf.default:MultiPlayConf", sys.argv[1:])
+    multiplay(conf)
