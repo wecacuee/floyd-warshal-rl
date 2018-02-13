@@ -13,9 +13,9 @@ class Conf(Namespace):
         setattr(self, k, v)
 
     @classmethod
-    def parser(cls):
+    def parser(cls, default_config):
         parser = ArgumentParser()
-        parser.add_argument("--config", default="conf.default:CurrentConf")
+        parser.add_argument("--config", default=default_config)
         return parser
 
     @classmethod
@@ -25,13 +25,13 @@ class Conf(Namespace):
         return getattr(module, class_)
 
     @classmethod
-    def parse_all_args(cls, args):
-        c, remargs = cls.parser().parse_known_args(args)
+    def parse_all_args(cls, default_config, args):
+        c, remargs = cls.parser(default_config).parse_known_args(args)
         conf = cls.import_class(c.config)()
         return conf.parse_remargs(remargs)
 
     def parse_remargs(self, remargs):
-        parser = self.parser()
+        parser = self.parser(self.__class__.__name__)
         for k, v in vars(self).items():
             if isinstance(v, Conf):
                 conf_from_args = lambda a : v.parse_remargs(a)

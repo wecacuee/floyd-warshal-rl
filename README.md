@@ -22,6 +22,7 @@
 ## Experimental setup
 
 ### Problem setup
+  py/game/play.py
 * Wind problem from the cse498
 [hw1](./hw1.jpg)
 * Change random start point with random goal location

@@ -2,7 +2,7 @@ from cog.confutils import (Conf, dict_update_recursive,
                            init_class_stack, NewConfClass)
 import numpy as np
 
-class DefaultConf(Conf):
+class PlayConf(Conf):
     """
     Follow the principle of delayed execution.
 
@@ -24,6 +24,7 @@ class DefaultConf(Conf):
         from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
                                              FloydWarshallVisualizer)
         from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld)
+        from game.play import LoggingObserver
         defaults      = dict(
             nepisodes = 10,
             seed      = 0,
@@ -46,13 +47,6 @@ class DefaultConf(Conf):
                   discount              = 0.99,
                 ),
 
-                # FloydWarshallVisualizer
-                NewConfClass(
-                    "FloydWarshallVisualizerConf",
-                    grid_shape     = lambda s: self.grid_world.shape,
-                    prob           = lambda s: self.prob
-                )(
-                )
             ],
             grid_world_maze_string = None,
             grid_world_class       = WindyGridWorld,
@@ -68,13 +62,26 @@ class DefaultConf(Conf):
                 goal_reward    = 10,
                 max_steps      = 200,
                 wall_penality  = 1.0
-            ))
+            ),
+
+            observer_classes = dict(logger = LoggingObserver,
+                                    visualizer = FloydWarshallVisualizer),
+            observer_classes_kwargs = [dict(), dict()],
+        )
 
         return defaults
 
     @property
     def alg(self):
         return init_class_stack(self.alg_class_stack, self.alg_kwargs_stack)
+
+    @property
+    def observer(self):
+        from game.play import MultiObserver
+        return MultiObserver(
+            { name : obs_class(**kw)
+              for (name, obs_class), kw in zip(self.observer_classes.items(), 
+                                               self.observer_classes_kwargs)})
 
     @property
     def grid_world(self):
@@ -90,5 +97,3 @@ class DefaultConf(Conf):
             self.grid_world,
             **vars(self.prob_kwargs))
 
-
-CurrentConf = DefaultConf

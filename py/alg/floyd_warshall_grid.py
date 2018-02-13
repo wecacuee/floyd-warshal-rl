@@ -1,4 +1,4 @@
-from game.interface import Space, Alg
+from game.play import Space, Alg, NoOPObserver
 import numpy as np
 from queue import PriorityQueue
 import cog.draw as draw
@@ -178,19 +178,17 @@ class FloydWarshallAlgDiscrete(Alg):
     def done(self):
         return False
 
-class FloydWarshallVisualizer(object):
-    def __init__(self, fwalg, prob, grid_shape):
-        if not isinstance(fwalg, FloydWarshallAlgDiscrete):
-            raise NotImplementedError()
-        self.fwalg = fwalg
-        self.prob = prob
-        self.grid_shape = grid_shape
+class FloydWarshallVisualizer(NoOPObserver):
+    def __init__(self):
+        self.grid_shape = None
+        self.goal_pose = None
         self._inverted_hash_state = None
         self.update_steps = 0
+        super().__init__()
 
     @property
-    def goal_pose(self):
-        return self.prob.goal_pose
+    def action_space(self):
+        return self.alg.action_space
         
     def _invert_hash_state(self, hash_state):
         self._inverted_hash_state = { state_idx : state_pose
@@ -216,7 +214,7 @@ class FloydWarshallVisualizer(object):
         return big_mat
 
     def _action_value_to_mat(self, action_value, hash_state):
-        mat = np.ones(self.grid_shape) * self.fwalg.init_value
+        mat = np.ones(self.grid_shape) * self.alg.init_value
         if action_value.size:
             for state_pose, state_idx in hash_state.items():
                 mat[state_pose] = np.max(action_value[state_idx, :])
@@ -228,7 +226,7 @@ class FloydWarshallVisualizer(object):
             raise NotImplementedError("Do not know how to visualize")
 
         for act in range(4):
-            mat = np.ones(self.grid_shape) * self.fwalg.init_value
+            mat = np.ones(self.grid_shape) * self.alg.init_value
             if action_value.size:
                 for state_pose, state_idx in hash_state.items():
                     mat[state_pose] = action_value[state_idx, act]
@@ -243,8 +241,9 @@ class FloydWarshallVisualizer(object):
             ax = draw.white_img(np.array(self.grid_shape)*100)
         path_cost_mat = self._path_cost_to_mat(path_cost, hash_state)
         max_val = np.max(path_cost_mat[:])
-        second_max = np.max(path_cost_mat[path_cost_mat != max_val])
-        path_cost_mat[path_cost_mat == max_val] = second_max
+        if max_val > 0:
+            second_max = np.max(path_cost_mat[path_cost_mat != max_val])
+            path_cost_mat[path_cost_mat == max_val] = second_max
         draw.matshow(ax, path_cost_mat)
         for i, j in np.ndindex(path_cost_mat.shape):
             cellsize = ax.get_xlim()[1] / path_cost_mat.shape[1]
@@ -319,18 +318,25 @@ class FloydWarshallVisualizer(object):
         ax3.set_yticks([])
         ax3.set_xlim([0, self.grid_shape[1]*cellsize])
         ax3.set_ylim([0, self.grid_shape[0]*cellsize])
-        self.visualize_policy(ax3, self.policy, hash_state)
+        self.visualize_policy(ax3, self.alg.policy, hash_state)
         draw.imshow("action_value", ax)
         draw.waitKey(1)
 
+    def on_new_goal_pose(self, goal_pose):
+        self.visualize(self.alg.action_value,
+                    self.alg.path_cost, self.alg.hash_state, 1)
+        self.goal_pose = goal_pose
 
-    def update(self, obs, act, rew):
-        self.fwalg.update(obs, act, rew)
+    def on_new_step(self, obs, act, rew):
+        if not np.any(self.goal_pose == self.prob.goal_pose):
+            self.on_new_goal_pose(self.prob.goal_pose)
+            
         if self.update_steps % 20 == 0:
-            self.visualize(self.fwalg.action_value,
-                        self.fwalg.path_cost, self.fwalg.hash_state, 1)
+            self.visualize(self.alg.action_value,
+                        self.alg.path_cost, self.alg.hash_state, 1)
         self.update_steps += 1
 
-    def __getattr__(self, attr):
-        return getattr(self.fwalg, attr)
+    def on_new_episode(self, n):
+        self.grid_shape = self.prob.grid_shape
+        self.goal_pose = self.prob.goal_pose
 

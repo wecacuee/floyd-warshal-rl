@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 from __future__ import absolute_import, division, print_function
-from game.interface import Space, Problem
+from game.play import Space, Problem
 import numpy as np
 from cog import draw
 import logging
@@ -200,6 +200,10 @@ class AgentInGridWorld(Problem):
             seed        = seed) 
         self.episode_reset()
 
+    @property
+    def grid_shape(self):
+        return self.grid_world.shape
+
     def step(self, act):
         if self._hit_goal():
             self._respawn()
@@ -254,6 +258,10 @@ class AgentInGridWorld(Problem):
 
     def done(self):
         return self.steps >= self.max_steps
+
+
+class AgentInGridWorldObserver(object):
+    pass
 
         
 if __name__ == '__main__':
