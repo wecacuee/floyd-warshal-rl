@@ -1,47 +1,26 @@
 from game.play import Space, Alg, NoOPObserver
 import numpy as np
-from queue import PriorityQueue
 import cog.draw as draw
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-class FloydWarshallAlgDiscrete(Alg):
+class FloydWarshallAlgDiscrete(object):
     def __init__(self,
-                 action_space,
-                 observation_space,
-                 seed,
-                 egreedy_epsilon,
-                 path_cost_momentum,
-                 action_value_momentum,
-                 init_value,
-                 top_value_queue_size,
-                 discount
+                 qlearning,
+                 path_cost_momentum
     ):
-        self.action_space         = action_space
-        self.observation_space    = observation_space
-        self.seed                 = seed
-        self.egreedy_epsilon      = egreedy_epsilon
+        self.qlearning            = qlearning
         self.path_cost_momentum   = path_cost_momentum
-        self.action_value_momentum= action_value_momentum
-        self.init_value           = init_value
-        self.top_value_queue_size = top_value_queue_size
-        self.per_edge_cost        = init_value / 20
-        self.discount             = discount
+        self.per_edge_cost        = self.qlearning.init_value / 20
         self.reset()
 
     def episode_reset(self):
-        self.action_value[:]= self.init_value
-        self.top_m_states   = PriorityQueue(maxsize=self.top_value_queue_size)
-        self.last_state_idx_act = None
+        self.qlearning.episode_reset()
 
     def reset(self):
-        self.rng            = np.random.RandomState()
-        self.rng.seed(self.seed)
+        self.qlearning.reset()
         self.path_cost     = self._default_path_cost(0)
-        self.action_value    = self._default_action_value(0)
-        self.hash_state     = dict()
-        self.episode_reset()
 
     def _default_path_cost(self, new_state_size):
         shape = (new_state_size, self.action_space.size, new_state_size)
@@ -50,9 +29,6 @@ class FloydWarshallAlgDiscrete(Alg):
         # for act in self.action_space.values():
         #     np.fill_diagonal(path_cost[:, act, :], 100)
         return path_cost
-
-    def _default_action_value(self, state_size):
-        return self.init_value * np.ones((state_size, self.action_space.size))
 
     def _resize_path_cost(self, new_state_size):
         new_path_cost = self._default_path_cost(new_state_size)
@@ -63,80 +39,22 @@ class FloydWarshallAlgDiscrete(Alg):
             ] = self.path_cost
         return new_path_cost
 
-    def _resize_action_value(self, new_size):
-        new_action_value = self._default_action_value(new_size)
-        if self.action_value.size:
-            new_action_value[:self.action_value.shape[0], :] = self.action_value
-        return new_action_value
-    
-    def egreedy(self, greedy_act):
-        sample_greedy = (self.rng.rand() >= self.egreedy_epsilon)
-        return greedy_act if sample_greedy else self.action_space.sample()
-
-    def _state_from_obs(self, obs):
-        state = obs # fully observed system
-        return state
-
     def _state_idx_from_obs(self, obs, act, rew):
-        state = tuple(self._state_from_obs(obs))
-        if state not in self.hash_state:
-            # A new state has been visited
-            state_idx = self.hash_state[state] = max(
-                self.hash_state.values(), default=-1) + 1
+        state_idx = self.qlearning._state_idx_from_obs(obs, act, rew)
+        if state_idx >= self.path_cost.shape[0]:
             self.path_cost = self._resize_path_cost(state_idx + 1)
-            self.action_value = self._resize_action_value(state_idx + 1)
-        else:
-            state_idx = self.hash_state[state]
         return state_idx
 
-    def _value(self, state_s, act_s, state_g):
-        return (self.path_cost[state_s, act, state_g]
-                + self.action_value[state_g])
-
-    def policy(self, obs):
-        state = self._state_from_obs(obs)
-        state_idx = self.hash_state[tuple(state)]
-        # desirable_dest = max(
-        #     self.top_m_states.queue,
-        #     key = lambda s: self.action_value[s[1]])[1]
-        logger.debug(
-            f"state = {state}; action_values = {self.action_value[state_idx, :]}")
-        return np.argmax(self.action_value[state_idx, :])
-
-    def state_pairs_iter(self):
-        for si in self.hash_state.values():
-            for sj in self.hash_state.values():
-                yield (si, sj)
-
-    def _hit_goal(self, rew):
-        return rew >= 9
-
     def update(self, obs, act, rew):
-        if not self.observation_space.contains(obs):
-            raise ValueError(f"Bad observation {obs}")
-
-        # Encoding state_hash from observation
-        state_idx = self._state_idx_from_obs(obs, act, rew)
         stm1, am1 = self.last_state_idx_act or (None, None)
-        st = state_idx
-        self.last_state_idx_act = state_idx, act
+        st = self._state_idx_from_obs(obs, act, rew)
+        self.qlearning.update(obs, act, rew)
         if stm1 is None:
             return
 
-        if self._hit_goal(rew):
-            #import pdb; pdb.set_trace()
-            self.last_state_idx_act = None
-
         # Abbreviate the variables
-        pm = self.path_cost_momentum
-        qm = self.action_value_momentum
         F = self.path_cost
-        Q = self.action_value
 
-        # Update step from online observed reward
-        Q[stm1, act] = (1-qm) * (
-            (rew-self.per_edge_cost) + np.max(Q[st, :])
-        ) + qm * Q[stm1, act]
         # Make a conservative estimate of differential
         F[stm1, act, st] = self.per_edge_cost
         F[:, :, st] = np.minimum(F[:, :, st], F[:, :, stm1] + F[stm1, act, st])
@@ -161,22 +79,21 @@ class FloydWarshallAlgDiscrete(Alg):
         self.path_cost = np.minimum(
             F,
             F[:, :, st:st+1] + np.min(F[st:st+1, :, :], axis=1, keepdims=True))
+
+    def _net_value(self, state_idx):
+        Q = self.qlearning.action_value
         V = np.max(Q, axis=-1)
-        self.action_value = np.maximum(
-            Q,
-            np.max(V[None, :] - self.path_cost , axis=-1))
+        state_action_values = np.maximum(
+            Q[state_idx, :],
+            np.max(V[None, :] - self.path_cost[state_idx, :, :] , axis=-1))
 
-    def close(self):
-        pass
+    def policy(self, obs):
+        state = self._state_from_obs(obs)
+        state_idx = self.hash_state[tuple(state)]
+        return np.argmax(self._net_value(state_idx))
 
-    def seed(self, seed=None):
-        self._seed = seed
-
-    def unwrapped(self):
-        return self
-
-    def done(self):
-        return False
+    def __getattr__(self, attr):
+        return getattr(self.qlearning, attr)
 
 class FloydWarshallVisualizer(NoOPObserver):
     def __init__(self):

@@ -21,6 +21,7 @@ class PlayConf(Conf):
         return self.rng.randint(1000)
 
     def defaults(self):
+        from alg.qlearning import QLearningDiscrete
         from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
                                              FloydWarshallVisualizer)
         from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld)
@@ -29,24 +30,26 @@ class PlayConf(Conf):
             nepisodes = 10,
             seed      = 0,
 
-            alg_class_stack = [FloydWarshallAlgDiscrete, FloydWarshallVisualizer],
+            alg_class_stack = [QLearningDiscrete, FloydWarshallAlgDiscrete],
 
             alg_kwargs_stack            = [
-                # FloydWarshallAlgDiscrete
+
+                # QLearningDiscrete
                 NewConfClass(
-                    "FloydWarshallAlgDiscreteConf",
+                    "QLearningDiscreteConf",
                     action_space        = lambda s: self.prob.action_space,
                     observation_space   = lambda s: self.prob.observation_space,
                     seed                = lambda s: self._next_seed(),
-                    per_edge_cost       = lambda s: self.init_value / 2,
                 )(egreedy_epsilon       = 0.2,
-                  path_cost_momentum    = 0.9,  # High momemtum changes less frequently
                   action_value_momentum = 0.1, # Low momentum changes more frequently
                   init_value            =   1,
-                  top_value_queue_size  =   5,
                   discount              = 0.99,
                 ),
 
+                # FloydWarshallAlgDiscrete
+                Conf(
+                  path_cost_momentum    = 0.9,  # High momemtum changes less frequently
+                ),
             ],
             grid_world_maze_string = None,
             grid_world_class       = WindyGridWorld,
