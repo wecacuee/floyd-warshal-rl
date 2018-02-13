@@ -1,4 +1,7 @@
 from __future__ import absolute_import, division, print_function
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Space(object):
     def values():
@@ -83,21 +86,29 @@ class Alg(object):
 
 # Sample refrees
 def play(alg, prob, nepisodes):
-    for _ in range(nepisodes):
-        play_episode(alg, prob)
+    all_rewards = []
+    for n in range(nepisodes):
+        logger.info(f" +++++++++++++++++ New episodes {n} +++++++++++++")
+        total_rew = play_episode(alg, prob, n)
+        all_rewards.append(total_rew)
+    logger.info(f"total rewards : {all_rewards}")
 
-def play_episode(alg, prob):
+def play_episode(alg, prob, episode_n):
     obs = prob.observation()
     rew = prob.reward()
     action = prob.action_space.sample()
+    total_rew = rew
     while not (prob.done() or alg.done()):
-        print(f"obs = {obs}; action = {action}; rew = {rew}")
+        if prob.steps % 5 == 0:
+            print(f"episode = {episode_n}, step = {prob.steps}, obs = {obs}; action = {action}; rew = {rew}; total_episode_reward = {total_rew}")
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
         prob.render(None, 100, wait_time=1)
+        total_rew += rew
     prob.episode_reset()
     alg.episode_reset()
+    return total_rew
         
 def play_from_conf(conf):
     play(conf.alg, conf.prob, conf.nepisodes)

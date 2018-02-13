@@ -25,11 +25,10 @@ class DefaultConf(Conf):
                                              FloydWarshallVisualizer)
         from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld)
         defaults      = dict(
-            nepisodes = 5,
+            nepisodes = 10,
             seed      = 0,
 
-            alg_class_stack = [FloydWarshallAlgDiscrete,
-                               FloydWarshallVisualizer],
+            alg_class_stack = [FloydWarshallAlgDiscrete, FloydWarshallVisualizer],
 
             alg_kwargs_stack            = [
                 # FloydWarshallAlgDiscrete
@@ -43,13 +42,15 @@ class DefaultConf(Conf):
                   path_cost_momentum    = 0.9,  # High momemtum changes less frequently
                   action_value_momentum = 0.1, # Low momentum changes more frequently
                   init_value            =   1,
-                  top_value_queue_size  =   5),
+                  top_value_queue_size  =   5,
+                  discount              = 0.99,
+                ),
 
                 # FloydWarshallVisualizer
                 NewConfClass(
                     "FloydWarshallVisualizerConf",
                     grid_shape     = lambda s: self.grid_world.shape,
-                    goal_pose      = lambda s: self.prob_kwargs.goal_pose
+                    prob           = lambda s: self.prob
                 )(
                 )
             ],
@@ -63,9 +64,10 @@ class DefaultConf(Conf):
 
             prob_kwargs     = Conf(
                 start_pose_gen = lambda prob: prob.grid_world.valid_random_pos(),
-                goal_pose      = [3, 4],
+                goal_pose_gen  = lambda prob: prob.grid_world.valid_random_pos(),
                 goal_reward    = 10,
-                max_steps      = 1000
+                max_steps      = 200,
+                wall_penality  = 1.0
             ))
 
         return defaults

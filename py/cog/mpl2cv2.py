@@ -51,7 +51,7 @@ class MPLAsCV(object):
         return [0, h] + xy_dpi * [1, -1]
 
     def _mpl_scale(self, ax, length):
-        return length / ax.figure.dpi
+        return length
 
     def _ax_imshape(self, ax):
         return (ax.get_xlim()[1], ax.get_ylim()[1])
@@ -96,9 +96,10 @@ class MPLAsCV(object):
         pt2 = self._mpl_coord(ax, pt2)
         color = self._mpl_color(color)
         delta = pt2 - pt1
-        ax.arrow(pt1[0], pt2[1],
+        ax.arrow(pt1[0], pt1[1],
                  delta[0], delta[1],
-                 width = thickness / ax.figure.dpi,
+                 width = thickness,
+                 head_width = 2 * thickness,
                  head_length = tipLength)
 
     def polylines(self, ax, pts, isClosed , color, thickness=1):

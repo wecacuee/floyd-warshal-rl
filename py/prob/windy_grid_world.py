@@ -3,6 +3,9 @@ from __future__ import absolute_import, division, print_function
 from game.interface import Space, Problem
 import numpy as np
 from cog import draw
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def maze_from_string(maze_string,
@@ -59,6 +62,9 @@ class Act2DSpace(Space):
     def size(self):
         return len(self.NAMES)
 
+    def tovector(self, x):
+        return self.VECTORS[x]
+
 
 class Loc2DSpace(Space):
     def __init__(self, lower_bound, upper_bound, seed):
@@ -78,6 +84,11 @@ class Loc2DSpace(Space):
             return False
         xint = np.int64(x)
         return np.all((self.lower_bound <= x) & (x < self.upper_bound))
+
+    def values(self):
+        return  (tuple(np.array(index) + self.lower_bound)
+                 for index in np.ndindex(
+                         tuple(self.upper_bound - self.lower_bound)))
         
 
 class WindyGridWorld(object):
@@ -123,6 +134,7 @@ class WindyGridWorld(object):
     def render(self, canvas, grid_size):
         if canvas is None:
             canvas = draw.white_img(np.array(self.maze.shape) * grid_size)
+        grid_size = canvas.get_xlim()[1] / self.shape[1]
 
         nrows, ncols = self.maze.shape
         for r, c in np.ndindex(*self.maze.shape):
@@ -138,11 +150,11 @@ class WindyGridWorld(object):
 
             if np.any(self.wind_dir((c,r))):
                 center = bottom_left + 0.5 * grid_size
-                wind_dir = self.wind_dir((c,r)) * grid_size / 4
-                pt1 = center - 0.5*wind_dir
-                pt2 = center + 0.5*wind_dir
+                wind_dir = self.wind_dir((c,r))
+                pt1 = center - wind_dir * grid_size / 8
+                pt2 = center + wind_dir * grid_size / 8
                 draw.arrowedLine(canvas, pt1, pt2,
-                                 draw.color_from_rgb((0,0,0)), thickness=5)
+                                 draw.color_from_rgb((0,0,0)), thickness=5, tipLength=10)
                 
         return canvas
 
@@ -155,6 +167,7 @@ class WindyGridWorld(object):
         pos = self.random_pos()
         while self.iswall(pos):
             pos = self.random_pos()
+
         return pos
 
     @property
@@ -171,18 +184,16 @@ class WindyGridWorld(object):
             "  +  "]))
 
 class AgentInGridWorld(Problem):
-    def __init__(self, seed, grid_world, start_pose_gen, goal_pose,
-                 goal_reward, max_steps):
+    def __init__(self, seed, grid_world, start_pose_gen, goal_pose_gen,
+                 goal_reward, max_steps, wall_penality):
         self.grid_world        = grid_world
         self.start_pose_gen    = start_pose_gen
         self.action_space      = Act2DSpace(seed)
-        self.goal_pose         = np.asarray(goal_pose)
+        self.goal_pose_gen     = goal_pose_gen
         self.goal_reward       = goal_reward
         self.max_steps         = max_steps
-        self._hit_wall_penality= 1
-        self._travel_cost     = 0.05
-        self._last_travel_cost= 0
-        self._last_reward     = 0
+        self._hit_wall_penality = wall_penality
+        self._last_reward      = 0
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
@@ -197,8 +208,7 @@ class AgentInGridWorld(Problem):
         old_pose = self.pose
         self.pose, hit_wall = self.grid_world.next_pose(
             self.pose,
-            self.action_space.VECTORS[act])
-        self._last_travel_cost = np.any(self.pose != old_pose) * self._travel_cost
+            self.action_space.tovector(act))
         self._last_reward = -self._hit_wall_penality if hit_wall else 0
         self.steps += 1
         return self.pose, self.reward()
@@ -240,6 +250,7 @@ class AgentInGridWorld(Problem):
         self.steps         = 0
         self._last_reward  = 0
         self.pose          = self.start_pose_gen(self)
+        self.goal_pose     = self.goal_pose_gen(self)
 
     def done(self):
         return self.steps >= self.max_steps

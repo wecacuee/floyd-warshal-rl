@@ -2,7 +2,7 @@
 # Floyd-Warshall algorithm
 
 ## Log
-* TODO Mould greedy policy to explore unexplored areas.
+* DONE Mould greedy policy to explore unexplored areas.
   py/alg/floyd_warshall_grid.py
   CLOCK: [2018-02-08 Thu 17:22]--[2018-02-08 Thu 18:37] =>  1:15
   * Not done. Looks like we need to take a relook into the algorithm.
@@ -13,7 +13,9 @@
     Fix the visualization.
     py/alg/floyd_warshall_grid.py
 * DONE Fix the visualization.
-* TODO Fix the respawning on hitting the goal.
+* DONE Fix the respawning on hitting the goal.
+* TODO Randomize the goal on new episode
+  py/prob/windy_grid_world.py
 
 ## Experimental setup
 
