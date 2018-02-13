@@ -4,7 +4,7 @@ from queue import PriorityQueue
 import cog.draw as draw
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 class FloydWarshallAlgDiscrete(Alg):
     def __init__(self,
@@ -138,9 +138,7 @@ class FloydWarshallAlgDiscrete(Alg):
             (rew-self.per_edge_cost) + np.max(Q[st, :])
         ) + qm * Q[stm1, act]
         # Make a conservative estimate of differential
-        F[stm1, act, st] = max(
-            (Q[stm1, act] - np.max(Q[st, :])) ,
-            self.per_edge_cost - rew, self.per_edge_cost)
+        F[stm1, act, st] = self.per_edge_cost
         F[:, :, st] = np.minimum(F[:, :, st], F[:, :, stm1] + F[stm1, act, st])
 
         # # TODO: Disabled for small state spaces. Re-enable for larger ones
