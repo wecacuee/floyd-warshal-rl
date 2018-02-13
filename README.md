@@ -14,8 +14,10 @@
     py/alg/floyd_warshall_grid.py
 * DONE Fix the visualization.
 * DONE Fix the respawning on hitting the goal.
-* TODO Randomize the goal on new episode
+* DONE Randomize the goal on new episode
   py/prob/windy_grid_world.py
+* TODO Evalute in comparison to Q-learning with fresh explorer and finder, Q-learning with goal state.
+  in terms of latency and distance inefficiency.
 
 ## Experimental setup
 
