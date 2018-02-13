@@ -1,152 +1,43 @@
-Let the reward be generated from two functions $\Rew_{e} : \State \rightarrow [0, \infty)$ and
-  $ \Rew_{\text{map}} : \State \times \Action \rightarrow [0, \infty) $.
-    Let the $\Rew_{e}$ be volatile, i.e. it changes for each episode $e$.
-    Let $\Rew_{\text{map}}$ be stationary i.e. it be stable for the map.
-\begin{figure}%[14]{r}{0.5\textwidth}
-  \begin{minipage}[t]{0.5\textwidth}
-    \begin{algorithm}[H]
-      \KwData{Graph $\graph = (\vtces, \edges)$\;
-      Distance between vertices $\wts(\edges)$ \;
-      }
-      Let $\distM^{(0)}(i, j) = \wts(\edges)$ be the shortest known path from point $i$ and point $j$. \;
-      If $(i, j) \notin \edges$ then $\distM^{(0)}(\edges) = \infty$ \;
-      \For{$k \leftarrow 1$ \KwTo $|\vtces|$}{
-        $\distM^{(k)}(i, j) = \min(\distM^{(k)}(i, j), \distM^{(k-1)}(i, k) + \distM^{(k-1)}(k, j))$
-        $\forall i,j \in V$
-        \;
-      }
-      \KwResult{To follow the shortest path $i$ to $j$, follow the
-        neighbors that smallest $\distM^{(|V|)}$\;
-        $\policy(i) = \arg \min_{k \in N(i)} \distM^{(|V|)}(k, j)$\;
-      }
-      \caption{\small Floyd-Warshall Algorithm for shortest distance between all point pairs.}
-      \label{alg:floyd-warshall}
-    \end{algorithm}
-  \end{minipage}%
-  \begin{minipage}[t]{0.5\textwidth}
-  \end{minipage}
-  \caption{Floyd-Warshall algorithm converted to a differentiable soft version}
-\end{figure}%
-
-    \begin{algorithm}
-      \KwData{Graph $\graph_0 = (\vtces_0, \edges_0)$\;
-        $\vtces_0 = \nil$, $\edges_0 = \nil$\;
-      }
-      Let $\prew(\state_i, \act_i, \state_j)$ be the path reward for going from $\state_i$ to state $\state_j$ \;
-      Initialize $\prew(\state_i, \act_i, \state_j; \param_{\prew}) = 0$ \;
-      Initialize $\Value(\state_i; \param_{\Value}) = \Value_{\text{max}}$ \;
-      Initialize $\vma = 0.1$, $\prewma = 0.9$ \;
-      \tcc{Keep a record of most favourable states}
-      Initialize $\maxValueBeam = \{ s_k \}_{k=1}^{m}$ \;
-      Observe $\meas_0$ from environment\;
-      \For{$t \leftarrow 1$ \KwTo $\epiT$}{
-        Take action $\act_{t-1}$\;
-        Observe $\meas_t$, $\rew_t$\;
-        Encode state $\state_t = \ObsEnc(\measurements; \param_E)$\;
-        $\vtces_t = \vtces_{t-1} \cup \{ \state_t \}$\;
-        $\edges_t = \edges_{t-1} \cup \{ (\state_{t-1}, \act_{t-1}, \state_t, \rew_t) \}$\;
-        \For{$(\state_i, \act_i, \state_j, \rew_j)$ in replay memory $\edges_t$}{
-          \tcc{Split $\rew$ into two parts path value and state value.}
-            $\prew(\state_{i}, \act_i, \state_{j}) = (1-\prewma)\rew_j + \prewma \prew(\state_{i}, \act_i, \state_{j}) $\;
-            $\Value(\state_{i}) = (1-\vma) (\rew_j - \prew(\state_{i}, \act_i, \state_{j})) + \vma \Value(\state_{i})$\;
-            \If{ $\exists \state_m \in \maxValueBeam \mid \Value(\state_i) > \Value(\state_m)$  }{
-              
-              Replace $\state_m$ in $\maxValueBeam$ with $\state_i$\;
-            }
-        }
-      }
-      \KwResult{To follow the shortest path $\state_i$ to $\state_j$, follow the
-        neighbors with highest $\prew$\;
-        $\policy(\state_k) = \arg \max_{\act_k \in \Action, \state_m \in \maxValueBeam} \prew(\state_k, \act_k, \state_m) + \Value(\state_m)$\;
-      }
-      \caption{\small An online version of Floyd-Warshall algorithm}
-      \label{alg:floyd-warshall}
-    \end{algorithm}
-
-Let $\fwcost(\state_i, \act_i, \state_j)$ be the path reward for going from $\state_i$ to state $\state_j$ and
-$\qValue(\state_i, \act_i)$ be action value function.
-    \begin{algorithm}
-      \KwData{Graph $\graph_0 = (\vtces_0, \edges_0)$\;
-        $\vtces_0 = \nil$, $\edges_0 = \nil$\;
-      }
-      Initialize $\fwcost(\state_i, \state_j; \param_{\prew}) = 0.1$ \;
-      Initialize $\qValue(\state_i,\act_i; \param_{\qValue}) = 0.1$ \;
-      Initialize $\vma = 0.1$, $\prewma = 0.9$ \;
-      \tcc{Keep a record of most favourable states}
-      Initialize $\maxValueBeam = \{ \state_k, \act_k \}_{k=1}^{m}$ as a priority with random states-action pairs\;
-      Observe $\meas_0$ from environment \;
-      \For{$t \leftarrow 1$ \KwTo $\epiT$}{
-        Take action $\act_{t-1}$\;
-        Observe $\meas_t$, $\rew_t$\;
-        Encode state $\state_t = \ObsEnc(\measurements; \param_E)$\;
-        $\vtces_t = \vtces_{t-1} \cup \{ \state_t \}$\;
-        $\edges_t = \edges_{t-1} \cup \{ (\state_{t-1}, \act_{t-1}, \state_t, \rew_t) \}$\;
-        \For{$(\state_i, \act_i, \state_j, \rew_j)$ in replay memory $\edges_t$}{
-          \tcc{Split $\rew$ into two parts stable path value and volatile state value.}
-            $\fwcost(\state_{i}, \state_{j}) = (1-\fwma) (- \rew_j) + \fwma \fwcost(\state_{i}, \state_{j}) $\;
-            $\qValue(\state_{i}, \act_i) = (1-\qma) (\rew_j) + \qma \qValue(\state_{i}, \act_i)$\;
-            \tcc{Update the list of high value states}
-            \If{ $\exists \state_m \in \maxValueBeam \mid \Value(\state_i) > \Value(\state_m)$  }{
-              
-              Replace $\state_m$ in $\maxValueBeam$ with $\state_i$\;
-            }
-            \tcc{Run the Floyd Warshall update}
-            \For{$(\state_k, \act_k, \state_l, \rew_l)$ in replay memory $\edges_t$} {
-              $\fwcost(\state_k, \state_i) =
-              \min \{
-                  \fwcost(\state_k, \state_i),
-                  \fwcost(\state_k, \state_t) + \fwcost(\state_t, \state_i)
-              \}$
-              \;
-
-              $\qValue(\state_k, \act_k) = \max \{
-                    \qValue(\state_k, \act_k),
-                    \max_{\state_m \in \maxValueBeam}\qValue(\state_m, \act_m) - \fwcost(\state_k, \state_m)
-                    \}$
-                \;
-               
-            }
-        }
-      }
-      \KwResult{To follow the shortest path $\state_i$ to $\state_j$, follow the
-        neighbors with highest $\qValue$\;
-        $\policy(\state_k) = \arg \max_{\act_k \in \Action} \qValue(\state_k, \act_k)$\;
-      }
-      \caption{\small How to solve windy grid world with randomized goals?}
-      \label{alg:floyd-warshall}
-    \end{algorithm}
 
 Over simplified. Ignoring the cost of going through the entire state space:
     \begin{algorithm}
       \KwData{Graph $\graph_0 = (\vtces, \edges)$\;}
-      Initialize $\fwcost(\state_i, \state_j; \param_{\fwcost}) = 0.1$ \;
-      Initialize $\fwcost(\state_i, \state_i; \param_{\fwcost}) = 100$ \;
-      Initialize $\qValue(\state_i,\act_i; \param_{\qValue}) = 0.1$ \;
+      Initialize $\fwcost(\state_i, \act_i, \state_j; \param_{\fwcost}) = 100$ \;
+      Initialize $\qValue(\state_i,\act_i; \param_{\qValue}) = 1$ \;
       Initialize $\vma = 0.1$, $\prewma = 0.9$ \;
+      Let minimum path cost $\minedgecost = 0.05$ \;
       Observe $\meas_0$ from environment \;
-      $\state_0 = \ObsEnc(\meas_0; \param_E)$
+      $\state_0 = \ObsEnc(\meas_0; \param_E)$ \;
       \For{$t \leftarrow 1$ \KwTo $\epiT$}{
         Take action $\act_{t-1}$\;
         Observe $\meas_t$, $\rew_t$\;
         Encode state $\state_t = \ObsEnc(\measurements; \param_E)$\;
-        \tcc{Split $\rew$ into two parts stable path value and volatile state value.}
-        $\fwcost(\state_{t-1}, \state_{t}) = (1-\fwma) (- \rew_t) + \fwma \fwcost(\state_{t-1}, \state_{t}) $ \;
-        $\qValue(\state_{t-1}, \act_{t-1}) = (1-\qma) (\rew_t + \max_{\act_k}\qValue(\state_t, \act_k)) + \qma \qValue(\state_{t-1}, \act_{t-1})$\;
-        \For{$(\state_i, \state_k) \in (\State \times \State)$}{
-            \tcc{Run the Floyd Warshall update}
-              $\fwcost(\state_k, \state_i) =
-              \min \{
-                  \fwcost(\state_k, \state_i),
-                  \fwcost(\state_k, \state_t) + \fwcost(\state_t, \state_i)
-              \}$
-              \;
-
-              $\qValue(\state_k, \act_l) = \max \{
-                    \qValue(\state_k, \act_l),
-                    \max_{\act_m} \qValue(\state_i, \act_m) - \fwcost(\state_k, \state_i)
-                    \} \quad \forall \act_l \in \Action$
+        \tcc{Initialize new FW values}
+        $\fwcost(\state, \act, \state_{t})
+        = \min \{
+               \fwcost(\state, \act, \state_t),
+                \fwcost(\state, \act, \state_{t-1}) + \minedgecost
+            \}
+        \qquad \forall \state \in \State, \act \in \Action$ \;
+        \tcc{Q-Value update}
+        $\qValue(\state_{t-1}, \act_{t-1}) = (1-\qma) (\rew_t + \discount \max_{\act_k}\qValue(\state_t, \act_k)) + \qma \qValue(\state_{t-1}, \act_{t-1})$\;
+        \If{$\state_t$ is visited the first time}{
+            \For{$(\state_i, \state_k, \act_k) \in (\State \times \State \times \Action)$}{
+                \tcc{Run the Floyd Warshall update}
+                $\fwcost(\state_k, \act_k, \state_i) =
+                \min \{
+                    \fwcost(\state_k, \act_k, \state_i),
+                    \fwcost(\state_k, \act_k, \state_t) + \min_{\act \in \Action}\fwcost(\state_t, \act, \state_i)
+                \}$
                 \;
-               
+
+                $\qValue(\state_k, \act_k) = \max \{
+                        \qValue(\state_k, \act_k),
+                        \max_{\act} \qValue(\state_i, \act) - \fwcost(\state_k, \act_k, \state_i)
+                        \}$
+                    \;
+
+            }
         }
       }
       \KwResult{To follow the shortest path $\state_i$ to $\state_j$, follow the
