@@ -205,28 +205,26 @@ class AgentInGridWorld(Problem):
         return self.grid_world.shape
 
     def step(self, act):
-        if self._hit_goal():
+        if self.hit_goal():
             self._respawn()
-            return self.pose, self.reward()
-
-        old_pose = self.pose
-        self.pose, hit_wall = self.grid_world.next_pose(
-            self.pose,
-            self.action_space.tovector(act))
-        self._last_reward = -self._hit_wall_penality if hit_wall else 0
+            self._last_reward = 0
+        else:
+            old_pose = self.pose
+            self.pose, hit_wall = self.grid_world.next_pose(
+                self.pose,
+                self.action_space.tovector(act))
+            self._last_reward = -self._hit_wall_penality if hit_wall else 0
         self.steps += 1
         return self.pose, self.reward()
 
     def _respawn(self):
         self.pose          = self.start_pose_gen(self)
 
-    def _hit_goal(self):
-        return self.reward() >= 9
+    def hit_goal(self):
+        return np.all(self.goal_pose == self.pose)
 
     def reward(self):
-        return (self.goal_reward
-                if (np.all(self.goal_pose == self.pose))
-                else self._last_reward)
+        return (self.goal_reward if self.hit_goal() else self._last_reward)
 
     def observation(self):
         return self.pose

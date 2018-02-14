@@ -182,9 +182,7 @@ def play_from_conf(conf):
     play(conf.alg, conf.prob, conf.observer, conf.nepisodes)
 
 def multiplay(multiconf):
-    observer = multiconf.observer
     for conf in multiconf.trials:
-        observer.on_new_trial(conf)
         play_from_conf(conf)
 
 if __name__ == '__main__':

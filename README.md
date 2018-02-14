@@ -18,6 +18,8 @@
   py/prob/windy_grid_world.py
 * TODO Evalute in comparison to Q-learning with fresh explorer and finder, Q-learning with goal state.
   in terms of latency and distance inefficiency.
+* TODO Implement latency 1: > 1
+  CLOCK: [2018-02-13 Tue 21:28]
 
 ## Experimental setup
 

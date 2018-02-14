@@ -95,26 +95,8 @@ class FloydWarshallAlgDiscrete(object):
     def __getattr__(self, attr):
         return getattr(self.qlearning, attr)
 
-class FloydWarshallVisualizer(NoOPObserver):
-    def __init__(self):
-        self.grid_shape = None
-        self.goal_pose = None
-        self._inverted_hash_state = None
-        self.update_steps = 0
-        super().__init__()
 
-    @property
-    def action_space(self):
-        return self.alg.action_space
-        
-    def _invert_hash_state(self, hash_state):
-        self._inverted_hash_state = { state_idx : state_pose
-            for state_pose, state_idx in hash_state.items() }
-        return self._inverted_hash_state
-
-    def _state_idx_to_pose(self, hash_state, state_idx):
-        return self._invert_hash_state(hash_state)[state_idx]
-
+class FloydWarshallVisualizer(QLearningVis):
     def _path_cost_to_mat(self, path_cost, hash_state):
         big_mat = np.zeros(np.array(self.grid_shape) * 2)
         if self.action_space.size != 4:
@@ -130,29 +112,7 @@ class FloydWarshallVisualizer(NoOPObserver):
             big_mat[big_r::2, big_c::2] = mat
         return big_mat
 
-    def _action_value_to_mat(self, action_value, hash_state):
-        mat = np.ones(self.grid_shape) * self.alg.init_value
-        if action_value.size:
-            for state_pose, state_idx in hash_state.items():
-                mat[state_pose] = np.max(action_value[state_idx, :])
-        return mat
 
-    def _action_value_to_matrices(self, action_value, hash_state):
-        big_mat = np.zeros(np.array(self.grid_shape) * 2)
-        if self.action_space.size != 4:
-            raise NotImplementedError("Do not know how to visualize")
-
-        for act in range(4):
-            mat = np.ones(self.grid_shape) * self.alg.init_value
-            if action_value.size:
-                for state_pose, state_idx in hash_state.items():
-                    mat[state_pose] = action_value[state_idx, act]
-            big_r = act // 2
-            big_c = act % 2
-            big_mat[big_r::2, big_c::2] = mat
-        return big_mat
-        
-        
     def visualize_path_cost(self, ax, path_cost, hash_state):
         if ax is None:
             ax = draw.white_img(np.array(self.grid_shape)*100)
@@ -171,89 +131,24 @@ class FloydWarshallVisualizer(NoOPObserver):
             draw.putText(ax, f"{path_cost_mat[i, j]:.3}",
                          center, fontScale=2)
 
-    def visualize_action_value(self, ax, action_value, hash_state):
-        if ax is None:
-            ax = draw.white_img(np.array(self.grid_shape) * 100)
-        cellsize = ax.get_xlim()[1] / self.grid_shape[0]
-        action_value_mat = self._action_value_to_matrices(
-            action_value, hash_state)
-        action_value_mat += np.min(action_value_mat[:])
-        draw.matshow(ax, action_value_mat)
-        for i, j in np.ndindex(action_value_mat.shape):
-            center = np.array((i*50 + 25, j*50 + 25))
-            if i % 2 == 0 and j % 2 == 0:
-                draw.rectangle(ax, center - 25, center + 75, (0, 0, 0))
-            draw.putText(ax, f"{action_value_mat[i, j]:.3}",
-                         center, fontScale=2)
 
-    def _policy_to_mat(self, policy_func):
-        return mat
-
-    def visualize_policy(self, ax, policy_func, hash_state):
-        if ax is None:
-            ax = draw.white_img(np.asarray(self.grid_shape) * cellsize)
-        cellsize = ax.get_xlim()[1] / self.grid_shape[0]
-
-        for state in hash_state.keys():
-            act = policy_func(state)
-            act_vec = self.action_space.tovector(act)
-            center = (np.array(state) + 0.5) * cellsize
-            draw.arrowedLine(ax,
-                             center - act_vec * cellsize / 4,
-                             center + act_vec * cellsize / 4,
-                             (0, 0, 0),
-                             thickness=5,
-                             tipLength=10)
-
-    def visualize(self, action_value, path_cost, hash_state, wait_time):
-        cellsize = 100
+    def on_new_goal_pose(self, goal_pose):
         ax = draw.white_img(
             (self.grid_shape[1]*cellsize, self.grid_shape[0]*3*cellsize),
             dpi=4*cellsize)
-        ax.set_position([0, 0, 0.33, 1])
-        ax.clear()
-        ax.axis('equal')
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xlim([0, self.grid_shape[1]*cellsize])
-        ax.set_ylim([0, self.grid_shape[0]*cellsize])
-        self.visualize_action_value(ax, action_value, hash_state)
-        ax2 = ax.figure.add_axes([0.33, 0, 0.33, 1], frameon=False)
-        ax2.set_position([0.33, 0, 0.33, 1])
+        self.visualize(ax, self.alg.action_value, self.alg.hash_state, 1)
+        ax2 = ax.figure.add_axes([0.67, 0, 0.33, 1], frameon=False)
+        ax2.set_position([0.67, 0, 0.33, 1])
         ax2.clear()
         ax2.axis('equal')
         ax2.set_xticks([])
         ax2.set_yticks([])
         ax2.set_xlim([0, self.grid_shape[1]*cellsize])
         ax2.set_ylim([0, self.grid_shape[0]*cellsize])
-        self.visualize_path_cost(ax2, path_cost, hash_state)
-        ax3 = ax.figure.add_axes([0.67, 0, 0.33, 1], frameon=False)
-        ax3.set_position([0.67, 0, 0.33, 1])
-        ax3.clear()
-        ax3.axis('equal')
-        ax3.set_xticks([])
-        ax3.set_yticks([])
-        ax3.set_xlim([0, self.grid_shape[1]*cellsize])
-        ax3.set_ylim([0, self.grid_shape[0]*cellsize])
-        self.visualize_policy(ax3, self.alg.policy, hash_state)
+        self.visualize_path_cost(ax2, self.alg.path_cost, self.alg.hash_state)
         draw.imshow("action_value", ax)
         draw.waitKey(1)
-
-    def on_new_goal_pose(self, goal_pose):
-        self.visualize(self.alg.action_value,
-                    self.alg.path_cost, self.alg.hash_state, 1)
         self.goal_pose = goal_pose
 
-    def on_new_step(self, obs, act, rew):
-        if not np.any(self.goal_pose == self.prob.goal_pose):
-            self.on_new_goal_pose(self.prob.goal_pose)
-            
-        if self.update_steps % 20 == 0:
-            self.visualize(self.alg.action_value,
-                        self.alg.path_cost, self.alg.hash_state, 1)
-        self.update_steps += 1
-
-    def on_new_episode(self, n):
-        self.grid_shape = self.prob.grid_shape
-        self.goal_pose = self.prob.goal_pose
-
+    def on_play_end(self):
+        pass
