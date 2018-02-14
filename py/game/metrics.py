@@ -17,8 +17,7 @@ def compute_latency(times_to_goal_hit_all_episodes):
             min(latencies_all_episode), max(latencies_all_episode))
 
 class LatencyLogger(NoOPObserver):
-    def __init__(self, latency_obs, logfilepath):
-        self.latency_obs = latency_obs
+    def __init__(self, logfilepath):
         self.logfilepath = logfilepath
         self.goal_hit_tag = f"{self.__class__.__name__}:goal_hit"
         self.new_episode_tag = f"{self.__class__.__name__}:new_episode"
@@ -45,7 +44,8 @@ class LatencyLogger(NoOPObserver):
 
     def on_play_end(self):
         self.info(self.play_end_tag, json.dumps({}))
-        latency_obs = self.latency_obs
+
+    def run_observer_from_logfile(obs):
         with open(self.logfilepath, "r") as log:
             for logline in log:
                 tag, length, json_string = logline.strip().split("\t")
@@ -57,6 +57,7 @@ class LatencyLogger(NoOPObserver):
                         json.loads(json_string)["episode_n"])
                 elif tag == self.play_end_tag:
                     break
+
 
 class LatencyObserver(NoOPObserver):
     def __init__(self):
