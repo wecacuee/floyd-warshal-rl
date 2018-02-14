@@ -4,7 +4,7 @@ from queue import PriorityQueue
 import cog.draw as draw
 import logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 class QLearningDiscrete(Alg):
     def __init__(self,
@@ -81,6 +81,9 @@ class QLearningDiscrete(Alg):
     def _hit_goal(self, rew):
         return rew >= 9
 
+    def on_hit_goal(self, obs, act, rew):
+        self.last_state_idx_act = None
+
     def update(self, obs, act, rew):
         if not self.observation_space.contains(obs):
             raise ValueError(f"Bad observation {obs}")
@@ -94,7 +97,7 @@ class QLearningDiscrete(Alg):
             return
 
         if self._hit_goal(rew):
-            self.last_state_idx_act = None
+            self.on_hit_goal(obs, act, rew)
 
         # Abbreviate the variables
         qm = self.action_value_momentum
@@ -117,7 +120,8 @@ class QLearningDiscrete(Alg):
         return False
 
 class QLearningVis(NoOPObserver):
-    def __init__(self):
+    def __init__(self, update_interval):
+        self.update_interval = update_interval
         self.grid_shape = None
         self.goal_pose = None
         self._inverted_hash_state = None
@@ -150,9 +154,8 @@ class QLearningVis(NoOPObserver):
 
         for act in range(4):
             mat = np.ones(self.grid_shape) * self.alg.init_value
-            if action_value.size:
-                for state_pose, state_idx in hash_state.items():
-                    mat[state_pose] = action_value[state_idx, act]
+            for state_pose, state_idx in hash_state.items():
+                mat[state_pose] = action_value(state_idx, act) or mat[state_pose]
             big_r = act // 2
             big_c = act % 2
             big_mat[big_r::2, big_c::2] = mat
@@ -164,7 +167,7 @@ class QLearningVis(NoOPObserver):
         action_value_mat = self._action_value_to_matrices(
             action_value, hash_state)
         action_value_mat += np.min(action_value_mat[:])
-        draw.matshow(ax, action_value_mat)
+        draw.matshow(ax, self.normalize_by_std(action_value_mat))
         for i, j in np.ndindex(action_value_mat.shape):
             center = np.array((i*50 + 25, j*50 + 25))
             if i % 2 == 0 and j % 2 == 0:
@@ -197,7 +200,10 @@ class QLearningVis(NoOPObserver):
         ax.set_yticks([])
         ax.set_xlim([0, self.grid_shape[1]*cellsize])
         ax.set_ylim([0, self.grid_shape[0]*cellsize])
-        self.visualize_action_value(ax, action_value, hash_state)
+        self.visualize_action_value(
+            ax,
+            lambda s, a: (action_value[s, a] if action_value.size else None),
+            hash_state)
         ax2 = ax.figure.add_axes([0.5, 0, 0.5, 1], frameon=False)
         ax2.set_position([0.5, 0, 0.5, 1])
         ax2.clear()
@@ -207,6 +213,18 @@ class QLearningVis(NoOPObserver):
         ax2.set_xlim([0, self.grid_shape[1]*cellsize])
         ax2.set_ylim([0, self.grid_shape[0]*cellsize])
         self.visualize_policy(ax2, self.alg.policy, hash_state)
+
+    def normalize_by_std(self, mat):
+        if not np.any(mat):
+            return mat
+        median_mat = np.median(mat[:])
+        std_mat = np.std(mat[:])
+        norm_mat = (mat - median_mat)
+        if std_mat:
+             norm_mat = norm_mat / (1.5*std_mat)
+        norm_mat[norm_mat < -1] = -1
+        norm_mat[norm_mat > +1] = +1
+        return norm_mat
 
     def on_new_goal_pose(self, goal_pose):
         cellsize = 100
@@ -222,7 +240,7 @@ class QLearningVis(NoOPObserver):
         if not np.any(self.goal_pose == self.prob.goal_pose):
             self.on_new_goal_pose(self.prob.goal_pose)
             
-        if self.update_steps % 20 == 0:
+        if self.update_steps % self.update_interval == 0:
             self.on_new_goal_pose(self.goal_pose)
         self.update_steps += 1
 

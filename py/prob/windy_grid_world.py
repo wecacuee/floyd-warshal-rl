@@ -183,13 +183,23 @@ class WindyGridWorld(object):
             " ^^^ ",
             "  +  "]))
 
+
+def random_goal_pose_gen(prob):
+    return prob.grid_world.valid_random_pos()
+
+def random_start_pose_gen(prob, goal_pose):
+    start_pose = goal_pose
+    while np.all(start_pose == goal_pose):
+        start_pose = prob.grid_world.valid_random_pos()
+    return start_pose
+
 class AgentInGridWorld(Problem):
     def __init__(self, seed, grid_world, start_pose_gen, goal_pose_gen,
                  goal_reward, max_steps, wall_penality):
         self.grid_world        = grid_world
+        self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
         self.action_space      = Act2DSpace(seed)
-        self.goal_pose_gen     = goal_pose_gen
         self.goal_reward       = goal_reward
         self.max_steps         = max_steps
         self._hit_wall_penality = wall_penality
@@ -218,7 +228,7 @@ class AgentInGridWorld(Problem):
         return self.pose, self.reward()
 
     def _respawn(self):
-        self.pose          = self.start_pose_gen(self)
+        self.pose          = self.start_pose_gen(self, self.goal_pose)
 
     def hit_goal(self):
         return np.all(self.goal_pose == self.pose)
@@ -251,8 +261,8 @@ class AgentInGridWorld(Problem):
     def episode_reset(self):
         self.steps         = 0
         self._last_reward  = 0
-        self.pose          = self.start_pose_gen(self)
         self.goal_pose     = self.goal_pose_gen(self)
+        self.pose          = self.start_pose_gen(self, self.goal_pose)
 
     def done(self):
         return self.steps >= self.max_steps

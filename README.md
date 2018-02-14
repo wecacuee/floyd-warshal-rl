@@ -17,9 +17,17 @@
 * DONE Randomize the goal on new episode
   py/prob/windy_grid_world.py
 * TODO Evalute in comparison to Q-learning with fresh explorer and finder, Q-learning with goal state.
+* DONE Implement latency 1: > 1
   in terms of latency and distance inefficiency.
-* TODO Implement latency 1: > 1
-  CLOCK: [2018-02-13 Tue 21:28]
+  Floyd rewards: 773.0 = sum([35.0, 33.0, 145.0, 11.0, 91.0, 123.0, 54.0, 237.0, 44.0])
+  Latency: 10.53
+  min latency : 0.23
+  max latency : 58.5
+
+  Q learning rewards: 750 = sum([159.0, 11.0, 80.0, 175.0, 151.0, 9.0, 85.0, 31.0, 49.0])
+  Latency : 6.001897273610246;
+  min latency 1.135483870967742;
+  max latency 18.433734939759034
 
 ## Experimental setup
 

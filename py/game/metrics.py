@@ -6,13 +6,13 @@ def mean(l):
 
 
 def latency_from_time_list(time_list, n=1):
-    return mean(time_list[:n]) / mean(time_list[n+1:])
+    return mean(time_list[:n]) / mean(time_list[n:])
 
 
 def compute_latency(times_to_goal_hit_all_episodes):
     # Need at least two hits to the goal for validity
     valid_times = filter(lambda t: len(t) >= 2, times_to_goal_hit_all_episodes)
-    latencies_all_episode = map(latency_from_time_list, valid_times)
+    latencies_all_episode = list(map(latency_from_time_list, valid_times))
     return (mean(latencies_all_episode),
             min(latencies_all_episode), max(latencies_all_episode))
 
@@ -82,6 +82,7 @@ class LatencyObserver(NoOPObserver):
         if self.prob.hit_goal(): self.on_goal_hit(self.prob.steps)
 
     def on_play_end(self):
+        self.on_new_episode(len(self.times_to_goal_hit)+1)
         mean_latency, min_l, max_l = compute_latency(
             self.times_to_goal_hit_all_episodes)
         print(f"latency : {mean_latency}; min latency {min_l}; max latency {max_l}")

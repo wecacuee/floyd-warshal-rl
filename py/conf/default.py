@@ -3,9 +3,10 @@ from cog.confutils import (Conf, dict_update_recursive,
 import numpy as np
 
 def AgentInGridWorldDefaultConfGen(play_conf):
+    from prob.windy_grid_world import random_goal_pose_gen, random_start_pose_gen
     return Conf(
-        start_pose_gen = lambda prob: prob.grid_world.valid_random_pos(),
-        goal_pose_gen  = lambda prob: prob.grid_world.valid_random_pos(),
+        start_pose_gen = random_start_pose_gen,
+        goal_pose_gen  = random_goal_pose_gen,
         goal_reward    = 10,
         max_steps      = 200,
         wall_penality  = 1.0)
@@ -37,6 +38,10 @@ class CommonPlayConf(Conf):
     def __init__(self, **kw):
         super().__init__(**kw)
         self._rng = None
+        self._alg = None
+        self._grid_world = None
+        self._prob = None
+        self._observer = None
 
     @property
     def rng(self):
@@ -54,29 +59,36 @@ class CommonPlayConf(Conf):
     @property
     def observer(self):
         from game.play import MultiObserver
-        return MultiObserver(
-            { name : obs_class(**kw)
-              for (name, obs_class), kw in zip(self.observer_classes.items(), 
-                                               self.observer_classes_kwargs)})
+        if self._observer is None:
+            self._observer = MultiObserver(
+                { name : obs_class(**vars(kw))
+                  for (name, obs_class), kw in zip(
+                          self.observer_classes.items(), 
+                          self.observer_classes_kwargs) })
+        return self._observer
 
     @property
     def grid_world(self):
-        return self.grid_world_class(
-            self._next_seed(),
-            self.grid_world_maze_string,
-            **vars(self.grid_world_kwargs))
+        if self._grid_world is None:
+            self._grid_world = self.grid_world_class(
+                self._next_seed(),
+                self.grid_world_maze_string,
+                **vars(self.grid_world_kwargs))
+        return self._grid_world
 
     @property 
     def prob(self):
-        return self.prob_class(
-            self._next_seed(),
-            self.grid_world,
-            **vars(self.prob_kwargs))
+        if self._prob is None:
+            self._prob = self.prob_class(
+                self._next_seed(),
+                self.grid_world,
+                **vars(self.prob_kwargs))
+        return self._prob
 
     def defaults(self):
         from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld)
         defaults      = dict(
-            nepisodes = 10,
+            nepisodes = 100,
             seed      = 0,
 
             grid_world_maze_string = None,
@@ -102,15 +114,15 @@ class FloydWarshallPlayConf(CommonPlayConf):
                 QLearningDiscreteDefaultConfGen(self),
 
                 # FloydWarshallAlgDiscrete
-                Conf(
-                  path_cost_momentum    = 0.9,  # High momemtum changes less frequently
-                ),
+                Conf(),
             ],
 
-            observer_classes = dict(logger = LoggingObserver,
-                                    visualizer = FloydWarshallVisualizer,
-                                    metrics = LatencyObserver),
-            observer_classes_kwargs = [dict(), dict()],
+            observer_classes = dict(logger     = LoggingObserver,
+                                    #visualizer = FloydWarshallVisualizer,
+                                    metrics    = LatencyObserver),
+            observer_classes_kwargs = [Conf(),
+                                       #Conf(update_interval = 20),
+                                       Conf()],
         ))
         return defaults
 
@@ -126,17 +138,19 @@ class QLearningPlayConf(CommonPlayConf):
                 QLearningDiscreteDefaultConfGen(self),
             ],
 
-            observer_classes = dict(logger = LoggingObserver,
-                                    visualizer = QLearningVis,
-                                    metrics = LatencyObserver),
-            observer_classes_kwargs = [dict(), dict()],
+            observer_classes = dict(logger     = LoggingObserver,
+                                    #visualizer = QLearningVis,
+                                    metrics    = LatencyObserver),
+            observer_classes_kwargs = [Conf(),
+                                       #Conf(update_interval = 20),
+                                       Conf()],
         ))
         return defaults
 
 class MultiPlayConf(QLearningPlayConf):
     def defaults(self):
         from game.play import NoOPObserver
-        return dict(trials_classes = [QLearningPlayConf, FloydWarshallPlayConf])
+        return dict(trials_classes = [FloydWarshallPlayConf, QLearningPlayConf])
 
     @property
     def trials(self):

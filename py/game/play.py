@@ -138,7 +138,8 @@ class LoggingObserver(NoOPObserver):
         super().__init__()
         
     def on_new_episode(self, episode_n):
-        logger.info(f" +++++++++++++++++ New episode: {episode_n} +++++++++++++")
+        logger.debug(
+            f" +++++++++++++++++ New episode: {episode_n} +++++++++++++")
         self.episode_n = episode_n
         self.all_episode_rew.append(self.total_rew)
         self.total_rew = 0
@@ -147,11 +148,11 @@ class LoggingObserver(NoOPObserver):
         prob = self.prob
         self.total_rew += rew
         if prob.steps % 5 == 0:
-            logger.info(
+            logger.debug(
                 f"episode = {self.episode_n}, step = {prob.steps}, obs = {obs}; action = {action}; rew = {rew}; total_episode_reward = {self.total_rew}")
 
     def on_play_end(self):
-        logger.info(f"all_episode_rew : {self.all_episode_rew}")
+        logger.info(f"all_episode_rew : {sum(self.all_episode_rew)}")
 
 # Sample refrees
 def play(alg, prob, observer, nepisodes):
@@ -173,7 +174,7 @@ def play_episode(alg, prob, observer, episode_n):
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        prob.render(None, 100, wait_time=1)
+        #prob.render(None, 100, wait_time=1)
 
     prob.episode_reset()
     alg.episode_reset()
@@ -183,6 +184,7 @@ def play_from_conf(conf):
 
 def multiplay(multiconf):
     for conf in multiconf.trials:
+        print(f"Running trial {conf.__class__.__name__}")
         play_from_conf(conf)
 
 if __name__ == '__main__':
