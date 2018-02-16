@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 import logging
+import json
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -96,7 +97,7 @@ class NoOPObserver(object):
     def set_alg(self, alg):
         self.alg = alg
 
-    def getattr(self, attr):
+    def __getattr__(self, attr):
         return lambda *args, **kwargs : 0
 
 
@@ -131,28 +132,73 @@ class MultiObserver(object):
         
 
 class LoggingObserver(NoOPObserver):
-    def __init__(self):
-        self.episode_n = 0
-        self.total_rew = 0
-        self.all_episode_rew = []
+    def __init__(self, logfilepath, log_interval):
+        self.logfilepath = logfilepath
+        self.log_interval = log_interval
+        self.human_tag = "INFO"
+        self.goal_hit_tag = f"{self.__class__.__name__}:goal_hit"
+        self.new_step_tag = f"{self.__class__.__name__}:new_step"
+        self.new_episode_tag = f"{self.__class__.__name__}:new_episode"
+        self.play_end_tag = f"{self.__class__.__name__}:play_end"
+        self.sep = "\t"
         super().__init__()
-        
-    def on_new_episode(self, episode_n):
-        logger.debug(
-            f" +++++++++++++++++ New episode: {episode_n} +++++++++++++")
-        self.episode_n = episode_n
-        self.all_episode_rew.append(self.total_rew)
-        self.total_rew = 0
+        print(f"LatencyLogger to file path: {self.logfilepath}")
 
-    def on_new_step(self, obs, rew, action):
-        prob = self.prob
-        self.total_rew += rew
-        if prob.steps % 5 == 0:
-            logger.debug(
-                f"episode = {self.episode_n}, step = {prob.steps}, obs = {obs}; action = {action}; rew = {rew}; total_episode_reward = {self.total_rew}")
+    def info(self, tag, message):
+        with open(self.logfilepath, "a") as log:
+            log.write(self.sep.join((tag, str(len(message)) , message)))
+            log.write("\n")
+
+    def on_new_episode(self, episode_n):
+        self.last_episode_n = episode_n
+        json_string = json.dumps(
+            dict(episode_n=episode_n, goal_pose=self.prob.goal_pose.tolist()))
+        self.info(self.human_tag, 
+            f" +++++++++++++++++ New episode: {episode_n} +++++++++++++")
+        self.info(self.new_episode_tag, json_string)
+
+    def on_goal_hit(self, current_step):
+        json_string = json.dumps(
+            dict(episode_n=self.last_episode_n, steps=current_step))
+        self.info(self.goal_hit_tag, json_string)
+
+    def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps):
+        if self.prob.hit_goal(): self.on_goal_hit(self.prob.steps)
+        if steps % self.log_interval == 0:
+            self.info(self.new_step_tag,
+                      json.dumps(dict(episode_n = int(self.last_episode_n),
+                                      steps     = int(steps),
+                                      obs       = obs.tolist(),
+                                      rew       = float(rew),
+                                      act       = int(act),
+                                      pose      = pose.tolist())))
+
+    def on_new_step(self, obs, rew, act):
+        self.on_new_step_with_pose_steps(
+            obs, rew, act, self.prob.pose, self.prob.steps)
 
     def on_play_end(self):
-        logger.info(f"all_episode_rew : {sum(self.all_episode_rew)}")
+        self.info(self.play_end_tag, json.dumps({}))
+        self.info(self.human_tag, "End of play")
+
+    def tag_event_map(self):
+        return dict([(self.new_step_tag, "on_new_step_with_pose_steps"),
+                     (self.goal_hit_tag, "on_goal_hit"),
+                     (self.new_episode_tag, "on_new_episode"),
+                     (self.play_end_tag, "on_play_end")])
+
+    def replay_observers_from_logs(self, observers, logfilepath):
+        tag_event_map = self.tag_event_map()
+        with open(logfilepath, "r") as log:
+            for logline in log:
+                tag, length, json_string = logline.strip().split("\t")
+                assert int(length) == len(json_string), \
+                    f"Corrupted log line {length} <=> {len(json_string)}"
+                if tag in tag_event_map:
+                    for obs in observers:
+                        if hasattr(obs, tag_event_map[tag]):
+                            getattr(obs, tag_event_map[tag])(
+                                **json.loads(json_string))
 
 # Sample refrees
 def play(alg, prob, observer, nepisodes):
@@ -179,16 +225,7 @@ def play_episode(alg, prob, observer, episode_n):
     prob.episode_reset()
     alg.episode_reset()
         
-def play_from_conf(conf):
-    play(conf.alg, conf.prob, conf.observer, conf.nepisodes)
-
-def multiplay(multiconf):
-    for conf in multiconf.trials:
+def multiplay(trials):
+    for conf in trials:
         print(f"Running trial {conf.__class__.__name__}")
-        play_from_conf(conf)
-
-if __name__ == '__main__':
-    import sys
-    from cog.confutils import Conf
-    conf = Conf.parse_all_args("conf.default:MultiPlayConf", sys.argv[1:])
-    multiplay(conf)
+        play(conf.alg, conf.prob, conf.observer, conf.nepisodes)

@@ -1,11 +1,32 @@
+"""
+This modules describes a minilanguage that is meant to describe what
+instead of how.
+If this was scheme, it would have been trivial. But I am trying to
+stay as pythonic as possible using introspection, lambdas and
+properties.
+"""
 import importlib
 from argparse import Namespace, ArgumentParser
 import inspect
+from string import Formatter
+from collections import namedtuple
+from cog.memoize import MethodMemoizer
 
+"""
+A pair of function and configuration object that can be applied using apply_conf
+"""
+LazyApplyable = namedtuple("LazyApplyable", "func conf".split())
+
+def apply_conf(func, conf):
+    required_args = list(inspect.signature(func).parameters.keys())
+    return func( ** { k : conf[k] for k in required_args } )
+
+MEMOIZE_METHOD = MethodMemoizer()
 class Conf(Namespace):
     def __init__(self, **kw):
         defaults = self.defaults()
         updated_kw = dict_update_recursive(defaults, kw)
+        MEMOIZE_METHOD.init_obj(self)
         super().__init__(**updated_kw)
 
     def defaults(self):
@@ -33,9 +54,9 @@ class Conf(Namespace):
         return getattr(module, class_)
 
     @classmethod
-    def parse_all_args(cls, default_config, args):
+    def parse_all_args(cls, default_config, args, **kwargs):
         c, remargs = cls.parser(default_config).parse_known_args(args)
-        conf = cls.import_class(c.config)()
+        conf = cls.import_class(c.config)(**kwargs)
         return conf.parse_remargs(remargs)
 
     def parse_remargs(self, remargs):
@@ -56,6 +77,9 @@ class Conf(Namespace):
     def run_checks(self):
         return True
 
+    def apply_func(self):
+        return apply_conf(self.func, self)
+
 def dict_update_recursive(ddest, dsrc):
     for k, v in dsrc.items():
         if hasattr(v, "items"):
@@ -67,21 +91,6 @@ def dict_update_recursive(ddest, dsrc):
             ddest[k] = v
 
     return ddest
-
-def init_class_stack(classes, class_kwargs_list):
-    # Initialize a stack of algorithm objects with their wrappers
-    obj = None
-    for class_, kwargs in zip(classes, class_kwargs_list):
-        required_args = list(inspect.signature(class_).parameters.keys())
-        if obj is None:
-            kw = { k : kwargs[k] for k in required_args }
-            obj = class_(** kw )
-        else:
-            kw = { k : kwargs[k] for k in required_args[1:] }
-            obj = class_(obj, **kw)
-
-    return obj
-    
 
 def NewConfClass(name, **kwargs):
     """
@@ -113,3 +122,33 @@ def NewConfClass(name, **kwargs):
     return type(name, (Conf,),
                 { k : property(v) if callable(v) else v
                   for k, v in kwargs.items() })
+
+
+def format_string_from_obj(strformat, obj):
+    fieldnames = [fn
+                  for lt, fn, fs, conv in Formatter().parse(strformat)
+                  if fn is not None]
+    formattted_string = strformat.format(**{fn : getattr(obj, fn)
+                                            for fn in fieldnames})
+    return formattted_string
+
+
+def serialize_list(l):
+    return list(map(serialize_any, l))
+
+def serialize_dict(d):
+    return { k : serialize_any(v) for k, v in d.items() }
+
+
+def serialize_any(obj):
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    elif isinstance(obj, list):
+        return serialize_list(obj)
+    elif isinstance(obj, dict):
+        return serialize_dict(obj)
+    elif isinstance(obj, Conf):
+        return serialize_dict(vars(obj))
+    else:
+        #print(f"serialize_any : ignoring {type(obj)}")
+        return {}

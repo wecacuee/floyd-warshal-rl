@@ -1,10 +1,33 @@
 from cog.confutils import (Conf, dict_update_recursive,
-                           init_class_stack, NewConfClass)
+                           NewConfClass,
+                           format_string_from_obj, apply_conf,
+                           serialize_any,
+                           LazyApplyable)
+
+from cog.memoize import MethodMemoizer
+from cog.misc import ensuredirs
 import numpy as np
+import hashlib
+import pickle
+import time
+import os
+from string import Formatter
+
+from alg.floyd_warshall_grid import FloydWarshallAlgDiscrete
+from alg.qlearning import QLearningDiscrete, QLearningVis
+from game.metrics import (ComputeMetricsFromLogReplay,
+                          LatencyObserver, DistineffObs)
+from game.play import LoggingObserver, MultiObserver, play, multiplay
+from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld,
+                                   random_goal_pose_gen, random_start_pose_gen)
 
 def AgentInGridWorldDefaultConfGen(play_conf):
-    from prob.windy_grid_world import random_goal_pose_gen, random_start_pose_gen
-    return Conf(
+    return NewConfClass(
+        "AgentInGridWorldConf",
+        seed = lambda s : play_conf._next_seed(),
+        grid_world = lambda s : play_conf.grid_world,
+    ) (
+        func           = AgentInGridWorld,
         start_pose_gen = random_start_pose_gen,
         goal_pose_gen  = random_goal_pose_gen,
         goal_reward    = 10,
@@ -17,15 +40,43 @@ def QLearningDiscreteDefaultConfGen(play_conf):
         action_space        = lambda s: play_conf.prob.action_space,
         observation_space   = lambda s: play_conf.prob.observation_space,
         seed                = lambda s: play_conf._next_seed(),
-    )(egreedy_epsilon       = 0.2,
-      action_value_momentum = 0.1, # Low momentum changes more frequently
-      init_value            =   1,
-      discount              = 0.99,
+    )(
+        func                  = QLearningDiscrete,
+        egreedy_epsilon       = 0.2,
+        action_value_momentum = 0.1, # Low momentum changes more frequently
+        init_value            =   1,
+        discount              = 0.99,
     )
 
 def WindyGridWorldDefaultConfGen(play_conf):
-    return Conf(wind_strength = 0.1)
+    return NewConfClass(
+        "WindyGridWorldConf",
+        seed = lambda s: play_conf._next_seed(),
+        maze = lambda s: WindyGridWorld.default_maze(),
+    ) (
+        func          = WindyGridWorld,
+        wind_strength = 0.1)
 
+def LoggingObserverConfGen(play_conf):
+    return NewConfClass(
+        "LoggingObserverConf",
+        prob        = lambda s : play_conf.prob,
+        logfilepath = lambda s : play_conf.log_file)(
+            func         = LoggingObserver,
+            log_interval = 1)
+
+def ComputeMetricsFromLogReplayConfGen(play_conf):
+    return NewConfClass(
+        "ComputeMetricsFromLogReplayConf",
+        loggingobserver   = lambda s: play_conf.logging_observer,
+        metrics_observers = lambda s : [play_conf.latency_observer,
+                                        play_conf.distineff_observer],
+        logfilepath       = lambda s : play_conf.log_file
+    )(
+        func              = ComputeMetricsFromLogReplay)
+
+
+MEMOIZE_METHOD = MethodMemoizer()
 class CommonPlayConf(Conf):
     """
     Follow the principle of delayed execution.
@@ -37,124 +88,155 @@ class CommonPlayConf(Conf):
     """
     def __init__(self, **kw):
         super().__init__(**kw)
-        self._rng = None
-        self._alg = None
-        self._grid_world = None
-        self._prob = None
-        self._observer = None
+        MEMOIZE_METHOD.init_obj(self)
 
     @property
+    @MEMOIZE_METHOD
     def rng(self):
-        if self._rng is None:
-            self._rng = np.random.RandomState(self.seed)
-        return self._rng
+        return np.random.RandomState(self.seed)
 
     def _next_seed(self):
         return self.rng.randint(1000)
 
     @property
-    def alg(self):
-        return init_class_stack(self.alg_class_stack, self.alg_kwargs_stack)
+    @MEMOIZE_METHOD
+    def exp_name(self):
+        return self.__class__.__name__
 
     @property
-    def observer(self):
-        from game.play import MultiObserver
-        if self._observer is None:
-            self._observer = MultiObserver(
-                { name : obs_class(**vars(kw))
-                  for (name, obs_class), kw in zip(
-                          self.observer_classes.items(), 
-                          self.observer_classes_kwargs) })
-        return self._observer
+    @MEMOIZE_METHOD
+    def run_time(self):
+        return time.strftime(self.run_time_format)
 
     @property
+    def log_file_latest(self):
+        return format_string_from_obj(self.log_file_latest_template, self)
+
+    @property
+    def log_file_dir(self):
+        return format_string_from_obj(self.log_file_dir_template, self)
+
+    @property
+    def latency_observer(self):
+        return LatencyObserver(self.prob)
+
+    @property
+    def distineff_observer(self):
+        return DistineffObs(self.prob)
+        
+    @property
+    @MEMOIZE_METHOD
+    def log_file(self):
+        log_file = ensuredirs(
+            format_string_from_obj(self.log_file_template, self))
+
+        if self.log_file_latest != log_file and not os.path.exists(log_file):
+            with open(log_file, "a") as f: pass
+
+            if os.path.exists(self.log_file_latest):
+                os.remove(self.log_file_latest)
+            os.symlink(log_file, self.log_file_latest)
+        return log_file
+
+    @property
+    @MEMOIZE_METHOD
     def grid_world(self):
-        if self._grid_world is None:
-            self._grid_world = self.grid_world_class(
-                self._next_seed(),
-                self.grid_world_maze_string,
-                **vars(self.grid_world_kwargs))
-        return self._grid_world
+        return self.grid_world_conf.apply_func()
 
-    @property 
+    @property
+    @MEMOIZE_METHOD
     def prob(self):
-        if self._prob is None:
-            self._prob = self.prob_class(
-                self._next_seed(),
-                self.grid_world,
-                **vars(self.prob_kwargs))
-        return self._prob
+        return self.prob_conf.apply_func()
+
+    @property
+    @MEMOIZE_METHOD
+    def logging_observer(self):
+        return self.logging_observer_conf.apply_func()
+
+    @property
+    @MEMOIZE_METHOD
+    def compute_metrics_from_replay(self):
+        return self.compute_metrics_from_replay.apply_func()
+
+    @property
+    @MEMOIZE_METHOD
+    def observer(self):
+        return self.observer_conf.apply_func()
 
     def defaults(self):
-        from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld)
         defaults      = dict(
+            func      = play,
             nepisodes = 100,
             seed      = 0,
 
-            grid_world_maze_string = None,
-            grid_world_class       = WindyGridWorld,
-            grid_world_kwargs      = WindyGridWorldDefaultConfGen(self),
+            grid_world_conf = WindyGridWorldDefaultConfGen(self),
 
-            prob_class = AgentInGridWorld,
-            prob_kwargs = AgentInGridWorldDefaultConfGen(self),
+            prob_conf = AgentInGridWorldDefaultConfGen(self),
+
+            logging_observer_conf = LoggingObserverConfGen(self),
+
+            compute_metrics_from_replay_conf =
+                ComputeMetricsFromLogReplayConfGen(self),
+
+            observer_conf = 
+                NewConfClass("MultiObserverConf",
+                    observers = lambda s : dict(
+                        logger     = self.logging_observer,
+                        metrics    = self.compute_metrics_from_replay)
+                ) (
+                    func = MultiObserver),
+
+            log_file_dir_template = "{data_dir}/{project_name}/{exp_name}",
+            log_file_template = "{log_file_dir}/{run_time}.log",
+            log_file_latest_template = "{log_file_dir}/latest.log",
+            data_dir          = os.environ["MID_DIR"],
+            project_name      = "floyd_warshall_rl",
+            run_time_format   = "%Y%m%d-%H%M%S"
         )
         return defaults
 
+
 class FloydWarshallPlayConf(CommonPlayConf):
     def defaults(self):
-        from alg.qlearning import QLearningDiscrete
-        from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
-                                             FloydWarshallVisualizer)
-        from game.play import LoggingObserver
-        from game.metrics import LatencyObserver
         defaults = super().defaults()
-        defaults.update(dict(
-            alg_class_stack = [QLearningDiscrete, FloydWarshallAlgDiscrete],
-            alg_kwargs_stack            = [
-                QLearningDiscreteDefaultConfGen(self),
-
-                # FloydWarshallAlgDiscrete
-                Conf(),
-            ],
-
-            observer_classes = dict(logger     = LoggingObserver,
-                                    #visualizer = FloydWarshallVisualizer,
-                                    metrics    = LatencyObserver),
-            observer_classes_kwargs = [Conf(),
-                                       #Conf(update_interval = 20),
-                                       Conf()],
-        ))
+        defaults = dict_update_recursive(
+            defaults,
+            dict(
+                alg = LazyApplyable(
+                    FloydWarshallAlgDiscrete,
+                    Conf(qlearning = LazyApplyable(
+                        QLearningDiscrete,
+                        QLearningDiscreteDefaultConfGen(self))))))
         return defaults
+
 
 class QLearningPlayConf(CommonPlayConf):
     def defaults(self):
-        from alg.qlearning import QLearningDiscrete, QLearningVis
-        from game.play import LoggingObserver
-        from game.metrics import LatencyObserver
         defaults = super().defaults()
-        defaults.update(dict(
-            alg_class_stack = [QLearningDiscrete],
-            alg_kwargs_stack            = [
-                QLearningDiscreteDefaultConfGen(self),
-            ],
-
-            observer_classes = dict(logger     = LoggingObserver,
-                                    #visualizer = QLearningVis,
-                                    metrics    = LatencyObserver),
-            observer_classes_kwargs = [Conf(),
-                                       #Conf(update_interval = 20),
-                                       Conf()],
-        ))
+        dict_update_recursive(
+            defaults,
+            dict(
+                alg = LazyApplyable(
+                    QLearningDiscrete,
+                    QLearningDiscreteDefaultConfGen(self))))
         return defaults
+
 
 class MultiPlayConf(QLearningPlayConf):
     def defaults(self):
-        from game.play import NoOPObserver
-        return dict(trials_classes = [FloydWarshallPlayConf, QLearningPlayConf])
+        defaults = super().defaults()
+        defaults = dict_update_recursive(
+            defaults,
+            dict(func = multiplay))
+        return defaults
 
     @property
+    @MEMOIZE_METHOD
     def trials(self):
-        return [class_(**vars(self)) for class_ in self.trials_classes]
+        return [FloydWarshallPlayConf(), QLearningPlayConf()]
 
 
-        
+if __name__ == '__apply_func__':
+    import sys
+    conf = Conf.parse_all_args("conf.default:MultiPlayConf", sys.argv[1:])
+    conf.apply_func()

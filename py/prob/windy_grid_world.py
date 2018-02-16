@@ -3,9 +3,15 @@ from __future__ import absolute_import, division, print_function
 from game.play import Space, Problem
 import numpy as np
 from cog import draw
+import numpy as np
+from cog.memoize import MethodMemoizer
+
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+METHOD_MEMOIZER = MethodMemoizer()
 
 
 def maze_from_string(maze_string,
@@ -153,8 +159,9 @@ class WindyGridWorld(object):
                 wind_dir = self.wind_dir((c,r))
                 pt1 = center - wind_dir * grid_size / 8
                 pt2 = center + wind_dir * grid_size / 8
-                draw.arrowedLine(canvas, pt1, pt2,
-                                 draw.color_from_rgb((0,0,0)), thickness=5, tipLength=10)
+                draw.arrowedLine(
+                    canvas, pt1, pt2,
+                    draw.color_from_rgb((0,0,0)), thickness=5, tipLength=10)
                 
         return canvas
 
@@ -209,10 +216,18 @@ class AgentInGridWorld(Problem):
             upper_bound = np.array(grid_world.shape),
             seed        = seed) 
         self.episode_reset()
+        METHOD_MEMOIZER.init_obj(self)
 
     @property
     def grid_shape(self):
         return self.grid_world.shape
+
+    def imagine_step(self, pose, act):
+        """ Imagine taking a step but do not modify any state variables """
+        pose, hit_wall = self.grid_world.next_pose(
+            pose,
+            self.action_space.tovector(act))
+        return pose, hit_wall
 
     def step(self, act):
         if self.hit_goal():
@@ -220,9 +235,7 @@ class AgentInGridWorld(Problem):
             self._last_reward = 0
         else:
             old_pose = self.pose
-            self.pose, hit_wall = self.grid_world.next_pose(
-                self.pose,
-                self.action_space.tovector(act))
+            self.pose, hit_wall = self.imagine_step(self.pose, act)
             self._last_reward = -self._hit_wall_penality if hit_wall else 0
         self.steps += 1
         return self.pose, self.reward()
@@ -267,17 +280,48 @@ class AgentInGridWorld(Problem):
     def done(self):
         return self.steps >= self.max_steps
 
+    @METHOD_MEMOIZER
+    def valid_nbrs(self, pos, samples=10):
+        nbrs = set()
+        for _ in range(samples):
+            for a in self.action_space.values():
+                valid_pose, _ = self.imagine_step(np.asarray(pos), a)
+                if np.any(valid_pose != np.asarray(pos)):
+                    nbrs.add(tuple(valid_pose.tolist()))
+        return nbrs
+
+    @METHOD_MEMOIZER
+    def shortest_path_length(self, start, end, visited=None):
+        assert start is not None and end is not None
+        if visited is None:
+            visited = set()
+        visited.add(tuple(start))
+
+        if np.all(start == end):
+            return 0
+        else:
+            unvisited_nbrs = self.valid_nbrs(start) - visited
+            length = min(
+                [self.shortest_path_length(nbr, end, visited | unvisited_nbrs)
+                 for nbr in unvisited_nbrs],
+                default = np.inf)
+            return length + 1#, [tuple(start)] + path
+
 
 class AgentInGridWorldObserver(object):
     pass
 
         
 if __name__ == '__main__':
-    agent = AgentInGridWorld(0,
-        grid_world  = WindyGridWorld(0, WindyGridWorld.default_maze()),
-        pose        = [1, 1],
-        goal_pose   = [3, 4],
-        goal_reward = 10)
+    agent = AgentInGridWorld(
+        0,
+        grid_world     = WindyGridWorld(0, WindyGridWorld.default_maze()),
+        start_pose_gen = lambda s, g : [1, 1],
+        goal_pose_gen  = lambda s : [3, 4],
+        goal_reward    = 10,
+        max_steps      = 100,
+        wall_penality  = 1
+    )
 
     direc_ = dict(w=0, a=1, d=2, x=3)
     k = np.random.randint(4)
