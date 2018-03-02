@@ -1,2 +1,6 @@
-module load miniconda3 numpy/py3.6 cuda opencv/3.4.0 matplotlib
-export MID_DIR="/z/home/dhiman/mid/"
+THISDIR=$(dirname $(readlink -m "${BASH_SOURCE[0]}"))
+source envsetup/*.sh
+PYPATH=$THISDIR/py
+if [ $PYTHONPATH != *"$PYPATH"* ]; then
+    export PYTHONPATH=$PYPATH:$PYTHONPATH
+fi
