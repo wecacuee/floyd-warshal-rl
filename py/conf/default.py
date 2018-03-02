@@ -1,3 +1,11 @@
+import numpy as np
+import hashlib
+import pickle
+import time
+import os
+from string import Formatter
+from pathlib import Path
+
 from cog.confutils import (Conf, dict_update_recursive,
                            NewConfClass,
                            format_string_from_obj, apply_conf,
@@ -6,20 +14,15 @@ from cog.confutils import (Conf, dict_update_recursive,
 
 from cog.memoize import MethodMemoizer
 from cog.misc import ensuredirs
-import numpy as np
-import hashlib
-import pickle
-import time
-import os
-from string import Formatter
 
-from alg.floyd_warshall_grid import FloydWarshallAlgDiscrete
+from alg.floyd_warshall_grid import FloydWarshallAlgDiscrete, FloydWarshallVisualizer
 from alg.qlearning import QLearningDiscrete, QLearningVis
 from game.metrics import (ComputeMetricsFromLogReplay,
                           LatencyObserver, DistineffObs)
 from game.play import LoggingObserver, MultiObserver, play, multiplay
 from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld,
-                                   random_goal_pose_gen, random_start_pose_gen)
+                                   random_goal_pose_gen, random_start_pose_gen,
+                                   maze_from_filepath)
 
 def AgentInGridWorldDefaultConfGen(play_conf):
     return NewConfClass(
@@ -32,7 +35,9 @@ def AgentInGridWorldDefaultConfGen(play_conf):
         goal_pose_gen  = random_goal_pose_gen,
         goal_reward    = 10,
         max_steps      = 200,
-        wall_penality  = 1.0)
+        wall_penality  = 1.0,
+        no_render      = False
+    )
 
 def QLearningDiscreteDefaultConfGen(play_conf):
     return NewConfClass(
@@ -52,7 +57,7 @@ def WindyGridWorldDefaultConfGen(play_conf):
     return NewConfClass(
         "WindyGridWorldConf",
         seed = lambda s: play_conf._next_seed(),
-        maze = lambda s: WindyGridWorld.default_maze(),
+        maze = lambda s: maze_from_filepath(Path(__file__).parent / "maze_5x5_no_wind.txt"),
     ) (
         func          = WindyGridWorld,
         wind_strength = 0.1)
@@ -123,7 +128,7 @@ class CommonPlayConf(Conf):
     @property
     def distineff_observer(self):
         return DistineffObs(self.prob)
-        
+
     @property
     @MEMOIZE_METHOD
     def log_file(self):
@@ -156,17 +161,23 @@ class CommonPlayConf(Conf):
     @property
     @MEMOIZE_METHOD
     def compute_metrics_from_replay(self):
-        return self.compute_metrics_from_replay.apply_func()
+        return self.compute_metrics_from_replay_conf.apply_func()
 
     @property
     @MEMOIZE_METHOD
     def observer(self):
         return self.observer_conf.apply_func()
 
+    @property
+    def observers_dict(self):
+        return dict(
+            logger     = self.logging_observer,
+            metrics    = self.compute_metrics_from_replay)
+
     def defaults(self):
         defaults      = dict(
             func      = play,
-            nepisodes = 100,
+            nepisodes = 3,
             seed      = 0,
 
             grid_world_conf = WindyGridWorldDefaultConfGen(self),
@@ -180,9 +191,7 @@ class CommonPlayConf(Conf):
 
             observer_conf = 
                 NewConfClass("MultiObserverConf",
-                    observers = lambda s : dict(
-                        logger     = self.logging_observer,
-                        metrics    = self.compute_metrics_from_replay)
+                    observers = lambda s : self.observers_dict
                 ) (
                     func = MultiObserver),
 
@@ -197,28 +206,58 @@ class CommonPlayConf(Conf):
 
 
 class FloydWarshallPlayConf(CommonPlayConf):
+    @property
+    @MEMOIZE_METHOD
+    def alg(self):
+        return self.alg_conf.apply_func()
+
+    @property
+    @MEMOIZE_METHOD
+    def visualizer(self):
+        return FloydWarshallVisualizer(update_interval = 1, cellsize = 80, log_file_dir=self.log_file_dir)
+
+    @property
+    def observers_dict(self):
+        od = super().observers_dict
+        od.update(visualizer = self.visualizer)
+        return od
+
     def defaults(self):
         defaults = super().defaults()
         defaults = dict_update_recursive(
             defaults,
             dict(
-                alg = LazyApplyable(
-                    FloydWarshallAlgDiscrete,
-                    Conf(qlearning = LazyApplyable(
-                        QLearningDiscrete,
-                        QLearningDiscreteDefaultConfGen(self))))))
+                alg_conf = NewConfClass(
+                    "FloydWarshallAlgDiscreteConf",
+                    qlearning = lambda s : s.qlearning_conf.apply_func()
+                )(
+                    func = FloydWarshallAlgDiscrete,
+                    qlearning_conf = QLearningDiscreteDefaultConfGen(self))))
         return defaults
 
 
 class QLearningPlayConf(CommonPlayConf):
+    @property
+    @MEMOIZE_METHOD
+    def alg(self):
+        return self.alg_conf.apply_func()
+
+    @property
+    @MEMOIZE_METHOD
+    def visualizer(self):
+        return QLearningVis(update_interval = 1, cellsize = 80, log_file_dir=self.log_file_dir)
+
+    @property
+    def observers_dict(self):
+        od = super().observers_dict
+        od.update(visualizer = self.visualizer)
+        return od
+
     def defaults(self):
         defaults = super().defaults()
         dict_update_recursive(
             defaults,
-            dict(
-                alg = LazyApplyable(
-                    QLearningDiscrete,
-                    QLearningDiscreteDefaultConfGen(self))))
+            dict(alg_conf = QLearningDiscreteDefaultConfGen(self)))
         return defaults
 
 
@@ -233,10 +272,11 @@ class MultiPlayConf(QLearningPlayConf):
     @property
     @MEMOIZE_METHOD
     def trials(self):
-        return [FloydWarshallPlayConf(), QLearningPlayConf()]
+        #return [FloydWarshallPlayConf(), QLearningPlayConf()]
+        return [FloydWarshallPlayConf()]
 
 
-if __name__ == '__apply_func__':
+if __name__ == '__main__':
     import sys
     conf = Conf.parse_all_args("conf.default:MultiPlayConf", sys.argv[1:])
     conf.apply_func()

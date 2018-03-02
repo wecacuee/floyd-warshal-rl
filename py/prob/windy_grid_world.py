@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 from __future__ import absolute_import, division, print_function
-from game.play import Space, Problem
 import numpy as np
+
 from cog import draw
-import numpy as np
 from cog.memoize import MethodMemoizer
 
+from game.play import Space, Problem
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -13,10 +13,20 @@ logger.setLevel(logging.INFO)
 
 METHOD_MEMOIZER = MethodMemoizer()
 
+def maze_from_filepath(fpath):
+    with open(fpath) as f:
+        return maze_from_file(f)
+
+def maze_from_file(f):
+    return maze_from_string("".join(f.readlines()))
 
 def maze_from_string(maze_string,
-                     intable = " +^<>V",
-                     outtable = range(6)):
+                     intable = ". +^<>V",
+                     outtable = "0012345",
+                     firstchar = "0",
+                     defaultchar = "0",
+                     breakline = "\n",
+                     encoding = "ascii"):
     r"""
     >>> maze_from_string("  +  \n  ^  \n ^^^ \n ^^^ \n  +  ")
     array([[0, 0, 1, 0, 0],
@@ -32,19 +42,17 @@ def maze_from_string(maze_string,
            [0, 2, 5, 2, 0],
            [0, 0, 1, 0, 0]], dtype=uint8)
     """
-    maze_bytes = maze_string.encode("ascii")
-    maze_lines = maze_string.split("\n")
+    maze_string = maze_string.translate(str.maketrans(intable, outtable))
+    maze_bytes = maze_string.encode(encoding)
+    maze_lines = list(filter(len, maze_string.split(breakline))) # keep only non-empty lines
     nrows = len(maze_lines)
     ncols = max(map(len, maze_lines))
-    maze_arr = np.zeros((len(maze_lines), ncols), dtype='u1')
     for line in maze_lines:
         if len(line) < ncols:
-            line += ' ' * (ncols - len(line))
-    maze_ch = np.frombuffer(''.join(maze_lines).encode('ascii'), dtype='u1'
+            line += defaultchar * (ncols - len(line))
+    return (np.frombuffer(''.join(maze_lines).encode(encoding), dtype='u1'
                 ).reshape(nrows, ncols)
-    for ch, replace in zip(intable, outtable):
-        maze_arr[maze_ch == ord(ch)] = replace
-    return maze_arr
+            - ord(firstchar))
 
 
 class Act2DSpace(Space):
@@ -202,7 +210,7 @@ def random_start_pose_gen(prob, goal_pose):
 
 class AgentInGridWorld(Problem):
     def __init__(self, seed, grid_world, start_pose_gen, goal_pose_gen,
-                 goal_reward, max_steps, wall_penality):
+                 goal_reward, max_steps, wall_penality, no_render):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
@@ -211,6 +219,7 @@ class AgentInGridWorld(Problem):
         self.max_steps         = max_steps
         self._hit_wall_penality = wall_penality
         self._last_reward      = 0
+        self.no_render         = no_render
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
@@ -253,6 +262,9 @@ class AgentInGridWorld(Problem):
         return self.pose
 
     def render(self, canvas, grid_size, wait_time=0):
+        if self.no_render:
+            return canvas
+            
         if canvas is None:
             canvas = draw.white_img(np.array(self.grid_world.shape) * 100)
         self.grid_world.render(canvas, grid_size)
@@ -290,7 +302,6 @@ class AgentInGridWorld(Problem):
                     nbrs.add(tuple(valid_pose.tolist()))
         return nbrs
 
-    @METHOD_MEMOIZER
     def shortest_path_length(self, start, end, visited=None):
         assert start is not None and end is not None
         if visited is None:
@@ -320,7 +331,8 @@ if __name__ == '__main__':
         goal_pose_gen  = lambda s : [3, 4],
         goal_reward    = 10,
         max_steps      = 100,
-        wall_penality  = 1
+        wall_penality  = 1,
+        no_render      = False
     )
 
     direc_ = dict(w=0, a=1, d=2, x=3)

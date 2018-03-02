@@ -157,9 +157,17 @@ class MPLAsCV(object):
         return key_pressed[0]
 
     def imwrite(self, filename, ax):
-        fig = plt.gcf()
-        fig.sca(ax)
-        plt.savefig(filename)
+        if filename.endswith(".png"):
+            from matplotlib.backends.backend_agg import FigureCanvasAgg
+            canvas = FigureCanvasAgg(ax.get_figure())
+            canvas.print_png(filename, dpi=ax.get_figure().dpi)
+        elif filename.endswith(".pdf"):
+            from matplotlib.backends.backend_pdf import FigureCanvasPdf
+            canvas = FigureCanvasPdf(ax.get_figure())
+            canvas.print_pdf(filename)
+        else:
+            raise NotImplementedError("don't know the extension {}".format(filename))
+
 
     def destroyWindow(self, name):
         self.fig_manager[name].destroy()

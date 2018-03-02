@@ -188,9 +188,8 @@ class FloydWarshallVisualizer(QLearningVis):
             ax4,
             lambda s, a: self.alg.net_value(s)[a] if action_value.size else None,
             self.alg.hash_state)
-        draw.imshow("path_value", ax)
-        draw.waitKey(1)
         self.goal_pose = goal_pose
+        return ax
 
     def on_play_end(self):
         pass

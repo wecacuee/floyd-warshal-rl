@@ -10,6 +10,8 @@ from argparse import Namespace, ArgumentParser
 import inspect
 from string import Formatter
 from collections import namedtuple
+import copy
+
 from cog.memoize import MethodMemoizer
 
 """
@@ -28,6 +30,9 @@ class Conf(Namespace):
         updated_kw = dict_update_recursive(defaults, kw)
         MEMOIZE_METHOD.init_obj(self)
         super().__init__(**updated_kw)
+
+    def copy(self):
+        return copy.copy(self)
 
     def defaults(self):
         return dict()

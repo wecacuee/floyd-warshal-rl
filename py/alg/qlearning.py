@@ -1,8 +1,11 @@
-from game.play import Space, Alg, NoOPObserver
+from pathlib import Path
 import numpy as np
 from queue import PriorityQueue
-import cog.draw as draw
 import logging
+
+import cog.draw as draw
+from game.play import Space, Alg, NoOPObserver
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -120,12 +123,17 @@ class QLearningDiscrete(Alg):
         return False
 
 class QLearningVis(NoOPObserver):
-    def __init__(self, update_interval):
+    def __init__(self, update_interval, cellsize, log_file_dir):
         self.update_interval = update_interval
+        self.cellsize = cellsize
+        self.log_file_dir = log_file_dir
+
+        # State variables
         self.grid_shape = None
         self.goal_pose = None
         self._inverted_hash_state = None
         self.update_steps = 0
+        self.nepisodes = 0
         super().__init__()
 
     @property
@@ -168,10 +176,13 @@ class QLearningVis(NoOPObserver):
             action_value, hash_state)
         action_value_mat += np.min(action_value_mat[:])
         draw.matshow(ax, self.normalize_by_std(action_value_mat))
+        c50 = cellsize/2
+        c25 = cellsize/4
+        c75 = cellsize*3/4
         for i, j in np.ndindex(action_value_mat.shape):
-            center = np.array((i*50 + 25, j*50 + 25))
+            center = np.array((i*c50 + c25, j*c50 + c25))
             if i % 2 == 0 and j % 2 == 0:
-                draw.rectangle(ax, center - 25, center + 75, (0, 0, 0))
+                draw.rectangle(ax, center - c25, center + c75, (0, 0, 0))
             draw.putText(ax, f"{action_value_mat[i, j]:.3}",
                          center, fontScale=2)
 
@@ -227,26 +238,31 @@ class QLearningVis(NoOPObserver):
         return norm_mat
 
     def on_new_goal_pose(self, goal_pose):
-        cellsize = 100
+        cellsize = self.cellsize
         ax = draw.white_img(
             (self.grid_shape[1]*cellsize, self.grid_shape[0]*2*cellsize),
-            dpi=4*cellsize)
+            dpi=cellsize)
         self.visualize(ax, self.alg.action_value, self.alg.hash_state, 1, cellsize)
-        draw.imshow("action_value", ax)
-        draw.waitKey(1)
         self.goal_pose = goal_pose
+        return ax
 
     def on_new_step(self, obs, act, rew):
         if not np.any(self.goal_pose == self.prob.goal_pose):
             self.on_new_goal_pose(self.prob.goal_pose)
             
         if self.update_steps % self.update_interval == 0:
-            self.on_new_goal_pose(self.goal_pose)
+            ax = self.on_new_goal_pose(self.goal_pose)
+            draw.imwrite(
+                str(
+                    Path(self.log_file_dir) / "action_value_{episode}_{step}.pdf".format(
+                        episode=self.episode, step=self.update_steps)),
+                ax)
         self.update_steps += 1
 
     def on_new_episode(self, n):
         self.grid_shape = self.prob.grid_shape
         self.goal_pose = self.prob.goal_pose
+        self.nepisodes = n
 
     def on_play_end(self):
         pass
