@@ -6,22 +6,22 @@ import os
 from string import Formatter
 from pathlib import Path
 
-from cog.confutils import (Conf, dict_update_recursive,
-                           NewConfClass,
+from cog.confutils import (Conf, dict_update_recursive, NewConfClass,
                            format_string_from_obj, apply_conf,
-                           serialize_any,
-                           LazyApplyable)
+                           serialize_any, LazyApplyable)
 
 from cog.memoize import MethodMemoizer
 from cog.misc import ensuredirs
 
-from alg.floyd_warshall_grid import FloydWarshallAlgDiscrete, FloydWarshallVisualizer
+from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
+                                     FloydWarshallVisualizer)
 from alg.qlearning import QLearningDiscrete, QLearningVis
 from game.metrics import (ComputeMetricsFromLogReplay,
                           LatencyObserver, DistineffObs)
 from game.play import LoggingObserver, MultiObserver, play, multiplay
 from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld,
-                                   random_goal_pose_gen, random_start_pose_gen,
+                                   random_goal_pose_gen,
+                                   random_start_pose_gen,
                                    maze_from_filepath)
 
 def AgentInGridWorldDefaultConfGen(play_conf):
@@ -29,6 +29,7 @@ def AgentInGridWorldDefaultConfGen(play_conf):
         "AgentInGridWorldConf",
         seed = lambda s : play_conf._next_seed(),
         grid_world = lambda s : play_conf.grid_world,
+        log_file_dir = lambda s: play_conf.log_file_dir
     ) (
         func           = AgentInGridWorld,
         start_pose_gen = random_start_pose_gen,
@@ -47,7 +48,7 @@ def QLearningDiscreteDefaultConfGen(play_conf):
         seed                = lambda s: play_conf._next_seed(),
     )(
         func                  = QLearningDiscrete,
-        egreedy_epsilon       = 0.2,
+        egreedy_epsilon       = 0.05,
         action_value_momentum = 0.1, # Low momentum changes more frequently
         init_value            =   1,
         discount              = 0.99,
@@ -245,7 +246,8 @@ class QLearningPlayConf(CommonPlayConf):
     @property
     @MEMOIZE_METHOD
     def visualizer(self):
-        return QLearningVis(update_interval = 1, cellsize = 80, log_file_dir=self.log_file_dir)
+        return QLearningVis(update_interval = 1, cellsize = 80,
+                            log_file_dir=self.log_file_dir)
 
     @property
     def observers_dict(self):

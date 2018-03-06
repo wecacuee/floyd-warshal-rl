@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 from __future__ import absolute_import, division, print_function
+from pathlib import Path
 import numpy as np
 
 from cog import draw
@@ -210,7 +211,7 @@ def random_start_pose_gen(prob, goal_pose):
 
 class AgentInGridWorld(Problem):
     def __init__(self, seed, grid_world, start_pose_gen, goal_pose_gen,
-                 goal_reward, max_steps, wall_penality, no_render):
+                 goal_reward, max_steps, wall_penality, no_render, log_file_dir):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
@@ -220,11 +221,12 @@ class AgentInGridWorld(Problem):
         self._hit_wall_penality = wall_penality
         self._last_reward      = 0
         self.no_render         = no_render
+        self.log_file_dir      = log_file_dir
         self.observation_space = Loc2DSpace(
             lower_bound = np.array([0, 0]),
             upper_bound = np.array(grid_world.shape),
             seed        = seed) 
-        self.episode_reset()
+        self.episode_reset(0)
         METHOD_MEMOIZER.init_obj(self)
 
     @property
@@ -281,13 +283,22 @@ class AgentInGridWorld(Problem):
                        thickness = -1)
         if wait_time != 0:
             draw.imshow(self.__class__.__name__, canvas)
+        if self.log_file_dir is not None:
+            draw.imwrite(
+                str(
+                    Path(self.log_file_dir) / "{name}_{episode_n}_{step}.pdf".format(
+                        name = self.__class__.__name__,
+                        episode_n = self.episode_n,
+                        step=self.steps)),
+                canvas)
         return canvas
 
-    def episode_reset(self):
+    def episode_reset(self, episode_n):
         self.steps         = 0
         self._last_reward  = 0
         self.goal_pose     = self.goal_pose_gen(self)
         self.pose          = self.start_pose_gen(self, self.goal_pose)
+        self.episode_n     = episode_n
 
     def done(self):
         return self.steps >= self.max_steps

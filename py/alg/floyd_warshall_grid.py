@@ -17,8 +17,8 @@ class FloydWarshallAlgDiscrete(object):
         self.path_cost_init       = self.qlearning.init_value * 100
         self.reset()
 
-    def episode_reset(self):
-        self.qlearning.episode_reset()
+    def episode_reset(self, episode_n):
+        self.qlearning.episode_reset(episode_n)
 
     def reset(self):
         self.qlearning.reset()

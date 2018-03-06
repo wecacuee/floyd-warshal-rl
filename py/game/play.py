@@ -37,7 +37,7 @@ class Problem(object):
     def reset(self):
         raise NotImplementedError()
 
-    def episode_reset(self):
+    def episode_reset(self, episode_n):
         raise NotImplementedError()
 
     def render(self):
@@ -69,7 +69,7 @@ class Alg(object):
     def reset(self):
         raise NotImplementedError()
 
-    def episode_reset(self):
+    def episode_reset(self, episode_n):
         raise NotImplementedError()
 
     def close(self):
@@ -205,13 +205,15 @@ def play(alg, prob, observer, nepisodes):
     observer.set_prob(prob)
     observer.set_alg(alg)
     for n in range(nepisodes):
-        observer.on_new_episode(n)
         play_episode(alg, prob, observer, n)
 
     observer.on_play_end()
     return observer
 
 def play_episode(alg, prob, observer, episode_n):
+    prob.episode_reset(episode_n)
+    alg.episode_reset(episode_n)
+    observer.on_new_episode(episode_n)
     obs = prob.observation()
     rew = prob.reward()
     action = prob.action_space.sample()
@@ -220,10 +222,8 @@ def play_episode(alg, prob, observer, episode_n):
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        prob.render(None, 100, wait_time=1)
+        prob.render(None, 100, wait_time=0)
 
-    prob.episode_reset()
-    alg.episode_reset()
         
 def multiplay(trials):
     for conf in trials:

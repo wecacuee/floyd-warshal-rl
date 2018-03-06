@@ -1,18 +1,19 @@
 -*- mode: org; -*-
 # Floyd-Warshall algorithm
 
-## Getting started
-* For first time project setup
+* Getting started
+** For first time project setup
 
     ./onetime_setup.py
     source setup.sh
 
     To edit configurations, edit `onetime_setup.py`
 
-* Everytime you return the project run
+** Everytime you return the project run
 
     source setup.sh
 
+* List of issues
 
 ## Log
 * DONE Mould greedy policy to explore unexplored areas.

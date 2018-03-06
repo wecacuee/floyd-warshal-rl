@@ -58,6 +58,7 @@ class LatencyObserver(NoOPObserver):
 
     def on_play_end(self):
         self.on_new_episode(episode_n=len(self.times_to_goal_hit)+1)
+        print(self.times_to_goal_hit_all_episodes)
         mean_latency, min_l, max_l = compute_latency(
             self.times_to_goal_hit_all_episodes)
         print(f"latency : {mean_latency}; min latency {min_l}; max latency {max_l}")
@@ -112,6 +113,7 @@ class DistineffObs(NoOPObserver):
 
     def on_play_end(self):
         self.on_new_episode(len(self.distineff_all_episodes)+1)
+        print(self.distineff_all_episodes)
         alldistineff = sum(map(lambda l: l[1:],
                                self.distineff_all_episodes), [])
         mean_distineff = mean(alldistineff)

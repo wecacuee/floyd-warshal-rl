@@ -28,7 +28,7 @@ class QLearningDiscrete(Alg):
         self.discount             = discount
         self.reset()
 
-    def episode_reset(self):
+    def episode_reset(self, episode_n):
         self.action_value[:]= self.init_value
         self.last_state_idx_act = None
 
@@ -37,7 +37,7 @@ class QLearningDiscrete(Alg):
         self.rng.seed(self._seed)
         self.action_value    = self._default_action_value(0)
         self.hash_state     = dict()
-        self.episode_reset()
+        self.episode_reset(0)
 
     def _default_action_value(self, state_size):
         return self.init_value * np.ones((state_size, self.action_space.size))
@@ -255,7 +255,7 @@ class QLearningVis(NoOPObserver):
             draw.imwrite(
                 str(
                     Path(self.log_file_dir) / "action_value_{episode}_{step}.pdf".format(
-                        episode=self.episode, step=self.update_steps)),
+                        episode=self.nepisodes, step=self.update_steps)),
                 ax)
         self.update_steps += 1
 
@@ -263,6 +263,7 @@ class QLearningVis(NoOPObserver):
         self.grid_shape = self.prob.grid_shape
         self.goal_pose = self.prob.goal_pose
         self.nepisodes = n
+        self.update_steps = 0
 
     def on_play_end(self):
         pass
