@@ -31,9 +31,6 @@ class Conf(Namespace):
         MEMOIZE_METHOD.init_obj(self)
         super().__init__(**updated_kw)
 
-    def copy(self):
-        return copy.copy(self)
-
     def defaults(self):
         return dict()
 
@@ -59,20 +56,25 @@ class Conf(Namespace):
         return getattr(module, class_)
 
     @classmethod
-    def parse_all_args(cls, default_config, args, **kwargs):
+    def parse_all_args(cls, default_config, args, glbls={}, **kwargs):
         c, remargs = cls.parser(default_config).parse_known_args(args)
         conf = cls.import_class(c.config)(**kwargs)
-        return conf.parse_remargs(remargs)
+        return conf.parse_remargs(remargs, glbls=glbls)
 
-    def parse_remargs(self, remargs):
+    def parse_remargs(self, remargs, glbls):
         parser = self.parser(self.__class__.__name__)
         for k, v in vars(self).items():
             if isinstance(v, Conf):
-                conf_from_args = lambda a : v.parse_remargs(a)
+                conf_from_args = lambda a : v.parse_remargs(a, glbls)
                 parser.add_argument(
-                    f"--{k}", default=None, type=conf_from_args)
+                    "--{k}".format(k=k), default=None, type=conf_from_args)
             else:
-                parser.add_argument(f"--{k}", default=None, type=type(v))
+                bool_from_str = lambda a : False if a == "False" else bool(a)
+                val_from_default = lambda a: (
+                    bool_from_str(a) if isinstance(v, bool) else type(v)(a))
+                val_from_str = lambda a : glbls.get(a, val_from_default(a))
+                parser.add_argument("--{k}".format(k=k), default=None,
+                                    type=val_from_str)
         args = parser.parse_args(remargs)
         self.__init__(
             **{ k : v for k, v in vars(args).items() if v is not None })
@@ -87,11 +89,11 @@ class Conf(Namespace):
 
 def dict_update_recursive(ddest, dsrc):
     for k, v in dsrc.items():
-        if hasattr(v, "items"):
+        if isinstance(v, (dict, Conf)):
             if k in ddest: 
                 ddest[k] = dict_update_recursive(ddest[k], v)
             else:
-                ddest[k] = v.copy()
+                ddest[k] = copy.copy(v)
         else:
             ddest[k] = v
 

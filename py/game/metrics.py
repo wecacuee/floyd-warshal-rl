@@ -19,10 +19,10 @@ def compute_latency(times_to_goal_hit_all_episodes):
             min(latencies_all_episode), max(latencies_all_episode))
 
 class ComputeMetricsFromLogReplay(NoOPObserver):
-    def __init__(self, loggingobserver, metrics_observers, logfilepath):
+    def __init__(self, loggingobserver, metrics_observers, logfilereader):
         self.loggingobserver = loggingobserver
         self.metrics_observers = metrics_observers
-        self.logfilepath = logfilepath
+        self.logfilereader = logfilereader
         super().__init__()
 
     def __getattr__(self, attr):
@@ -30,7 +30,7 @@ class ComputeMetricsFromLogReplay(NoOPObserver):
 
     def on_play_end(self):
         self.loggingobserver.replay_observers_from_logs(
-            self.metrics_observers, self.logfilepath)
+            self.metrics_observers, self.logfilereader)
 
 class LatencyObserver(NoOPObserver):
     def __init__(self, prob):

@@ -1,8 +1,13 @@
 from __future__ import absolute_import, division, print_function
 import logging
 import json
+from contextlib import closing
+
+from cog.misc import NumpyEncoder
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 class Space(object):
     def values():
@@ -24,6 +29,7 @@ class Space(object):
     def from_jsonable(self, sample_n):
         return sample_n
         
+
 class Problem(object):
     action_space = Space()
     observation_space = Space()
@@ -98,7 +104,11 @@ class NoOPObserver(object):
         self.alg = alg
 
     def __getattr__(self, attr):
-        return lambda *args, **kwargs : 0
+        if attr in """on_new_episode on_new_step on_play_end
+                      on_goal_hit on_new_goal_pose""".split():
+            return lambda *args, **kwargs : 0
+        else:
+            raise AttributeError("attr = {attr} not found".format(attr  = attr))
 
 
 class MultiObserver(object):
@@ -129,56 +139,96 @@ class MultiObserver(object):
     def on_play_end(self):
         for o in self.observers.values():
             o.on_play_end()
-        
+
+
+class LogFileWriter(object):
+    def __init__(self, logfilepath, readonly=False):
+        self.logfilepath = logfilepath
+        self.sep         = "\t"
+        self.linesep     = "\n"
+        self._logfileobj = None
+        self.readonly    = readonly
+        if not self.readonly:
+            print("Loggging to {self.logfilepath}".format(self=self))
+        else:
+            print("Reading logs from {self.logfilepath}".format(self=self))
+
+    @property
+    def logfileobj(self):
+        return closing( open(self.logfilepath,
+                                ("r" if self.readonly else "a")) )
+
+    def stringify(self, dct):
+        return json.dumps(dct, cls=NumpyEncoder)
+
+    def jsonify(self, str_):
+        return json.loads(str_, object_hook=NumpyEncoder.loads_hook)
+
+    def write_data(self, dct, tag):
+        self.write_msg(self.stringify(dct), tag)
+
+    def write_msg(self, message, tag=None):
+        if tag is None:
+            tag = self.human_tag
+
+        with self.logfileobj as f:
+            f.write(self.sep.join((tag, str(len(message)) , message)))
+            f.write(self.linesep)
+
+    def parse_next_line(self, line):
+        tag, len_msg, msg = line.strip().split(self.sep)
+        assert int(len_msg) == len(msg)
+        return self.jsonify(msg), tag
+
+    def read_data(self):
+        with self.logfileobj as file_:
+            for line in file_:
+                yield self.parse_next_line(line)
+
 
 class LoggingObserver(NoOPObserver):
-    def __init__(self, logfilepath, log_interval):
-        self.logfilepath = logfilepath
+    def __init__(self, logfilewriter, log_interval):
+        self.logfilewriter = logfilewriter
         self.log_interval = log_interval
-        self.human_tag = "INFO"
-        self.goal_hit_tag = f"{self.__class__.__name__}:goal_hit"
-        self.new_step_tag = f"{self.__class__.__name__}:new_step"
-        self.new_episode_tag = f"{self.__class__.__name__}:new_episode"
-        self.play_end_tag = f"{self.__class__.__name__}:play_end"
-        self.sep = "\t"
+        self.human_tag       = "INFO"
+        self.goal_hit_tag    = "{self.__class__.__name__}:goal_hit".format(self=self)
+        self.new_step_tag    = "{self.__class__.__name__}:new_step".format(self=self)
+        self.new_episode_tag = "{self.__class__.__name__}:new_episode".format(self=self)
+        self.play_end_tag    = "{self.__class__.__name__}:play_end".format(self=self)
         super().__init__()
-        print(f"LatencyLogger to file path: {self.logfilepath}")
 
-    def info(self, tag, message):
-        with open(self.logfilepath, "a") as log:
-            log.write(self.sep.join((tag, str(len(message)) , message)))
-            log.write("\n")
+    def info(self, tag, dct):
+        self.logfilewriter.write_data(dct, tag)
 
     def on_new_episode(self, episode_n):
         self.last_episode_n = episode_n
-        json_string = json.dumps(
-            dict(episode_n=episode_n, goal_pose=self.prob.goal_pose.tolist()))
         self.info(self.human_tag, 
-            f" +++++++++++++++++ New episode: {episode_n} +++++++++++++")
-        self.info(self.new_episode_tag, json_string)
+                  " +++++++++++++++++ New episode: {episode_n} +++++++++++++".format(
+                      episode_n=episode_n))
+        self.info(self.new_episode_tag,
+                  dict(episode_n=episode_n, goal_pose=self.prob.goal_pose.tolist()))
 
     def on_goal_hit(self, current_step):
-        json_string = json.dumps(
-            dict(episode_n=self.last_episode_n, steps=current_step))
-        self.info(self.goal_hit_tag, json_string)
+        self.info(self.goal_hit_tag,
+                  dict(episode_n=self.last_episode_n, steps=current_step))
 
     def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps):
         if self.prob.hit_goal(): self.on_goal_hit(self.prob.steps)
         if steps % self.log_interval == 0:
             self.info(self.new_step_tag,
-                      json.dumps(dict(episode_n = int(self.last_episode_n),
-                                      steps     = int(steps),
-                                      obs       = obs.tolist(),
-                                      rew       = float(rew),
-                                      act       = int(act),
-                                      pose      = pose.tolist())))
+                      dict(episode_n = int(self.last_episode_n),
+                           steps     = int(steps),
+                           obs       = obs.tolist(),
+                           rew       = float(rew),
+                           act       = int(act),
+                           pose      = pose.tolist()))
 
     def on_new_step(self, obs, rew, act):
         self.on_new_step_with_pose_steps(
             obs, rew, act, self.prob.pose, self.prob.steps)
 
     def on_play_end(self):
-        self.info(self.play_end_tag, json.dumps({}))
+        self.info(self.play_end_tag, {})
         self.info(self.human_tag, "End of play")
 
     def tag_event_map(self):
@@ -187,18 +237,13 @@ class LoggingObserver(NoOPObserver):
                      (self.new_episode_tag, "on_new_episode"),
                      (self.play_end_tag, "on_play_end")])
 
-    def replay_observers_from_logs(self, observers, logfilepath):
+    def replay_observers_from_logs(self, observers, logfilereader):
         tag_event_map = self.tag_event_map()
-        with open(logfilepath, "r") as log:
-            for logline in log:
-                tag, length, json_string = logline.strip().split("\t")
-                assert int(length) == len(json_string), \
-                    f"Corrupted log line {length} <=> {len(json_string)}"
-                if tag in tag_event_map:
-                    for obs in observers:
-                        if hasattr(obs, tag_event_map[tag]):
-                            getattr(obs, tag_event_map[tag])(
-                                **json.loads(json_string))
+        for dct, tag in logfilereader.read_data():
+            if tag in tag_event_map:
+                for obs in observers:
+                    if hasattr(obs, tag_event_map[tag]):
+                        getattr(obs, tag_event_map[tag])(**dct)
 
 # Sample refrees
 def play(alg, prob, observer, nepisodes):
@@ -222,10 +267,10 @@ def play_episode(alg, prob, observer, episode_n):
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        prob.render(None, 100, wait_time=0)
+        # prob.render(None, 100, wait_time=0)
 
         
 def multiplay(trials):
     for conf in trials:
-        print(f"Running trial {conf.__class__.__name__}")
+        print("Running trial {conf.__class__.__name__}".format(conf=conf))
         play(conf.alg, conf.prob, conf.observer, conf.nepisodes)

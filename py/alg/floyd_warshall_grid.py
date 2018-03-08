@@ -193,3 +193,37 @@ class FloydWarshallVisualizer(QLearningVis):
 
     def on_play_end(self):
         pass
+
+
+class FloydWarshallLogger(NoOPObserver):
+    def __init__(self, logfilewriter, log_interval):
+        self.logfilewriter    = logfilewriter
+        self.log_interval     = log_interval
+        self.human_tag        = "INFO"
+        self.action_value_tag = "{self.__class__.__name__}:action_value".format(
+            self=self)
+        self.sep              = "\t"
+        self.episode_n        = None
+        super().__init__()
+
+    def info(self, tag, dct):
+        self.logfilewriter.write_data(dct, tag)
+
+    def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps):
+        if steps % self.log_interval == 0:
+            self.info(self.action_value_tag,
+                      dict(episode_n = int(self.episode_n),
+                           steps     = int(steps),
+                           obs       = obs.tolist(),
+                           rew       = float(rew),
+                           act       = int(act),
+                           pose      = pose.tolist(),
+                           action_value = self.alg.action_value,
+                           path_cost    = self.alg.path_cost))
+
+    def on_new_step(self, obs, rew, act):
+        self.on_new_step_with_pose_steps(
+            obs, rew, act, self.prob.pose, self.prob.steps)
+
+    def on_new_episode(self, episode_n):
+        self.episode_n = episode_n
