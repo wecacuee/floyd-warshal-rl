@@ -8,9 +8,9 @@ from cog.memoize import MethodMemoizer
 
 from game.play import Space, Problem
 import logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
+def logger():
+    return logging.getLogger(__name__)
 
 METHOD_MEMOIZER = MethodMemoizer()
 

@@ -2,12 +2,10 @@ from __future__ import absolute_import, division, print_function
 import logging
 import json
 from contextlib import closing
+from functools import lru_cache
 
 from cog.misc import NumpyEncoder
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
+from cog.memoize import MEMOIZE_METHOD
 
 class Space(object):
     def values():
@@ -140,55 +138,58 @@ class MultiObserver(object):
         for o in self.observers.values():
             o.on_play_end()
 
-
-class LogFileWriter(object):
-    def __init__(self, logfilepath, readonly=False):
-        self.logfilepath = logfilepath
-        self.sep         = "\t"
-        self.linesep     = "\n"
-        self._logfileobj = None
-        self.readonly    = readonly
-        if not self.readonly:
-            print("Loggging to {self.logfilepath}".format(self=self))
-        else:
-            print("Reading logs from {self.logfilepath}".format(self=self))
-
-    @property
-    def logfileobj(self):
-        return closing( open(self.logfilepath,
-                                ("r" if self.readonly else "a")) )
-
-    def stringify(self, dct):
+class NPJSONEncDec(object):
+    def dumps(self, dct):
         return json.dumps(dct, cls=NumpyEncoder)
 
-    def jsonify(self, str_):
+    def loads(self, str_):
         return json.loads(str_, object_hook=NumpyEncoder.loads_hook)
 
+class JSONLoggingFormatter(logging.Formatter):
+    def __init__(self, enc, sep = "\t", **kwargs) :
+        self.enc  = enc
+        self.sep  = sep
+        super().__init__(**kwargs)
+
+    def format(self, record):
+        str_ = super().format(record)
+        record_str = self.enc.dumps(getattr(record, "data", {}))
+        str_ = self.sep.join((str_, getattr(record, "tag", ""),
+                              str(len(record_str)), record_str))
+        return str_
+
+class LogFileWriter(object):
+    def __init__(self, logger):
+        self._logger      = logger
+        self.linesep     = "\n"
+
     def write_data(self, dct, tag):
-        self.write_msg(self.stringify(dct), tag)
+        self._logger.debug("", extra=dict(tag=tag, data=dct))
 
-    def write_msg(self, message, tag=None):
-        if tag is None:
-            tag = self.human_tag
+class LogFileReader(object):
+    def __init__(self, logfilepath, enc, sep="\t"):
+        self.logfilepath = logfilepath
+        self.sep         = sep
+        self.enc         = enc
 
-        with self.logfileobj as f:
-            f.write(self.sep.join((tag, str(len(message)) , message)))
-            f.write(self.linesep)
+    @MEMOIZE_METHOD
+    def logfileobj(self):
+        return closing( open( self.logfilepath, "r" ) )
 
     def parse_next_line(self, line):
-        tag, len_msg, msg = line.strip().split(self.sep)
+        pre_tag, tag, len_msg, msg = line.strip().split(self.sep)
         assert int(len_msg) == len(msg)
-        return self.jsonify(msg), tag
+        return self.enc.loads(msg), tag
 
     def read_data(self):
-        with self.logfileobj as file_:
+        with self.logfileobj() as file_:
             for line in file_:
                 yield self.parse_next_line(line)
 
 
 class LoggingObserver(NoOPObserver):
-    def __init__(self, logfilewriter, log_interval):
-        self.logfilewriter = logfilewriter
+    def __init__(self, logger, log_interval):
+        self._logger = logger
         self.log_interval = log_interval
         self.human_tag       = "INFO"
         self.goal_hit_tag    = "{self.__class__.__name__}:goal_hit".format(self=self)
@@ -198,7 +199,7 @@ class LoggingObserver(NoOPObserver):
         super().__init__()
 
     def info(self, tag, dct):
-        self.logfilewriter.write_data(dct, tag)
+        self._logger.debug("", extra=dict(tag=tag, data=dct))
 
     def on_new_episode(self, episode_n):
         self.last_episode_n = episode_n
@@ -270,7 +271,8 @@ def play_episode(alg, prob, observer, episode_n):
         # prob.render(None, 100, wait_time=0)
 
         
-def multiplay(trials):
+def multiplay(trials, logger_factory):
+    logger = logger_factory(__name__)
     for conf in trials:
-        print("Running trial {conf.__class__.__name__}".format(conf=conf))
+        logger.info("Running trial {conf.__class__.__name__}".format(conf=conf))
         play(conf.alg, conf.prob, conf.observer, conf.nepisodes)

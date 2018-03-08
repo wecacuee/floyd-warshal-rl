@@ -4,9 +4,8 @@ import cog.draw as draw
 import logging
 from .qlearning import QLearningVis
 
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+def logger():
+    return logging.getLogger(__name__)
 
 class FloydWarshallAlgDiscrete(object):
     def __init__(self,
@@ -196,18 +195,17 @@ class FloydWarshallVisualizer(QLearningVis):
 
 
 class FloydWarshallLogger(NoOPObserver):
-    def __init__(self, logfilewriter, log_interval):
-        self.logfilewriter    = logfilewriter
+    def __init__(self, logger, log_interval):
+        self.logger           = logger
         self.log_interval     = log_interval
         self.human_tag        = "INFO"
         self.action_value_tag = "{self.__class__.__name__}:action_value".format(
             self=self)
-        self.sep              = "\t"
         self.episode_n        = None
         super().__init__()
 
     def info(self, tag, dct):
-        self.logfilewriter.write_data(dct, tag)
+        self.logger.debug("", extra=dict(data=dct, tag=tag))
 
     def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps):
         if steps % self.log_interval == 0:

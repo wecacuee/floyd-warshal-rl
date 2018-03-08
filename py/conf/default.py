@@ -4,13 +4,16 @@ import pickle
 import time
 import os
 from string import Formatter
+import logging
+import logging.config
 from pathlib import Path
+import functools
 
 from cog.confutils import (Conf, dict_update_recursive, NewConfClass,
                            format_string_from_obj, apply_conf,
                            serialize_any, LazyApplyable)
 
-from cog.memoize import MethodMemoizer
+from cog.memoize import MEMOIZE_METHOD
 from cog.misc import ensuredirs, git_revision
 
 from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
@@ -19,12 +22,44 @@ from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
 from alg.qlearning import QLearningDiscrete, QLearningVis, QLearningLogger
 from game.metrics import (ComputeMetricsFromLogReplay,
                           LatencyObserver, DistineffObs)
-from game.play import (LoggingObserver, MultiObserver, play, multiplay, NoOPObserver,
-                       LogFileWriter)
+from game.play import (LoggingObserver, MultiObserver, play,
+                       multiplay, NoOPObserver, LogFileWriter,
+                       NPJSONEncDec, JSONLoggingFormatter,
+                       LogFileReader)
 from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld,
                                    random_goal_pose_gen,
                                    random_start_pose_gen,
                                    maze_from_filepath)
+
+def logging_dictConfig(log_file, logging_encdec):
+    return dict(
+        version = 1,
+        formatters = dict(
+            json_fmt = {
+                '()' : JSONLoggingFormatter,
+                'enc' : logging_encdec,
+                'sep' : "\t",
+                'fmt' : "%(asctime)s %(name)-15s %(message)s",
+                'datefmt' : "%d %H:%M:%S"
+            }
+        ),
+        handlers = dict(
+            file = {
+                'class' : "logging.FileHandler",
+                'filename' : log_file,
+                'formatter' : "json_fmt",
+                'level' : "DEBUG",
+            },
+            console = {
+                'class' : "logging.StreamHandler",
+                'level' : "INFO"
+            }
+        ),
+        root = dict(
+            level = 'DEBUG',
+            handlers = "console file".split()
+        )
+    )
 
 def AgentInGridWorldDefaultConfGen(play_conf):
     return NewConfClass(
@@ -70,7 +105,7 @@ def LoggingObserverConfGen(play_conf):
     return NewConfClass(
         "LoggingObserverConf",
         prob        = lambda s : play_conf.prob,
-        logfilewriter = lambda s : play_conf.log_file_writer)(
+        logger      = lambda s : play_conf.getLogger("LoggingObserver"))(
             func         = LoggingObserver,
             log_interval = 1)
 
@@ -85,7 +120,6 @@ def ComputeMetricsFromLogReplayConfGen(play_conf):
         func              = ComputeMetricsFromLogReplay)
 
 
-MEMOIZE_METHOD = MethodMemoizer()
 class CommonPlayConf(Conf):
     """
     Follow the principle of delayed execution.
@@ -97,7 +131,16 @@ class CommonPlayConf(Conf):
     """
     def __init__(self, **kw):
         super().__init__(**kw)
-        MEMOIZE_METHOD.init_obj(self)
+
+    def getLogger(self, name):
+        logging.config.dictConfig(
+            logging_dictConfig(self.log_file,
+                               self.logging_encdec))
+        return logging.getLogger(name)
+
+    @property
+    def logger_factory(self):
+        return lambda name : self.getLogger(name)
 
     @property
     @MEMOIZE_METHOD
@@ -152,13 +195,8 @@ class CommonPlayConf(Conf):
 
     @property
     @MEMOIZE_METHOD
-    def log_file_writer(self):
-        return LogFileWriter(self.log_file)
-
-    @property
-    @MEMOIZE_METHOD
     def log_file_reader(self):
-        return LogFileWriter(self.log_file, readonly=True)
+        return self.log_file_reader_conf.apply_func()
 
     @property
     @MEMOIZE_METHOD
@@ -197,6 +235,11 @@ class CommonPlayConf(Conf):
     def visualizer(self):
         return self.visualizer_conf.apply_func()
 
+    @property
+    @MEMOIZE_METHOD
+    def logging_encdec(self):
+        return self.logging_encdec_conf.apply_func()
+
     def defaults(self):
         defaults      = dict(
             func      = play,
@@ -221,11 +264,22 @@ class CommonPlayConf(Conf):
 
             visualizer_conf = NewConfClass(
                 "VisualizerConf",
-                logfilewriter = lambda s : self.log_file_writer
+                logger = lambda s : self.getLogger("Visualizer")
             ) (
                 func = NoOPObserver,
                 log_interval = 1,
                 cellsize = 80
+            ),
+
+            logging_encdec_conf = Conf(func = NPJSONEncDec),
+
+            log_file_reader_conf = NewConfClass(
+                "LogFileReaderConf",
+                logfilepath = lambda s : self.log_file,
+                enc = lambda s: self.logging_encdec,
+            ) (
+                func = LogFileReader,
+                sep = "\t"
             ),
 
             log_file_dir_template = "{data_dir}/{project_name}/{exp_name}",
@@ -275,33 +329,7 @@ class QLearningPlayConf(CommonPlayConf):
             ))
         return defaults
 
-
-def try_with_exceptions(objs, attr):
-    for o in objs:
-        try:
-            return getattr(o, attr)
-        except AttributeError as e:
-            pass
-    raise
-
-
-class ChainedObjs(object):
-    def __init__(self, objs):
-        self.objs = objs
-
-    def __getattr__(self, attr):
-        return try_with_exceptions(objs, attr)
-
-
-class ChainConfClasses(object):
-    def __init__(self, conf_classes):
-        self.conf_classes = conf_classes
-
-    def __call__(self, **kwargs):
-        return ChainedObjs([ c(**kwargs) for c in self.conf_classes ])
-
-
-class MultiPlayConf(Conf):
+class MultiPlayConf(CommonPlayConf):
     def defaults(self):
         defaults = super().defaults()
         defaults = dict_update_recursive(

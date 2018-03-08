@@ -51,12 +51,25 @@ class MethodMemoizer(object):
         @functools.wraps(method)
         def wrapper(s, *args, **kwargs):
             key = self.keyfunc(method, args, kwargs)
-            memoize_mem = getattr(s, self.memoize_mem_attr)
+            try:
+                memoize_mem = getattr(s, self.memoize_mem_attr)
+            except AttributeError as a:
+                self.init_obj(s)
+                memoize_mem = getattr(s, self.memoize_mem_attr)
+
             if key not in memoize_mem:
                 memoize_mem[key] =  method(s, *args, **kwargs)
 
             return memoize_mem[key]
         return wrapper
+
+"""
+Global object to memoize methods.
+This object does not store anything. The memoize dictionary is
+attached to the object. This just contains the attribute name that is
+used to store the memoize data.
+"""
+MEMOIZE_METHOD = MethodMemoizer()
 
 if __name__ == '__main__':
     MEMOIZE_METHOD = MethodMemoizer()

@@ -7,8 +7,8 @@ from cog.misc import NumpyEncoder
 import cog.draw as draw
 from game.play import Space, Alg, NoOPObserver
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+def logger():
+    return logging.getLogger(__name__)
 
 class QLearningDiscrete(Alg):
     def __init__(self,
@@ -78,7 +78,7 @@ class QLearningDiscrete(Alg):
         # desirable_dest = max(
         #     self.top_m_states.queue,
         #     key = lambda s: self.action_value[s[1]])[1]
-        logger.debug(
+        logger().debug(
             f"state = {state}; action_values = {self.action_value[state_idx, :]}")
         return np.argmax(self.action_value[state_idx, :])
 
@@ -124,8 +124,8 @@ class QLearningDiscrete(Alg):
         return False
 
 class QLearningLogger(NoOPObserver):
-    def __init__(self, logfilewriter, log_interval):
-        self.logfilewriter    = logfilewriter
+    def __init__(self, logger, log_interval):
+        self.logger           = logger
         self.log_interval     = log_interval
         self.human_tag        = "INFO"
         self.action_value_tag = "{self.__class__.__name__}:action_value".format(
@@ -135,7 +135,7 @@ class QLearningLogger(NoOPObserver):
         super().__init__()
 
     def info(self, tag, dct):
-        self.logfilewriter.write_data(dct, tag)
+        self.logger.debug("", extra=dict(tag=tag, data=dct))
 
     def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps):
         if steps % self.log_interval == 0:
