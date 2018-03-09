@@ -159,3 +159,15 @@ def serialize_any(obj):
     else:
         #print(f"serialize_any : ignoring {type(obj)}")
         return {}
+
+def MultiConfGen(name, confs):
+    conf_dict = (confs
+                 if isinstance(confs, dict)
+                 else { str(k) : v for k, v in enumerate(confs) })
+    conf_keys = conf_dict.keys()
+    return type(name, (Conf, ),
+                dict(
+                    defaults = lambda self: dict(
+                        func = lambda confs: [confs[k].apply_func() for k in conf_keys],
+                        confs = Conf(**conf_dict))))
+        

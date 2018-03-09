@@ -11,7 +11,7 @@ import functools
 
 from cog.confutils import (Conf, dict_update_recursive, NewConfClass,
                            format_string_from_obj, apply_conf,
-                           serialize_any, LazyApplyable)
+                           serialize_any, LazyApplyable, MultiConfGen)
 
 from cog.memoize import MEMOIZE_METHOD
 from cog.misc import ensuredirs, git_revision
@@ -23,9 +23,8 @@ from alg.qlearning import QLearningDiscrete, QLearningVis, QLearningLogger
 from game.metrics import (ComputeMetricsFromLogReplay,
                           LatencyObserver, DistineffObs)
 from game.play import (LoggingObserver, MultiObserver, play,
-                       multiplay, NoOPObserver, LogFileWriter,
-                       NPJSONEncDec, JSONLoggingFormatter,
-                       LogFileReader)
+                       NoOPObserver, LogFileWriter, NPJSONEncDec,
+                       JSONLoggingFormatter, LogFileReader)
 from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld,
                                    random_goal_pose_gen,
                                    random_start_pose_gen,
@@ -39,7 +38,7 @@ def logging_dictConfig(log_file, logging_encdec):
                 '()' : JSONLoggingFormatter,
                 'enc' : logging_encdec,
                 'sep' : "\t",
-                'fmt' : "%(asctime)s %(name)-15s %(message)s",
+                'format' : "%(asctime)s %(name)-15s %(message)s",
                 'datefmt' : "%d %H:%M:%S"
             }
         ),
@@ -132,10 +131,18 @@ class CommonPlayConf(Conf):
     def __init__(self, **kw):
         super().__init__(**kw)
 
-    def getLogger(self, name):
+    @MEMOIZE_METHOD
+    def setLoggerConfig(self):
+        print("Setting dict config from {self.__class__.__name__}".format(self=self))
+        logging.root = logging.RootLogger(logging.WARNING)
+        logging.Logger.root = logging.root
+        logging.Logger.manager = logging.Manager(logging.Logger.root)
         logging.config.dictConfig(
             logging_dictConfig(self.log_file,
                                self.logging_encdec))
+
+    def getLogger(self, name):
+        self.setLoggerConfig()
         return logging.getLogger(name)
 
     @property
@@ -250,8 +257,6 @@ class CommonPlayConf(Conf):
 
             prob_conf = AgentInGridWorldDefaultConfGen(self),
 
-            logging_observer_conf = LoggingObserverConfGen(self),
-
             compute_metrics_from_replay_conf =
                 ComputeMetricsFromLogReplayConfGen(self),
 
@@ -272,6 +277,8 @@ class CommonPlayConf(Conf):
             ),
 
             logging_encdec_conf = Conf(func = NPJSONEncDec),
+
+            logging_observer_conf = LoggingObserverConfGen(self),
 
             log_file_reader_conf = NewConfClass(
                 "LogFileReaderConf",
@@ -329,16 +336,8 @@ class QLearningPlayConf(CommonPlayConf):
             ))
         return defaults
 
-class MultiPlayConf(CommonPlayConf):
-    def defaults(self):
-        defaults = super().defaults()
-        defaults = dict_update_recursive(
-            defaults,
-            dict(func = multiplay,
-                 trials = [FloydWarshallPlayConf(), QLearningPlayConf()],
-            ))
-        return defaults
-
+MultiPlayConf = MultiConfGen(
+    "MultiPlayConf", [FloydWarshallPlayConf(), QLearningPlayConf()])
 
 if __name__ == '__main__':
     import sys

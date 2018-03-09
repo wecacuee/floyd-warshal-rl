@@ -79,7 +79,8 @@ class QLearningDiscrete(Alg):
         #     self.top_m_states.queue,
         #     key = lambda s: self.action_value[s[1]])[1]
         logger().debug(
-            f"state = {state}; action_values = {self.action_value[state_idx, :]}")
+            "state = {state}; action_values = {av}".format(
+                av=self.action_value[state_idx, :], state=state))
         return np.argmax(self.action_value[state_idx, :])
 
     def _hit_goal(self, rew):
@@ -146,7 +147,8 @@ class QLearningLogger(NoOPObserver):
                            rew       = float(rew),
                            act       = int(act),
                            pose      = pose.tolist(),
-                           action_value = self.alg.action_value))
+                           action_value = self.alg.action_value,
+                           hash_state = self.alg.hash_state))
 
     def on_new_step(self, obs, rew, act):
         self.on_new_step_with_pose_steps(
@@ -301,3 +303,21 @@ class QLearningVis(NoOPObserver):
 
     def on_play_end(self):
         pass
+
+
+def visualize_action_value(action_value, hash_state, cellsize):
+    vis = QLearningVis(1, cellsize, None)
+    ax = draw.white_img(
+        (vis.grid_shape[1] * vis.cellsize, vis.grid_shape[0] * 2 * vis.cellsize),
+        dpi = cellsize)
+    vis.visualize(ax, action_value, hash_state)
+    return ax
+
+
+def post_process(log_file_reader, cellsize, image_file_fmt):
+    for data, tag in log_file_reader.read_data():
+        ax = visualize_action_value(data["action_value"], data["hash_state"], cellsize)
+        draw.imwrite(image_file_fmt.format(
+            episode=data["episode_n"], step=data["steps"]), ax)
+
+

@@ -4,7 +4,7 @@ import json
 from contextlib import closing
 from functools import lru_cache
 
-from cog.misc import NumpyEncoder
+from cog.misc import DictEncoder, NumpyEncoder, ChainedEncoders
 from cog.memoize import MEMOIZE_METHOD
 
 class Space(object):
@@ -140,10 +140,13 @@ class MultiObserver(object):
 
 class NPJSONEncDec(object):
     def dumps(self, dct):
-        return json.dumps(dct, cls=NumpyEncoder)
+        return DictEncoder(default=NumpyEncoder().default).encode(dct)
 
     def loads(self, str_):
-        return json.loads(str_, object_hook=NumpyEncoder.loads_hook)
+        return json.loads(
+            str_,
+            object_hook = ChainedEncoders(
+                encoders = [NumpyEncoder(), DictEncoder()]).loads_hook)
 
 class JSONLoggingFormatter(logging.Formatter):
     def __init__(self, enc, sep = "\t", **kwargs) :
@@ -247,7 +250,10 @@ class LoggingObserver(NoOPObserver):
                         getattr(obs, tag_event_map[tag])(**dct)
 
 # Sample refrees
-def play(alg, prob, observer, nepisodes):
+def play(alg, prob, observer, nepisodes, logger_factory):
+    logger = logger_factory(__name__)
+    logger.info("Running alg : {}".format(alg.__class__.__name__))
+    logger.info("Loging to file : {}".format(logging.root.handlers[1].baseFilename))
     observer.set_prob(prob)
     observer.set_alg(alg)
     for n in range(nepisodes):
@@ -269,10 +275,3 @@ def play_episode(alg, prob, observer, episode_n):
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
         # prob.render(None, 100, wait_time=0)
-
-        
-def multiplay(trials, logger_factory):
-    logger = logger_factory(__name__)
-    for conf in trials:
-        logger.info("Running trial {conf.__class__.__name__}".format(conf=conf))
-        play(conf.alg, conf.prob, conf.observer, conf.nepisodes)

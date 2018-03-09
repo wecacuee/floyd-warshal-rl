@@ -217,7 +217,8 @@ class FloydWarshallLogger(NoOPObserver):
                            act       = int(act),
                            pose      = pose.tolist(),
                            action_value = self.alg.action_value,
-                           path_cost    = self.alg.path_cost))
+                           path_cost    = self.alg.path_cost,
+                           hash_state   = self.alg.hash_state))
 
     def on_new_step(self, obs, rew, act):
         self.on_new_step_with_pose_steps(
