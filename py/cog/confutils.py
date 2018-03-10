@@ -11,6 +11,7 @@ import inspect
 from string import Formatter
 from collections import namedtuple
 import copy
+import shlex
 
 from cog.memoize import MethodMemoizer
 
@@ -65,16 +66,16 @@ class Conf(Namespace):
         parser = self.parser(self.__class__.__name__)
         for k, v in vars(self).items():
             if isinstance(v, Conf):
-                conf_from_args = lambda a : v.parse_remargs(a, glbls)
+                conf_from_args = lambda a : v.parse_remargs(shlex.split(a), glbls)
                 parser.add_argument(
                     "--{k}".format(k=k), default=None, type=conf_from_args)
             else:
-                bool_from_str = lambda a : False if a == "False" else bool(a)
-                val_from_default = lambda a: (
-                    bool_from_str(a) if isinstance(v, bool) else type(v)(a))
-                val_from_str = lambda a : glbls.get(a, val_from_default(a))
+                #bool_from_str = lambda a : False if a == "False" else bool(a)
+                #val_from_default = lambda a: (
+                #    bool_from_str(a) if isinstance(v, bool) else type(v)(a))
+                #val_from_str = lambda a : glbls.get(a, val_from_default(a))
                 parser.add_argument("--{k}".format(k=k), default=None,
-                                    type=val_from_str)
+                                    type=type(v))
         args = parser.parse_args(remargs)
         self.__init__(
             **{ k : v for k, v in vars(args).items() if v is not None })

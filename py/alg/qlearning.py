@@ -138,21 +138,34 @@ class QLearningLogger(NoOPObserver):
     def info(self, tag, dct):
         self.logger.debug("", extra=dict(tag=tag, data=dct))
 
-    def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps):
+    def policy(self):
+        policy = np.zeros(len(self.alg.hash_state.keys()), dtype='i8')
+        for obs, k in self.alg.hash_state.items():
+            policy[k] = self.alg.policy(obs)
+        return policy
+
+    def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps,
+                                    grid_shape, goal_pose):
         if steps % self.log_interval == 0:
             self.info(self.action_value_tag,
-                      dict(episode_n = int(self.episode_n),
-                           steps     = int(steps),
-                           obs       = obs.tolist(),
-                           rew       = float(rew),
-                           act       = int(act),
-                           pose      = pose.tolist(),
+                      dict(episode_n    = int(self.episode_n),
+                           steps        = int(steps),
+                           obs          = obs.tolist(),
+                           rew          = float(rew),
+                           act          = int(act),
+                           pose         = pose,
+                           grid_shape   = grid_shape,
+                           goal_pose    = goal_pose,
                            action_value = self.alg.action_value,
-                           hash_state = self.alg.hash_state))
+                           policy       = self.policy(),
+                           hash_state   = self.alg.hash_state))
 
     def on_new_step(self, obs, rew, act):
         self.on_new_step_with_pose_steps(
-            obs, rew, act, self.prob.pose, self.prob.steps)
+            obs = obs, rew = rew,
+            act = act, pose = self.prob.pose, steps = self.prob.steps,
+            grid_shape = self.prob.grid_shape,
+            goal_pose = self.prob.grid_shape)
 
     def on_new_episode(self, episode_n):
         self.episode_n = episode_n
@@ -184,20 +197,20 @@ class QLearningVis(NoOPObserver):
     def _state_idx_to_pose(self, hash_state, state_idx):
         return self._invert_hash_state(hash_state)[state_idx]
 
-    def _action_value_to_mat(self, action_value, hash_state):
-        mat = np.ones(self.grid_shape) * self.alg.init_value
+    def _action_value_to_mat(self, action_value, hash_state, grid_shape):
+        mat = np.ones(grid_shape) * self.alg.init_value
         if action_value.size:
             for state_pose, state_idx in hash_state.items():
                 mat[state_pose] = np.max(action_value[state_idx, :])
         return mat
 
-    def _action_value_to_matrices(self, action_value, hash_state):
-        big_mat = np.zeros(np.array(self.grid_shape) * 2)
-        if self.action_space.size != 4:
-            raise NotImplementedError("Do not know how to visualize")
+    def _action_value_to_matrices(self, action_value, hash_state, grid_shape):
+        big_mat = np.zeros(np.array(grid_shape) * 2)
+        # if self.action_space.size != 4:
+        #     raise NotImplementedError("Do not know how to visualize")
 
         for act in range(4):
-            mat = np.ones(self.grid_shape) * self.alg.init_value
+            mat = np.zeros(grid_shape) * 0
             for state_pose, state_idx in hash_state.items():
                 mat[state_pose] = action_value(state_idx, act) or mat[state_pose]
             big_r = act // 2
@@ -206,10 +219,10 @@ class QLearningVis(NoOPObserver):
         return big_mat
         
         
-    def visualize_action_value(self, ax, action_value, hash_state):
-        cellsize = ax.get_xlim()[1] / self.grid_shape[1]
+    def visualize_action_value(self, ax, action_value, hash_state, grid_shape):
+        cellsize = ax.get_xlim()[1] / grid_shape[1]
         action_value_mat = self._action_value_to_matrices(
-            action_value, hash_state)
+            action_value, hash_state, grid_shape)
         action_value_mat += np.min(action_value_mat[:])
         draw.matshow(ax, self.normalize_by_std(action_value_mat))
         c50 = cellsize/2
@@ -225,12 +238,13 @@ class QLearningVis(NoOPObserver):
     def _policy_to_mat(self, policy_func):
         return mat
 
-    def visualize_policy(self, ax, policy_func, hash_state):
-        cellsize = ax.get_xlim()[1] / self.grid_shape[0]
+    def visualize_policy(self, ax, policy_func, hash_state, grid_shape):
+        cellsize = ax.get_xlim()[1] / grid_shape[0]
+        VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
 
         for state in hash_state.keys():
             act = policy_func(state)
-            act_vec = self.action_space.tovector(act)
+            act_vec = np.array(VECTORS[act, :])
             center = (np.array(state) + 0.5) * cellsize
             draw.arrowedLine(ax,
                              center - act_vec * cellsize / 4,
@@ -239,27 +253,29 @@ class QLearningVis(NoOPObserver):
                              thickness=5,
                              tipLength=10)
 
-    def visualize(self, ax, action_value, hash_state, wait_time, cellsize):
+    def visualize(self, ax, action_value, hash_state, wait_time,
+                  grid_shape, cellsize):
         ax.set_position([0, 0, 0.5, 1])
         ax.clear()
         ax.axis('equal')
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_xlim([0, self.grid_shape[1]*cellsize])
-        ax.set_ylim([0, self.grid_shape[0]*cellsize])
+        ax.set_xlim([0, grid_shape[1]*cellsize])
+        ax.set_ylim([0, grid_shape[0]*cellsize])
         self.visualize_action_value(
             ax,
             lambda s, a: (action_value[s, a] if action_value.size else None),
-            hash_state)
+            hash_state,
+            grid_shape)
         ax2 = ax.figure.add_axes([0.5, 0, 0.5, 1], frameon=False)
         ax2.set_position([0.5, 0, 0.5, 1])
         ax2.clear()
         ax2.axis('equal')
         ax2.set_xticks([])
         ax2.set_yticks([])
-        ax2.set_xlim([0, self.grid_shape[1]*cellsize])
-        ax2.set_ylim([0, self.grid_shape[0]*cellsize])
-        self.visualize_policy(ax2, self.alg.policy, hash_state)
+        ax2.set_xlim([0, grid_shape[1]*cellsize])
+        ax2.set_ylim([0, grid_shape[0]*cellsize])
+        self.visualize_policy(ax2, self.alg.policy, hash_state, grid_shape)
 
     def normalize_by_std(self, mat):
         if not np.any(mat):
@@ -276,9 +292,10 @@ class QLearningVis(NoOPObserver):
     def on_new_goal_pose(self, goal_pose):
         cellsize = self.cellsize
         ax = draw.white_img(
-            (self.grid_shape[1]*cellsize, self.grid_shape[0]*2*cellsize),
+            (grid_shape[1]*cellsize, grid_shape[0]*2*cellsize),
             dpi=cellsize)
-        self.visualize(ax, self.alg.action_value, self.alg.hash_state, 1, cellsize)
+        self.visualize(ax, self.alg.action_value, self.alg.hash_state,
+                       1, self.grid_shape, cellsize)
         self.goal_pose = goal_pose
         return ax
 
@@ -305,10 +322,10 @@ class QLearningVis(NoOPObserver):
         pass
 
 
-def visualize_action_value(action_value, hash_state, cellsize):
+def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
     vis = QLearningVis(1, cellsize, None)
     ax = draw.white_img(
-        (vis.grid_shape[1] * vis.cellsize, vis.grid_shape[0] * 2 * vis.cellsize),
+        (grid_shape[1] * vis.cellsize, grid_shape[0] * 2 * vis.cellsize),
         dpi = cellsize)
     vis.visualize(ax, action_value, hash_state)
     return ax
@@ -316,7 +333,8 @@ def visualize_action_value(action_value, hash_state, cellsize):
 
 def post_process(log_file_reader, cellsize, image_file_fmt):
     for data, tag in log_file_reader.read_data():
-        ax = visualize_action_value(data["action_value"], data["hash_state"], cellsize)
+        ax = visualize_action_value(
+            data["action_value"], data["hash_state"], data["grid_shape"], cellsize)
         draw.imwrite(image_file_fmt.format(
             episode=data["episode_n"], step=data["steps"]), ax)
 
