@@ -6,7 +6,7 @@ stay as pythonic as possible using introspection, lambdas and
 properties.
 """
 import importlib
-from argparse import Namespace, ArgumentParser
+from argparse import Namespace, ArgumentParser, Action
 import inspect
 from string import Formatter
 from collections import namedtuple
@@ -24,13 +24,22 @@ def apply_conf(func, conf):
     required_args = list(inspect.signature(func).parameters.keys())
     return func( ** { k : conf[k] for k in required_args } )
 
-MEMOIZE_METHOD = MethodMemoizer()
 class Conf(Namespace):
-    def __init__(self, **kw):
+    def __init__(self, root_conf, **kwargs):
+        self.root_conf = root_conf
+        self.init_kwargs = kwargs
+        self.overrides()
+        super().__init__()
+
+    def overrides(self, **kw):
         defaults = self.defaults()
-        updated_kw = dict_update_recursive(defaults, kw)
-        MEMOIZE_METHOD.init_obj(self)
-        super().__init__(**updated_kw)
+        updated_kw = dict_update_recursive(defaults, self.init_kwargs)
+        updated_kw = dict_update_recursive(updated_kw, kw)
+        for k, v in updated_kw.items():
+            setattr(self, k, v)
+
+    def keys(self):
+        return vars(self).keys()
 
     def defaults(self):
         return dict()
@@ -59,25 +68,33 @@ class Conf(Namespace):
     @classmethod
     def parse_all_args(cls, default_config, args, glbls={}, **kwargs):
         c, remargs = cls.parser(default_config).parse_known_args(args)
-        conf = cls.import_class(c.config)(**kwargs)
+        conf = cls.import_class(c.config)(root_conf = None, **kwargs)
         return conf.parse_remargs(remargs, glbls=glbls)
+
+    def argparse_action(self, key, glbls):
+        class DefAction(Action):
+            def __call__(s, parser, namespace, values, option_string=None):
+                setattr(namespace, key, self.parse_remargs(shlex.split(values), glbls))
+
+        return DefAction
 
     def parse_remargs(self, remargs, glbls):
         parser = self.parser(self.__class__.__name__)
-        for k, v in vars(self).items():
-            if isinstance(v, Conf):
-                conf_from_args = lambda a : v.parse_remargs(shlex.split(a), glbls)
+        for key, defval in vars(self).items():
+            if isinstance(defval, Conf):
+                defvalcopy = copy.copy(defval)
                 parser.add_argument(
-                    "--{k}".format(k=k), default=None, type=conf_from_args)
+                    "--{k}".format(k=key), default=None,
+                    action = defvalcopy.argparse_action(key, glbls))
             else:
                 #bool_from_str = lambda a : False if a == "False" else bool(a)
                 #val_from_default = lambda a: (
                 #    bool_from_str(a) if isinstance(v, bool) else type(v)(a))
                 #val_from_str = lambda a : glbls.get(a, val_from_default(a))
-                parser.add_argument("--{k}".format(k=k), default=None,
-                                    type=type(v))
+                parser.add_argument("--{k}".format(k=key), default=None,
+                                    type=type(defval))
         args = parser.parse_args(remargs)
-        self.__init__(
+        self.overrides(
             **{ k : v for k, v in vars(args).items() if v is not None })
         self.run_checks()
         return self
@@ -85,8 +102,11 @@ class Conf(Namespace):
     def run_checks(self):
         return True
 
-    def apply_func(self):
-        return apply_conf(self.func, self)
+    def __call__(self):
+        return apply_conf(self._call_func, self)
+
+    def __repr__(self):
+        return "{}".format(vars(self))
 
 def dict_update_recursive(ddest, dsrc):
     for k, v in dsrc.items():
@@ -132,7 +152,7 @@ def NewConfClass(name, **kwargs):
                   for k, v in kwargs.items() })
 
 
-def format_string_from_obj(strformat, obj):
+def format_string_from_conf(strformat, obj):
     fieldnames = [fn
                   for lt, fn, fs, conv in Formatter().parse(strformat)
                   if fn is not None]

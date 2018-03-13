@@ -331,11 +331,35 @@ def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
     return ax
 
 
-def post_process(log_file_reader, cellsize, image_file_fmt):
-    for data, tag in log_file_reader.read_data():
-        ax = visualize_action_value(
-            data["action_value"], data["hash_state"], data["grid_shape"], cellsize)
-        draw.imwrite(image_file_fmt.format(
-            episode=data["episode_n"], step=data["steps"]), ax)
+def filter_by_tag_data(**criteria):
+    def func(data_tag):
+        data, tag = data_tag
+        if not isinstance(data, dict):
+            return False
+            
+        if "tag" in data:
+            raise NotImplementedError("Data should not have tag")
+        data["tag"] = tag
+        if all(data.get(k, None) == v for k, v in criteria.items()):
+            return True
+        else:
+            return False
+    return func
+
+def post_process_data_iter(log_file_reader, filter_criteria):
+    return filter(filter_by_tag_data(**filter_criteria) ,
+                  log_file_reader.read_data())
 
 
+def post_process_data_tag(data, tag, cellsize, image_file_fmt):
+    ax = visualize_action_value(
+        data["action_value"], data["hash_state"], data["grid_shape"], cellsize)
+    draw.imwrite(image_file_fmt.format( tag = "action_value",
+        episode=data["episode_n"], step=data["steps"]), ax)
+
+
+def post_process(log_file_reader, filter_criteria, image_file_fmt, cellsize):
+    for data, tag in post_process_data_iter(
+            log_file_reader,
+            {**filter_criteria, 'tag' :  "QLearningLogger:action_value" }):
+        post_process_data_tag(data, tag, cellsize, image_file_fmt)

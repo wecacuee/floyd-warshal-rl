@@ -2,7 +2,7 @@ from game.play import Space, Alg, NoOPObserver
 import numpy as np
 import cog.draw as draw
 import logging
-from .qlearning import QLearningVis
+from .qlearning import QLearningVis, post_process_data_iter
 
 def logger():
     return logging.getLogger(__name__)
@@ -268,22 +268,24 @@ def visualize_action_value(action_value, policy, path_cost, net_value,
                              goal_pose    = goal_pose,
                              cellsize     = cellsize)
 
+def post_process_data_tag(data, tag, cellsize, image_file_fmt):
+    ax = visualize_action_value(
+        action_value = data["action_value"],
+        policy       = data["policy"],
+        path_cost    = data["path_cost"],
+        net_value    = data["net_value"],
+        hash_state   = data["hash_state"],
+        grid_shape   = data["grid_shape"],
+        goal_pose    = data["goal_pose"],
+        cellsize     = cellsize)
+    fname = image_file_fmt.format(
+        tag = "action_value",
+        episode=data["episode_n"], step=data["steps"])
+    print("Writing img to: {}".format(fname))
+    draw.imwrite(fname, ax)
 
-def post_process(log_file_reader, cellsize, image_file_fmt):
-    for data, tag in log_file_reader.read_data():
-        if tag == "FloydWarshallLogger:action_value":
-            ax = visualize_action_value(
-                action_value = data["action_value"],
-                policy       = data["policy"],
-                path_cost    = data["path_cost"],
-                net_value    = data["net_value"],
-                hash_state   = data["hash_state"],
-                grid_shape   = data["grid_shape"],
-                goal_pose    = data["goal_pose"],
-                cellsize     = cellsize)
-            fname = image_file_fmt.format(
-                episode=data["episode_n"], step=data["steps"])
-            print("Writing img to: {}".format(fname))
-            draw.imwrite(fname, ax)
-        else:
-            print("Skipping tags {}".format(tag))
+def post_process(log_file_reader, filter_criteria, image_file_fmt, cellsize):
+    for data, tag in post_process_data_iter(
+            log_file_reader,
+            {**filter_criteria, 'tag' :  "FloydWarshallLogger:action_value" }):
+        post_process_data_tag(data, tag, cellsize, image_file_fmt)

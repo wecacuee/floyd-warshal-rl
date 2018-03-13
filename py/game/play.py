@@ -103,7 +103,8 @@ class NoOPObserver(object):
 
     def __getattr__(self, attr):
         if attr in """on_new_episode on_new_step on_play_end
-                      on_goal_hit on_new_goal_pose""".split():
+                      on_goal_hit on_new_goal_pose
+                      on_play_start on_episode_end""".split():
             return lambda *args, **kwargs : 0
         else:
             raise AttributeError("attr = {attr} not found".format(attr  = attr))
@@ -207,8 +208,8 @@ class LoggingObserver(NoOPObserver):
     def on_new_episode(self, episode_n):
         self.last_episode_n = episode_n
         self.info(self.human_tag, 
-                  " +++++++++++++++++ New episode: {episode_n} +++++++++++++".format(
-                      episode_n=episode_n))
+                  dict(msg=" +++++++++++++++++ New episode: {episode_n} +++++++++++++".format(
+                      episode_n=episode_n)))
         self.info(self.new_episode_tag,
                   dict(episode_n=episode_n, goal_pose=self.prob.goal_pose.tolist()))
 
@@ -252,10 +253,10 @@ class LoggingObserver(NoOPObserver):
 # Sample refrees
 def play(alg, prob, observer, nepisodes, logger_factory):
     logger = logger_factory(__name__)
-    logger.info("Running alg : {}".format(alg.__class__.__name__))
-    logger.info("Loging to file : {}".format(logging.root.handlers[1].baseFilename))
+    logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
     observer.set_prob(prob)
     observer.set_alg(alg)
+    observer.on_play_start()
     for n in range(nepisodes):
         play_episode(alg, prob, observer, n)
 
@@ -275,3 +276,4 @@ def play_episode(alg, prob, observer, episode_n):
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
         # prob.render(None, 100, wait_time=0)
+    observer.on_episode_end(episode_n)

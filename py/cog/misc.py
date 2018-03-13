@@ -6,6 +6,7 @@ import numpy as np
 from io import BytesIO
 import base64
 import builtins
+from itertools import tee, islice
 
 def ensuredirs(file_path):
     file_dir = os.path.dirname(file_path)
@@ -120,3 +121,8 @@ class ChainedEncoders(json.JSONEncoder):
             if enc.is_dct_instance(dct):
                 return enc.loads(dct)
         return dct
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s2,s3), (s4, s5), ..."
+    a, b = tee(iterable)
+    return zip(islice(a, None, None, 2), islice(b, 1, None, 2))
