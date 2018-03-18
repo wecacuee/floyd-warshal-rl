@@ -401,17 +401,6 @@ def FloydWarshallPlayConf(parent):
     )
 
 
-def MultiPlayConf(parent):
-    return Conf(
-        attrs = dict(
-            _call_func = lambda multiconf : [c(parent)() for c in multiconf],
-            multiconf = [FloydWarshallPlayConf, QLearningPlayConf]
-        ),
-        from_parent = ("seed_src", "logger_factory", "project_name",
-                       "confname", "log_file_conf"),
-        parent = parent,
-    )
-
 def SessionConf(confname, project_name = PROJECT_NAME, seed = 0):
     return Conf(
         props = dict(
@@ -428,23 +417,42 @@ def SessionConf(confname, project_name = PROJECT_NAME, seed = 0):
         )
     )
 
-def QLearningPlayConfSession(confname = "QLearningPlayConf"):
-    return QLearningPlayConf(SessionConf(confname))
 
-def SessionedConf(**kw):
+def SessionedConf(conf_gen, **kw):
     return Conf(
         props = dict(
             sessioned_conf = lambda s: s.conf(SessionConf(s.conf.__name__))
         ),
         attrs = dict(
             _call_func = lambda sessioned_conf: sessioned_conf(),
-            conf = MultiPlayConf,
+            conf = conf_gen,
             **kw,
         )
     )
 
+
+def QLearningPlaySessionConf(**kw):
+    return QLearningPlayConf(SessionConf(QLearningPlayConf.__name__)).copy(
+        attrs = kw)
+
+    
+def FloydWarshallPlaySessionConf(**kw):
+    return FloydWarshallPlayConf(SessionConf(FloydWarshallPlayConf.__name__)).copy(
+        attrs = kw)
+    
+
+def MultiPlaySessionConf(**kw):
+    return Conf(
+        attrs = dict(
+            _call_func = lambda multiconf : [c() for c in multiconf],
+            multiconf = [FloydWarshallPlaySessionConf(**kw),
+                         QLearningPlaySessionConf(**kw)],
+        ),
+    )
+
+
 if __name__ == '__main__':
     import sys
-    conf = Conf.parse_all_args("conf.default:SessionedConf",
+    conf = Conf.parse_all_args("conf.default:MultiPlaySessionConf",
                                sys.argv[1:], glbls=globals())
     conf()
