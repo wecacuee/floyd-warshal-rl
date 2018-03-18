@@ -39,18 +39,25 @@ class MethodMemoizer(object):
     def __init__(
             self,
             memoize_mem_attr = "_memoize_mem",
-            keyfunc = lambda f, a, k: (f.__name__, a, tuple(sorted(k.items())))
+            f_key = lambda f: f.__name__,
+            a_key = lambda a: a,
+            kw_key = lambda kw: tuple(kw.items())
     ):
         self.memoize_mem_attr = memoize_mem_attr
-        self.keyfunc          = keyfunc
+        self.f_key = f_key
+        self.a_key = a_key
+        self.kw_key = kw_key
+
+    def keyfunc(self, f, a, kw):
+        return (self.f_key(f), self.a_key(a), self.kw_key(kw))
 
     def init_obj(self, s):
         setattr(s, self.memoize_mem_attr, dict())
 
-    def __call__(self, method):
+    def memoize_with_keyfunc(self, method, keyfunc):
         @functools.wraps(method)
         def wrapper(s, *args, **kwargs):
-            key = self.keyfunc(method, args, kwargs)
+            key = keyfunc(method, args, kwargs)
             try:
                 memoize_mem = getattr(s, self.memoize_mem_attr)
             except AttributeError as a:
@@ -62,6 +69,12 @@ class MethodMemoizer(object):
 
             return memoize_mem[key]
         return wrapper
+
+    def __call__(self, method):
+        return self.memoize_with_keyfunc(method, self.keyfunc)
+
+def LambdaMethodMemoizer(func_name, **kw):
+    return MethodMemoizer(f_key = lambda f: func_name, **kw)
 
 """
 Global object to memoize methods.
@@ -75,14 +88,17 @@ if __name__ == '__main__':
     MEMOIZE_METHOD = MethodMemoizer()
     import random
     class A:
-        def __init__(self):
-            MEMOIZE_METHOD.init_obj(self)
-
+        rand2 = LambdaMethodMemoizer("rand2")(
+            lambda s: random.randint(0, 100))
         @MEMOIZE_METHOD
         def rand(self):
             return random.randint(0, 10000)
     a = A()
     r1 = a.rand()
     for i in range(10):
-        print(f"{i} = {a.rand()}")
+        print("{i} = {rand}".format(i=i,rand=a.rand()))
         assert r1 == a.rand(), "All vaues should be same"
+    r2 = a.rand2()
+    for i in range(10):
+        print("{i} = {rand}".format(i=i,rand=a.rand2()))
+        assert r2 == a.rand2(), "All vaues should be same"

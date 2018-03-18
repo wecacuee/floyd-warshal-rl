@@ -210,22 +210,25 @@ def random_start_pose_gen(prob, goal_pose):
     return start_pose
 
 class AgentInGridWorld(Problem):
-    def __init__(self, seed, grid_world, start_pose_gen, goal_pose_gen,
-                 goal_reward, max_steps, wall_penality, no_render, log_file_dir):
+    def __init__(self, seed, grid_world, start_pose_gen,
+                 goal_pose_gen, goal_reward, max_steps, wall_penality,
+                 no_render, log_file_dir,
+                 action_space, observation_space):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
-        self.action_space      = Act2DSpace(seed)
+        self.action_space      = action_space #Act2DSpace(seed)
         self.goal_reward       = goal_reward
         self.max_steps         = max_steps
         self._hit_wall_penality = wall_penality
         self._last_reward      = 0
         self.no_render         = no_render
         self.log_file_dir      = log_file_dir
-        self.observation_space = Loc2DSpace(
-            lower_bound = np.array([0, 0]),
-            upper_bound = np.array(grid_world.shape),
-            seed        = seed) 
+        self.observation_space = observation_space
+        #Loc2DSpace(
+        #    lower_bound = np.array([0, 0]),
+        #    upper_bound = np.array(grid_world.shape),
+        #    seed        = seed) 
         self.episode_reset(0)
         METHOD_MEMOIZER.init_obj(self)
 

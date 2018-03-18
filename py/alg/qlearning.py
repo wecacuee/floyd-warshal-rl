@@ -160,10 +160,10 @@ class QLearningLogger(NoOPObserver):
                            policy       = self.policy(),
                            hash_state   = self.alg.hash_state))
 
-    def on_new_step(self, obs, rew, act):
+    def on_new_step(self, obs, rew, action):
         self.on_new_step_with_pose_steps(
             obs = obs, rew = rew,
-            act = act, pose = self.prob.pose, steps = self.prob.steps,
+            act = action, pose = self.prob.pose, steps = self.prob.steps,
             grid_shape = self.prob.grid_shape,
             goal_pose = self.prob.grid_shape)
 

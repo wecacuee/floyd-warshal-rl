@@ -1,30 +1,3 @@
-"""
-Philosophy:
-Convert parts of the program into recursive named value pairs. The
-values are usually objects. We explicitly avoid sequence of actions as
-a model because that makes the replacing of a particular component in
-the hierarchy difficult by merging.
-
-The configuration must be lazy. This is to avoid early copying of
-shared arguments before the command line parsing has taken place.
-
-Example: log_file_name is usually shared among many objects. Most of
-the classes or functions expect log_file_name (or most arguments) as
-primitive types rather than functions or lazy configurations.
-Conf objects act as thin wrappers over classes or functions that have
-most of their arguments as lazy functions/properties that depend upon
-a single shared primitive data source.
-
-def foo(a, b, c):
-    ...
-
-# Prepare configuration
-fooconf = Conf(a=1, b=2, c=3, _call_func = foo)
-
-# Run the function
-fooconf()
-
-"""
 from argparse import Action
 import shlex
 import numpy as np
@@ -32,17 +5,16 @@ import hashlib
 import pickle
 import time
 import os
+import json
 from string import Formatter
 import logging
 import logging.config
 from pathlib import Path
 import functools
 
-from cog.confutils import (Conf, dict_update_recursive, NewConfClass,
-                           format_string_from_conf, apply_conf,
-                           serialize_any, LazyApplyable, MultiConfGen)
+from cog.confutils import (Conf, dict_update_recursive, ConfTemplate)
 
-from cog.memoize import MEMOIZE_METHOD
+from cog.memoize import MEMOIZE_METHOD, LambdaMethodMemoizer
 from cog.misc import ensuredirs, git_revision, pairwise
 
 from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
@@ -57,7 +29,9 @@ from game.play import (LoggingObserver, MultiObserver, play,
 from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld,
                                    random_goal_pose_gen,
                                    random_start_pose_gen,
-                                   maze_from_filepath)
+                                   maze_from_filepath,
+                                   Act2DSpace, Loc2DSpace)
+PROJECT_NAME = "floyd_warshall_rl"
 
 def logging_dictConfig(log_file, logging_encdec):
     return dict(
@@ -89,345 +63,388 @@ def logging_dictConfig(log_file, logging_encdec):
         )
     )
 
-class AgentInGridWorldConf(Conf):
-    seed =  property(lambda s:s.root_conf._next_seed())
-    grid_world = property(lambda s:s.root_conf.grid_world)
-    log_file_dir = property(lambda s:s.root_conf.log_file_dir)
 
-    def defaults(self):
-        return dict_update_recursive(
-            super().defaults(),
-            dict(_call_func     = AgentInGridWorld,
-                 start_pose_gen = random_start_pose_gen,
-                 goal_pose_gen  = random_goal_pose_gen,
-                 goal_reward    = 10,
-                 max_steps      = 200,
-                 wall_penality  = 1.0,
-                 no_render      = False))
+def SeedSourceGen(parent):
+    return Conf(
+        props = dict(
+            rng = LambdaMethodMemoizer(
+                "rng")(
+                    lambda self: np.random.RandomState(self.seed)),
+            next_seed = lambda self: self.rng.randint(1000)
+        ),
+        from_parent = ("seed",),
+        parent = parent,
+    )
 
 
-class QLearningDiscreteConf(Conf):
-    action_space = property(lambda s: s.root_conf.action_space)
-    observation_space = property(lambda s: s.root_conf.observation_space)
-    seed = property(lambda s: s.root_conf._next_seed())
-
-    def defaults(self):
-        return dict_update_recursive(
-            super().defaults(),
-            dict(
-                _call_func            = QLearningDiscrete,
-                egreedy_epsilon       = 0.05,
-                action_value_momentum = 0.1, # Low momentum changes more frequently
-                init_value            =   1,
-                discount              = 0.99
-            ))
-
-class WindyGridWorldConf(Conf):
-    seed = property(lambda s: s.root_conf._next_seed())
-    maze = property(lambda s: maze_from_filepath(
-        Path(__file__).parent / "maze_5x5_no_wind.txt"))
-
-    def defaults(self):
-        return dict_update_recursive(
-            super().defaults(),
-            dict(_call_func          = WindyGridWorld,
-                 wind_strength = 0.1))
-
-class LoggingObserverConf(Conf):
-    prob        = property(lambda s : play_conf.prob)
-    logger      = property(lambda s : play_conf.getLogger("LoggingObserver"))
-    def defaults(self):
-        return dict_update_recursive(
-            super().defaults(),
-            dict(_call_func   = LoggingObserver,
-                 log_interval = 1))
+def WindyGridWorldConf(parent):
+    return Conf(
+        props = dict(
+            seed = lambda s: s.seed_src.next_seed,
+            maze_file_path = lambda s: s.maze_file_path_template.expand(s),
+            file_work_dir = lambda s: Path(__file__).parent,
+            maze = lambda s: maze_from_filepath(s.maze_file_path),
+        ),
+        attrs = dict(
+            _call_func    = WindyGridWorld,
+            maze_file_path_template =  ConfTemplate("{file_work_dir}/maze_5x5_no_wind.txt"),
+            wind_strength = 0.1
+            #seed_src      = SeedSource,
+        ),
+        from_parent = ("seed_src",),
+        parent = parent
+        
+    )
 
 
-class ComputeMetricsFromLogReplayConf(Conf):
-    loggingobserver   = property(lambda s : play_conf.logging_observer)
-    metrics_observers = property(lambda s : [play_conf.latency_observer,
-                                             play_conf.distineff_observer])
-    logfilereader     = property(lambda s : play_conf.log_file_reader)
-
-    def defaults(self):
-        return dict_update_recursive(
-            super().defaults(),
-            dict(_call_func              = ComputeMetricsFromLogReplay))
-
-
-def bool_from_str(v):
-    try:
-        return {"False" : False, "True" : True}[v]
-    except KeyError as e:
-        raise ValueError(e)
-
-
-def try_restrictive_types(v, converters=[bool_from_str, int, float]):
-    exc = None
-    for conv in converters:
-        try:
-            return conv(v)
-        except ValueError as e:
-            exc = e
-    raise exc
-
-
-class FilterConf(Conf): 
-    def argparse_action(self, key, glbls):
-        class DefAction(Action):
-            def __call__(s, parser, namespace, values, option_string=None):
-                d = {k[2:] : try_restrictive_types(v)
-                     for k, v in pairwise(shlex.split(values))}
-                setattr(namespace, key, d)
-        return DefAction
+def LogFileConf(parent):
+    return Conf(
+        props = dict(
+        log_file = lambda self: ensuredirs(
+            self.log_file_template.expand(self)),
+        log_file_dir = lambda self: ensuredirs(
+            self.log_file_dir_template.expand(self)),
+        data_dir     = lambda self: os.environ["MID_DIR"],
+        exp_name     = lambda self: self.exp_name_template.expand(self),
+        gitrev       = LambdaMethodMemoizer(
+            "gitrev")(
+                lambda self: git_revision(Path(__file__).parent)),
+        run_month    = lambda self: self.run_time[:6],
+        run_time     = LambdaMethodMemoizer(
+            "run_time")(
+                lambda self: time.strftime(self.run_time_format)),
+        image_file_fmt = lambda self: self.image_file_fmt_template.expand(self)
+        ),
+        attrs = dict(
+            exp_name_template        = ConfTemplate("{run_month}_{gitrev}_{confname}"),
+            log_file_dir_template    = ConfTemplate("{data_dir}/{project_name}/{exp_name}"),
+            log_file_template        = ConfTemplate("{log_file_dir}/{run_time}.log"),
+            run_time_format          = "%Y%m%d-%H%M%S",
+            image_file_fmt_template  = ConfTemplate(
+                "{log_file_dir}/{{tag}}_{{episode}}_{{step}}.png"),
+            #project_name             = PROJECT_NAME,
+            #confname                 = "LogFileConf",
+        ),
+        from_parent = ("project_name", "confname"),
+        parent = parent,
+    )
 
 
-class CommonPlayConf(Conf):
-    """
-    Follow the principle of delayed execution.
+def Act2DSpaceConf(parent):
+    return Conf(
+        props = dict(
+            seed = lambda s:s.seed_src.next_seed
+        ),
+        attrs = dict(
+            _call_func = Act2DSpace,
+            #seed_src = SeedSource
+        ),
+        from_parent = ("seed_src",),
+        parent = parent
+    )
 
-    1. Avoid executing any code untill a property of this conf is accessed.
-    2. Do not make any copies of same attributes.
-        Use property objects for redirection
-    3. Use class stacks for additional properties on the base classes.
-    """
-    def __init__(self, **kw):
-        super().__init__(**kw)
 
-    @MEMOIZE_METHOD
-    def setLoggerConfig(self):
-        print("Setting dict config from {self.__class__.__name__}".format(self=self))
-        logging.root = logging.RootLogger(logging.WARNING)
-        logging.Logger.root = logging.root
-        logging.Logger.manager = logging.Manager(logging.Logger.root)
-        logging.config.dictConfig(
-            logging_dictConfig(self.log_file,
-                               self.logging_encdec))
+def Obs2DSpaceConf(parent):
+    return Conf(
+        props = dict(
+            seed = lambda s: s.seed_src.next_seed,
+            upper_bound = lambda s: np.array(s.grid_world.shape),
+            grid_world = lambda s: s.grid_world_conf(),
+        ), attrs = dict(
+            _call_func = Loc2DSpace,
+            lower_bound = np.array([0,0]),
+            #grid_world_conf = WindyGridWorldConf,
+            #seed_src = SeedSource
+        ),
+        from_parent = ("seed_src", "grid_world_conf"),
+        parent = parent,
+    )
 
-    def getLogger(self, name):
-        self.setLoggerConfig()
-        return logging.getLogger(name)
 
-    @property
-    def logger_factory(self):
-        return lambda name : self.getLogger(name)
+def AgentInGridWorldConf(parent):
+    return Conf(
+        props = dict(
+            seed         = lambda s:s.seed_src.next_seed,
+            grid_world   = lambda s:s.grid_world_conf(),
+            log_file_dir = lambda s:s.log_file_conf.log_file_dir,
+            action_space = lambda s:s.action_space_conf(),
+            observation_space = lambda s:s.observation_space_conf(),
+            grid_world_conf = WindyGridWorldConf,
+            action_space_conf = Act2DSpaceConf,
+            observation_space_conf = Obs2DSpaceConf,
+        ), attrs = dict(
+            _call_func      = AgentInGridWorld,
+            #log_file_conf   = LogFileConf,
+            #seed_src        = SeedSource,
+            start_pose_gen  = random_start_pose_gen,
+            goal_pose_gen   = random_goal_pose_gen,
+            goal_reward     = 10,
+            max_steps       = 200,
+            wall_penality   = 1.0,
+            no_render       = False
+        ),
+        from_parent = ("seed_src", "log_file_conf"),
+        parent = parent,
+    )
 
-    @property
-    @MEMOIZE_METHOD
-    def rng(self):
-        return np.random.RandomState(self.seed)
 
-    def _next_seed(self):
-        return self.rng.randint(1000)
+def QLearningDiscreteConf(parent):
+    return Conf(
+        props = dict(
+            seed              = lambda s: s.seed_src.next_seed
+        ), attrs = dict (
+            _call_func            = QLearningDiscrete,
+            egreedy_epsilon       = 0.05,
+            action_value_momentum = 0.1, # Low momentum changes more frequently
+            init_value            =   1,
+            discount              = 0.99,
+            #seed_src              = SeedSource,
+        ),
+        from_parent = ("seed_src", "action_space", "observation_space"),
+        parent = parent
+    )
 
-    @property
-    @MEMOIZE_METHOD
-    def exp_name(self):
-        return "{run_month}_{gitrev}_{name}".format(
-            name=self.__class__.__name__ ,
-            gitrev=git_revision(Path(__file__).parent),
-            run_month=self.run_time[:6])
 
-    @property
-    @MEMOIZE_METHOD
-    def run_time(self):
-        return time.strftime(self.run_time_format)
+LoggingEncdecConf = Conf(attrs = dict(
+    _call_func = NPJSONEncDec))
 
-    @property
-    def log_file_latest(self):
-        return format_string_from_conf(self.log_file_latest_template, self)
 
-    @property
-    def log_file_dir(self):
-        log_dir = format_string_from_conf(self.log_file_dir_template, self)
-        Path(log_dir).mkdir(parents=True, exist_ok=True)
-        return log_dir
+def setLoggerConfig(confname, log_file, logging_encdec):
+    print("Setting dict config from {confname}".format(confname=confname))
+    logging.root = logging.RootLogger(logging.WARNING)
+    logging.Logger.root = logging.root
+    logging.Logger.manager = logging.Manager(logging.Logger.root)
+    logging.config.dictConfig(
+        logging_dictConfig(log_file,
+                           logging_encdec))
 
-    @property
-    def latency_observer(self):
-        return LatencyObserver(self.prob)
 
-    @property
-    def distineff_observer(self):
-        return DistineffObs(self.prob)
+def LoggingFactoryConf(parent):
+    return Conf(
+        props = dict(
+            set_logger_conf = lambda s : setLoggerConfig(s.log_file_conf.confname,
+                                                         s.log_file_conf.log_file,
+                                                         s.logging_encdec_conf()),
+        ), attrs = dict(
+            _call_func = lambda set_logger_conf: (lambda name : logging.getLogger(name)),
+            #log_file_conf = LogFileConf,
+            logging_encdec_conf = LoggingEncdecConf,
+        ),
+        from_parent = ("log_file_conf",),
+        parent = parent
+    )
 
-    @property
-    @MEMOIZE_METHOD
-    def log_file(self):
-        log_file = ensuredirs(
-            format_string_from_conf(self.log_file_template, self))
 
-        if self.log_file_latest != log_file and not os.path.exists(log_file):
-            with open(log_file, "a") as f: pass
+def LoggingObserverConf(parent):
+    return Conf(
+        props = dict(
+            logger          = lambda s : s.logger_factory("LoggingObserver"),
+        ), attrs = dict (
+            _call_func   = LoggingObserver,
+            #prob_conf    = AgentInGridWorldConf,
+            #logger_factory_conf = LoggingFactoryConf
+            log_interval = 1
+        ),
+        from_parent = ("logger_factory", "prob"),
+        parent = parent,
+    )
 
-            if os.path.exists(self.log_file_latest):
-                os.remove(self.log_file_latest)
-            os.symlink(log_file, self.log_file_latest)
-        return log_file
 
-    @property
-    @MEMOIZE_METHOD
-    def log_file_reader(self):
-        return self.log_file_reader_conf()
+def LatencyObserverConf(parent):
+    return Conf(
+        attrs = dict(
+            _call_func = LatencyObserver,
+        ),
+        from_parent = ("prob",),
+        parent = parent,
+    )
 
-    @property
-    @MEMOIZE_METHOD
-    def grid_world(self):
-        return self.grid_world_conf()
 
-    @property
-    @MEMOIZE_METHOD
-    def prob(self):
-        return self.prob_conf()
+def DistineffObsConf(parent):
+    return Conf(
+        attrs = dict(
+            _call_func = DistineffObs,
+            #prob_conf = AgentInGridWorldConf
+        ),
+        from_parent = ("prob", ),
+        parent = parent,
+    )
 
-    @property
-    @MEMOIZE_METHOD
-    def logging_observer(self):
-        return self.logging_observer_conf()
 
-    @property
-    @MEMOIZE_METHOD
-    def compute_metrics_from_replay(self):
-        return self.compute_metrics_from_replay_conf()
+def LogFileReaderConf(parent):
+    return Conf(
+        props = dict(
+            logfilepath    = lambda s : s.log_file_conf.log_file,
+            enc            = lambda s: s.logging_encdec_conf(),
+        ), attrs = dict(
+            _call_func = LogFileReader,
+            #log_file_conf = LogFileConf,
+            logging_encdec_conf = LoggingEncdecConf,
+            sep = "\t"
+        ),
+        from_parent = ("log_file_conf",),
+        parent = parent,
+    )
 
-    @property
-    @MEMOIZE_METHOD
-    def observer(self):
-        return self.observer_conf()
 
-    @property
-    def observers_dict(self):
-        return dict(
-            logger     = self.logging_observer,
-            metrics    = self.compute_metrics_from_replay,
-            visualizer = self.visualizer)
+def ComputeMetricsFromLogReplayConf(parent):
+    return Conf(
+        props = dict(
+            loggingobserver   = lambda s : s.logging_observer_conf(),
+            metrics_observers = lambda s : [s.latency_observer_conf(),
+                                            s.distineff_observer_conf()],
+            logfilereader     = lambda s : s.log_file_reader_conf()
+        ), attrs = dict(
+            _call_func              = ComputeMetricsFromLogReplay,
+            log_file_reader_conf = LogFileReaderConf(parent),
+            logging_observer_conf = LoggingObserverConf(parent),
+            latency_observer_conf = LatencyObserverConf(parent),
+            distineff_observer_conf = DistineffObsConf(parent)
+        ),
+        from_parent = ("seed_src", "logger_factory", "project_name",
+                       "confname", "log_file_conf", "prob"),
+        parent = parent
+    )
 
-    @property
-    @MEMOIZE_METHOD
-    def visualizer(self):
-        return self.visualizer_conf()
 
-    @property
-    @MEMOIZE_METHOD
-    def logging_encdec(self):
-        return self.logging_encdec_conf()
+def VisualizerConf(parent):
+    return Conf(
+        props = dict(
+            logger = lambda s : s.logger_factory("Visualizer")
+        ),
+        attrs = dict(
+            _call_func = NoOPObserver,
+            log_interval = 1,
+            cellsize = 80,
+        ),
+        from_parent = ("logger_factory",),
+        parent = parent
+    )
 
-    @property
-    def cellsize(self):
-        return self.visualizer_conf.cellsize
+def MultiObserverConf(parent):
+    return Conf( 
+        props = dict(
+            observers = lambda s: {k : v() for k, v in s.observers_conf.items()}
+        ),
+        attrs = dict (
+            _call_func = MultiObserver,
+            observers_conf = dict(
+                #logging = LoggingObserverConf(parent),
+                metrics = ComputeMetricsFromLogReplayConf(parent),
+                visualizer = VisualizerConf(parent))
+        ),
+        from_parent = ("seed_src", "logger_factory", "project_name",
+                       "confname", "log_file_conf", "prob"),
+        parent = parent,
+    )
 
-    @property
-    def image_file_fmt(self):
-        return str(Path(self.log_file_dir) / self.image_file_fmt_basename)
 
-    @property
-    def filter_criteria(self):
-        return { k : v for k, v in self.filter_conf.items()
-                 if not isinstance(v, (Conf, dict)) }
+def QLearningPlayConf(parent):
+    return Conf(
+        props = dict(
+            alg             = lambda self: self.alg_conf(),
+            prob            = lambda self: self.prob_conf(),
+            observer        = lambda self: self.observers_conf(),
+            action_space    = lambda self: self.prob.action_space,
+            observation_space = lambda self: self.prob.observation_space,
+            alg_conf       = QLearningDiscreteConf,
+            prob_conf      = AgentInGridWorldConf,
+            observers_conf = lambda parent: MultiObserverConf(parent).copy(
+                attrs = dict(
+                    observers_conf = dict(
+                        visualizer = Conf(
+                            attrs = dict(_call_func = QLearningLogger))))),
+        ), attrs = dict (
+            _call_func     = play,
+            nepisodes            = 3
+        ),
+        from_parent = ("seed_src", "logger_factory", "project_name",
+                       "confname", "log_file_conf"),
+        parent = parent,
+    )
 
-    def defaults(self):
-        defaults      = dict(
-            _call_func  = play,
-            nepisodes = 3,
-            seed      = 0,
+def FloydWarshallAlgDiscreteConf(parent):
+    return Conf(
+        props = dict(
+            qlearning = lambda s : s.qlearning_conf()
+        ), attrs = dict(
+            _call_func = FloydWarshallAlgDiscrete,
+            qlearning_conf = QLearningDiscreteConf(parent),
+        ),
+        from_parent = ("seed_src", "action_space", "observation_space"),
+        parent = parent
+    )
 
-            grid_world_conf = WindyGridWorldConf(self),
 
-            prob_conf = AgentInGridWorldConf(self),
+def FloydWarshallPlayConf(parent):
+    return Conf(
+        props = dict(
+            alg             = lambda self: self.alg_conf(),
+            prob            = lambda self: self.prob_conf(),
+            observer        = lambda self: self.observers_conf(),
+            action_space    = lambda self: self.prob.action_space,
+            observation_space = lambda self: self.prob.observation_space,
+            alg_conf             = FloydWarshallAlgDiscreteConf,
+            prob_conf            = AgentInGridWorldConf,
+            observers_conf       = lambda self: MultiObserverConf(self).copy(
+                attrs = dict(
+                    observers_conf = dict(
+                        visualizer = Conf(
+                            attrs = dict(_call_func = FloydWarshallLogger))))),
+        ), attrs = dict (
+            _call_func           = play,
+            nepisodes            = 3,
+        ),
+        from_parent = ("seed_src", "logger_factory", "project_name",
+                       "confname", "log_file_conf"),
+        parent = parent,
+    )
 
-            compute_metrics_from_replay_conf =
-                ComputeMetricsFromLogReplayConf(self),
 
-            observer_conf = 
-                NewConfClass("MultiObserverConf",
-                             observers = lambda s : self.observers_dict,
-                ) ( root_conf = self,
-                    _call_func = MultiObserver,
-                ),
+def MultiPlayConf(parent):
+    return Conf(
+        attrs = dict(
+            _call_func = lambda multiconf : [c(parent)() for c in multiconf],
+            multiconf = [FloydWarshallPlayConf, QLearningPlayConf]
+        ),
+        from_parent = ("seed_src", "logger_factory", "project_name",
+                       "confname", "log_file_conf"),
+        parent = parent,
+    )
 
-            visualizer_conf = NewConfClass(
-                "VisualizerConf",
-                logger = lambda s : self.getLogger("Visualizer")
-            ) ( root_conf = self,
-                _call_func = NoOPObserver,
-                log_interval = 1,
-                cellsize = 80
-            ),
-
-            logging_encdec_conf = Conf(root_conf = self,
-                                       _call_func = NPJSONEncDec),
-
-            logging_observer_conf = LoggingObserverConf(self),
-
-            log_file_reader_conf = NewConfClass(
-                "LogFileReaderConf",
-                logfilepath = lambda s : self.log_file_to_process or self.log_file,
-                enc = lambda s: self.logging_encdec,
-            ) ( root_conf = self,
-                _call_func = LogFileReader,
-                sep = "\t"
-            ),
-
-            filter_conf = FilterConf(root_conf = self),
-
-            log_file_dir_template = "{data_dir}/{project_name}/{exp_name}",
-            log_file_template = "{log_file_dir}/{run_time}.log",
-            log_file_latest_template = "{log_file_dir}/latest.log",
-            data_dir          = os.environ["MID_DIR"],
-            project_name      = "floyd_warshall_rl",
-            run_time_format   = "%Y%m%d-%H%M%S",
-            log_file_to_process  = None,
-            image_file_fmt_basename = "{tag}_{episode}_{step}.png"
+def SessionConf(confname, project_name = PROJECT_NAME, seed = 0):
+    return Conf(
+        props = dict(
+            log_file_conf = MEMOIZE_METHOD(LogFileConf),
+            logger_factory_conf = LoggingFactoryConf,
+            seed_src = MEMOIZE_METHOD(SeedSourceGen),
+            logger_factory = LambdaMethodMemoizer("logging_factory")(
+                lambda s: s.logger_factory_conf()),
+        ),
+        attrs = dict(
+            seed = seed,
+            project_name = project_name,
+            confname = confname,
         )
-        return defaults
+    )
 
+def QLearningPlayConfSession(confname = "QLearningPlayConf"):
+    return QLearningPlayConf(SessionConf(confname))
 
-class FloydWarshallPlayConf(CommonPlayConf):
-    @property
-    @MEMOIZE_METHOD
-    def alg(self):
-        return self.alg_conf()
-
-    def defaults(self):
-        defaults = super().defaults()
-        defaults = dict_update_recursive(
-            defaults,
-            dict(
-                alg_conf = NewConfClass(
-                    "FloydWarshallAlgDiscreteConf",
-                    qlearning = lambda s : s.qlearning_conf()
-                )(
-                    _call_func = FloydWarshallAlgDiscrete,
-                    qlearning_conf = QLearningDiscreteDefaultConfGen(self)),
-                visualizer_conf = Conf(_call_func = FloydWarshallLogger)
-            ))
-        return defaults
-
-
-class QLearningPlayConf(CommonPlayConf):
-    @property
-    @MEMOIZE_METHOD
-    def alg(self):
-        return self.alg_conf()
-
-    def defaults(self):
-        defaults = super().defaults()
-        dict_update_recursive(
-            defaults,
-            dict(alg_conf = QLearningDiscreteDefaultConfGen(self),
-                 visualizer_conf = Conf(_call_func = QLearningLogger)
-            ))
-        return defaults
-
-class MultiPlayConf(Conf):
-    def defaults(self):
-        return dict_update_recursive(
-            super().defaults(),
-            dict(fw = FloydWarshallPlayConf(self),
-                 ql = QLearningPlayConf(self)))
+def SessionedConf(**kw):
+    return Conf(
+        props = dict(
+            sessioned_conf = lambda s: s.conf(SessionConf(s.conf.__name__))
+        ),
+        attrs = dict(
+            _call_func = lambda sessioned_conf: sessioned_conf(),
+            conf = MultiPlayConf,
+            **kw,
+        )
+    )
 
 if __name__ == '__main__':
     import sys
-    conf = Conf.parse_all_args("conf.default:MultiPlayConf",
+    conf = Conf.parse_all_args("conf.default:SessionedConf",
                                sys.argv[1:], glbls=globals())
     conf()

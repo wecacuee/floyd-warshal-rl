@@ -1,57 +1,124 @@
 """
-This modules describes a minilanguage that is meant to describe what
-instead of how.
-If this was scheme, it would have been trivial. But I am trying to
-stay as pythonic as possible using introspection, lambdas and
-properties.
+* Design requirements:
+
+1. Almost no loss of information.
+2. Tree like structure (DAG) with support for shared objects. 
+3. Allowing macros for small changes in configurations.
+4. Easy copying.
+
+* Why property magic?
+
+The access syntax to the configuration items must be consistent. Since
+all types can be wrapped as functions, so functions is one option.
+Another option is properties which wrap callables as normal types.
+
+* What is wrong with dictionaries?
+
+Do not support properties
+
+* Proposed Design iteration 1
+
+** ConfClass function to create easy creation class with properties. To
+avoid loss of information, the properties can atmost point to other
+objects or function call on other properties.
+
+** Shared objects by memoize method utility
+
+* Problems
+
+** Looks ugly.
+** Debugging is difficult even for me.
+** The lambdas are not given line number.
+
+May be all we need is a different kind of lambdas.
+
+        Conf(_call_func = callable, arg1 = arg1...)()
+
+is same as 
+
+        lambda arg1, ... : callable(arg1)
+
+What you want the configuration to look like
+
+QLearningPlayConf(
+_call_func = play,
+seed_src = SeedSource,
+logger_factory_conf = LoggerFactoryConf,
+alg = AlgConf(from_parent = "next_seed logger_factory",
+              action_space_conf = ActionSpaceConf( seed_src = SeedSource ),
+             ).setter("parent"),
+prob = ProbConf,
+observer = ObsConf,
+logger_factory = LoggerFactoryConf)
+
+
 """
 import importlib
 from argparse import Namespace, ArgumentParser, Action
 import inspect
+from itertools import chain
 from string import Formatter
 from collections import namedtuple
 import copy
-import shlex
+import json
 
 from cog.memoize import MethodMemoizer
-
-"""
-A pair of function and configuration object that can be applied using apply_conf
-"""
-LazyApplyable = namedtuple("LazyApplyable", "func conf".split())
 
 def apply_conf(func, conf):
     required_args = list(inspect.signature(func).parameters.keys())
     return func( ** { k : conf[k] for k in required_args } )
 
-class Conf(Namespace):
-    def __init__(self, root_conf, **kwargs):
-        self.root_conf = root_conf
-        self.init_kwargs = kwargs
-        self.overrides()
-        super().__init__()
+class Conf:
+    def __init__(self, props=dict(), from_parent = (), parent=None,
+                 attrs = dict()):
+        self._attributes = attrs
+        self._properties = props
+        self._from_parent = from_parent
+        self._parent = parent
 
-    def overrides(self, **kw):
-        defaults = self.defaults()
-        updated_kw = dict_update_recursive(defaults, self.init_kwargs)
-        updated_kw = dict_update_recursive(updated_kw, kw)
-        for k, v in updated_kw.items():
-            setattr(self, k, v)
+    def _overrides(self, attrs):
+        updated_kw = self._attributes.copy()
+        updated_kw = dict_update_recursive(updated_kw, attrs)
+        return updated_kw
+
+    def copy(self, props=dict(), from_parent = (), parent = None, attrs = dict()):
+        updated_props = self._properties.copy()
+        updated_props.update(props)
+        return type(self)(props = updated_props,
+                          from_parent = from_parent or self._from_parent,
+                          parent = parent or self._parent,
+                          attrs = self._overrides(attrs))
+
+    def setter(self, name):
+        return lambda value: self.copy(name = value)
 
     def keys(self):
-        return vars(self).keys()
-
-    def defaults(self):
-        return dict()
+        return chain(self._properties.keys(), self._attributes.keys())
 
     def items(self):
-        return vars(self).items()
+        return chain(self._properties.items(), self._attributes.items())
 
     def __getitem__(self, k):
         return getattr(self, k)
 
     def __setitem__(self, k, v):
-        setattr(self, k, v)
+        return setattr(self, k, v)
+
+    def __getattr__(self, k):
+        if k in self._from_parent:
+            return getattr(self._parent, k)
+        elif k in self._properties:
+            try:
+                return self._properties[ k ](self)
+            except KeyError as e:
+                raise AttributeError("self:{} missing k:{}. Error: {}".format(
+                    self, k, e))
+        else:
+            try:
+                return self._attributes[ k ]
+            except KeyError as e:
+                raise AttributeError("self:{} missing k:{}. Error: {}".format(
+                    self, k, e))
 
     @classmethod
     def parser(cls, default_config):
@@ -68,13 +135,13 @@ class Conf(Namespace):
     @classmethod
     def parse_all_args(cls, default_config, args, glbls={}, **kwargs):
         c, remargs = cls.parser(default_config).parse_known_args(args)
-        conf = cls.import_class(c.config)(root_conf = None, **kwargs)
+        conf = cls.import_class(c.config)(**kwargs)
         return conf.parse_remargs(remargs, glbls=glbls)
 
     def argparse_action(self, key, glbls):
         class DefAction(Action):
             def __call__(s, parser, namespace, values, option_string=None):
-                setattr(namespace, key, self.parse_remargs(shlex.split(values), glbls))
+                setattr(namespace, key, json.loads(values))
 
         return DefAction
 
@@ -94,10 +161,10 @@ class Conf(Namespace):
                 parser.add_argument("--{k}".format(k=key), default=None,
                                     type=type(defval))
         args = parser.parse_args(remargs)
-        self.overrides(
-            **{ k : v for k, v in vars(args).items() if v is not None })
-        self.run_checks()
-        return self
+        c = self.copy(
+            attrs = { k : v for k, v in vars(args).items() if v is not None })
+        c.run_checks()
+        return c
 
     def run_checks(self):
         return True
@@ -120,7 +187,7 @@ def dict_update_recursive(ddest, dsrc):
 
     return ddest
 
-def NewConfClass(name, **kwargs):
+def NewConfClassInherit(name, props, parents=(Conf,), defaults=dict()):
     """
     Defines a new class with name = name and
     initialize kwargs attributes as property objects.
@@ -145,11 +212,21 @@ def NewConfClass(name, **kwargs):
             return s._parent.blah.xyz
     ```
     """
-    for v in kwargs.values():
+    for v in props.values():
         assert callable(v), "Not implemented"
-    return type(name, (Conf,),
-                { k : property(v) if callable(v) else v
-                  for k, v in kwargs.items() })
+    dct = { k : property(v) if callable(v) else v for k, v in props.items() }
+    if "_defaults" in dct:
+        raise NotImplementedError("do not name any prooperty as default")
+    dct["_defaults"] = defaults
+    return type(name, parents, dct)
+
+
+def NewConfClass(name, **props):
+    return NewConfClassInherit(name, props)
+
+
+def ConfClass(name, props=dict(), defaults=dict(), **kw):
+    return NewConfClassInherit(name, props, defaults=defaults, **kw)
 
 
 def format_string_from_conf(strformat, obj):
@@ -160,6 +237,11 @@ def format_string_from_conf(strformat, obj):
                                             for fn in fieldnames})
     return formattted_string
 
+class ConfTemplate:
+    def __init__(self, strformat):
+        self.strformat = strformat
+    def expand(self, conf):
+        return format_string_from_conf(self.strformat, conf)
 
 def serialize_list(l):
     return list(map(serialize_any, l))

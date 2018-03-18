@@ -119,25 +119,19 @@ class MultiObserver(object):
         for o in self.observers.values():
             o.parent = self
 
-    def set_prob(self, prob):
-        for o in self.observers.values():
-            o.set_prob(prob)
+    def __getattr__(self, attr):
+        if attr in """set_prob set_alg on_new_episode on_episode_end
+                        on_new_step on_play_start on_play_end""".split():
+            childattr = [getattr(o, attr)
+                         for o in self.observers.values()]
+            def wrapper(*args, **kwargs):
+                for a in childattr:
+                    a(*args, **kwargs)
+                    
+            return wrapper
+        else:
+            super().__getattr__(attr)
 
-    def set_alg(self, alg):
-        for o in self.observers.values():
-            o.set_alg(alg)
-
-    def on_new_episode(self, episode_n):
-        for o in self.observers.values():
-            o.on_new_episode(episode_n)
-
-    def on_new_step(self, obs, rew, action):
-        for o in self.observers.values():
-            o.on_new_step(obs, rew, action)
-
-    def on_play_end(self):
-        for o in self.observers.values():
-            o.on_play_end()
 
 class NPJSONEncDec(object):
     def dumps(self, dct):

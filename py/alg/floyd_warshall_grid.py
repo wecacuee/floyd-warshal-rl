@@ -244,9 +244,9 @@ class FloydWarshallLogger(NoOPObserver):
                            hash_state   = self.alg.hash_state
                       ))
 
-    def on_new_step(self, obs, rew, act):
+    def on_new_step(self, obs, rew, action):
         self.on_new_step_with_pose_steps(
-            obs, rew, act, self.prob.pose, self.prob.steps)
+            obs, rew, action, self.prob.pose, self.prob.steps)
 
     def on_new_episode(self, episode_n):
         self.episode_n = episode_n
