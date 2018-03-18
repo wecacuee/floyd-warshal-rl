@@ -1,10 +1,21 @@
 """
 * Design requirements:
 
-1. Almost no loss of information.
+1. Almost no loss of information. When a function is executed it eats
+  its arguments and may result in output from which the input cannot
+  be recovered. This is not to mean that functions should not be
+  executed, but all the arguments to the function should be kept around.
 2. Tree like structure (DAG) with support for shared objects. 
-3. Allowing macros for small changes in configurations.
+3. Allowing macros for small changes in configurations. As long we
+   keep the configuration as a DAG, we can manipulate the DAG to change configuration.
 4. Easy copying.
+
+* A function is best written, when most of it is written in the
+  kwargs. Because that makes it overrideable.
+
+* Another technique of programming can be properties like kwargs,
+  where some of the kwargs are just lambdas that depend on the
+  locals() inside the function.
 
 * Why property magic?
 
@@ -14,43 +25,15 @@ Another option is properties which wrap callables as normal types.
 
 * What is wrong with dictionaries?
 
-Do not support properties
+Do not support properties.
 
-* Proposed Design iteration 1
+* Proposed Design
 
 ** ConfClass function to create easy creation class with properties. To
 avoid loss of information, the properties can atmost point to other
 objects or function call on other properties.
 
-** Shared objects by memoize method utility
-
-* Problems
-
-** Looks ugly.
-** Debugging is difficult even for me.
-** The lambdas are not given line number.
-
-May be all we need is a different kind of lambdas.
-
-        Conf(_call_func = callable, arg1 = arg1...)()
-
-is same as 
-
-        lambda arg1, ... : callable(arg1)
-
-What you want the configuration to look like
-
-QLearningPlayConf(
-_call_func = play,
-seed_src = SeedSource,
-logger_factory_conf = LoggerFactoryConf,
-alg = AlgConf(from_parent = "next_seed logger_factory",
-              action_space_conf = ActionSpaceConf( seed_src = SeedSource ),
-             ).setter("parent"),
-prob = ProbConf,
-observer = ObsConf,
-logger_factory = LoggerFactoryConf)
-
+** Shared objects by delegating the shared object to appropriate level of parent hood.
 
 """
 import importlib
@@ -71,54 +54,46 @@ def apply_conf(func, conf):
 class Conf:
     def __init__(self, props=dict(), from_parent = (), parent=None,
                  attrs = dict()):
-        self._attributes = attrs
-        self._properties = props
-        self._from_parent = from_parent
-        self._parent = parent
-
-    def _overrides(self, attrs):
-        updated_kw = self._attributes.copy()
-        updated_kw = dict_update_recursive(updated_kw, attrs)
-        return updated_kw
+        self.attrs = attrs
+        self.props = props
+        self.from_parent = from_parent
+        self.parent = parent
 
     def copy(self, props=dict(), from_parent = (), parent = None, attrs = dict()):
-        updated_props = self._properties.copy()
-        updated_props.update(props)
-        return type(self)(props = updated_props,
-                          from_parent = from_parent or self._from_parent,
-                          parent = parent or self._parent,
-                          attrs = self._overrides(attrs))
-
-    def setter(self, name):
-        return lambda value: self.copy(name = value)
+        new_props = self.props.copy()
+        new_props.update(props)
+        return type(self)(props = new_props,
+                          from_parent = from_parent or self.from_parent,
+                          parent = parent or self.parent,
+                          attrs = dict_update_recursive(self.attrs.copy(), attrs))
 
     def keys(self):
-        return chain(self._properties.keys(), self._attributes.keys())
+        return chain(self.props.keys(), self.attrs.keys())
 
     def items(self):
-        return chain(self._properties.items(), self._attributes.items())
+        return chain(self.props.items(), self.attrs.items())
 
     def __getitem__(self, k):
-        return getattr(self, k)
-
-    def __setitem__(self, k, v):
-        return setattr(self, k, v)
-
-    def __getattr__(self, k):
-        if k in self._from_parent:
-            return getattr(self._parent, k)
-        elif k in self._properties:
-            try:
-                return self._properties[ k ](self)
-            except KeyError as e:
-                raise AttributeError("self:{} missing k:{}. Error: {}".format(
-                    self, k, e))
+        if k in self.from_parent:
+            return self.parent[k]
+        elif k in self.props:
+            return self.props[ k ](self)
         else:
             try:
-                return self._attributes[ k ]
+                return self.attrs[ k ]
             except KeyError as e:
-                raise AttributeError("self:{} missing k:{}. Error: {}".format(
-                    self, k, e))
+                raise KeyError("missing k:{}. Error: {}; \n self:{} "
+                               .format(k, e, self))
+
+    def __setitem__(self, k, v):
+        self.attrs[k] = v
+
+    def __getattr__(self, k):
+        try:
+            return self.__getitem__(k)
+        except KeyError as e:
+            raise AttributeError("missing k:{}. Error: {}; \n self:{} "
+                                    .format(k, e, self))
 
     @classmethod
     def parser(cls, default_config):
@@ -196,7 +171,7 @@ def NewConfClassInherit(name, props, parents=(Conf,), defaults=dict()):
     ```
     MyConf = NewConfClass("MyConf",
                 abc = lambda s : s.bleh.abc,
-                xyz = lambda s : s._parent.blah.xyz)
+                xyz = lambda s : s.parent.blah.xyz)
     ```
 
     is equivalent to
@@ -209,7 +184,7 @@ def NewConfClassInherit(name, props, parents=(Conf,), defaults=dict()):
 
         @property
         def xyz(s):
-            return s._parent.blah.xyz
+            return s.parent.blah.xyz
     ```
     """
     for v in props.values():
