@@ -78,9 +78,9 @@ class QLearningDiscrete(Alg):
         # desirable_dest = max(
         #     self.top_m_states.queue,
         #     key = lambda s: self.action_value[s[1]])[1]
-        logger().debug(
-            "state = {state}; action_values = {av}".format(
-                av=self.action_value[state_idx, :], state=state))
+        #logger().debug(
+        #    "state = {state}; action_values = {av}".format(
+        #        av=self.action_value[state_idx, :], state=state))
         return np.argmax(self.action_value[state_idx, :])
 
     def _hit_goal(self, rew):
