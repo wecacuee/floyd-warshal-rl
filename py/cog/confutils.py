@@ -49,36 +49,52 @@ from cog.memoize import MethodMemoizer
 
 def apply_conf(func, conf):
     required_args = list(inspect.signature(func).parameters.keys())
-    return func( ** { k : conf[k] for k in required_args } )
+    return func( ** { k : getattr(conf, k) for k in required_args } )
 
 class Conf:
+    attrs = dict()
+    from_parent = ()
+    parent = None
     def __init__(self, props=dict(), from_parent = (), parent=None,
                  attrs = dict()):
         self.attrs = attrs
-        self.props = props
+        self.attrs.update( self.props2attrs(props) )
         self.from_parent = from_parent
         self.parent = parent
 
-    def copy(self, props=dict(), from_parent = (), parent = None, attrs = dict()):
-        new_props = self.props.copy()
-        new_props.update(props)
-        return type(self)(props = new_props,
-                          from_parent = from_parent or self.from_parent,
-                          parent = parent or self.parent,
-                          attrs = dict_update_recursive(self.attrs.copy(), attrs))
+    def setparent(self, parent):
+        self.parent = parent
+        return self
+
+    def props2attrs(self, props):
+        return { k : property(v) for k, v in props.items() }
+
+    def call_if_prop(self, val):
+        if isinstance(val, property):
+            return val.fget(self)
+        return val
+
+    def copy(self, props=dict(), from_parent = (), parent = None, attrs = dict(),
+             recursetypes=(dict,)):
+        attrs.update(self.props2attrs( props) )
+        c = self.__new__ (type(self))
+        c.__init__(props = dict(),
+                   from_parent = from_parent or self.from_parent,
+                   parent = parent or self.parent,
+                   attrs = dict_update_recursive(self.attrs.copy(), attrs,
+                                                 recursetypes=recursetypes))
+        return c
+
+    def __contains__(self, k):
+        return  ( k in self.attrs )
 
     def keys(self):
-        return chain(self.props.keys(), self.attrs.keys())
+        return self.attrs.keys()
 
     def items(self):
-        return chain(self.props.items(), self.attrs.items())
+        return self.attrs.items()
 
     def __getitem__(self, k):
-        if k in self.from_parent:
-            return self.parent[k]
-        elif k in self.props:
-            return self.props[ k ](self)
-        else:
             try:
                 return self.attrs[ k ]
             except KeyError as e:
@@ -86,14 +102,17 @@ class Conf:
                                .format(k, e, self))
 
     def __setitem__(self, k, v):
-        self.attrs[k] = v
+        self.attrs[ k ] = v
 
     def __getattr__(self, k):
-        try:
-            return self.__getitem__(k)
-        except KeyError as e:
-            raise AttributeError("missing k:{}. Error: {}; \n self:{} "
-                                    .format(k, e, self))
+        if k in self.from_parent:
+            return getattr(self.parent, k)
+        else:
+            try:
+                return self.call_if_prop(self.__getitem__(k))
+            except KeyError as e:
+                raise AttributeError("missing k:{}. Error: {}; \n self:{} "
+                                        .format(k, e, self))
 
     @classmethod
     def parser(cls, default_config):
@@ -150,11 +169,11 @@ class Conf:
     def __repr__(self):
         return "{}".format(vars(self))
 
-def dict_update_recursive(ddest, dsrc):
+def dict_update_recursive(ddest, dsrc, recursetypes=(dict, Conf)):
     for k, v in dsrc.items():
-        if isinstance(v, (dict, Conf)):
+        if isinstance(v, recursetypes):
             if k in ddest: 
-                ddest[k] = dict_update_recursive(ddest[k], v)
+                dict_update_recursive(ddest[k], v)
             else:
                 ddest[k] = copy.copy(v)
         else:

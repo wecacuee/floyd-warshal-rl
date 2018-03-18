@@ -65,21 +65,21 @@ def logging_dictConfig(log_file, logging_encdec):
 
 
 def SeedSourceGen(
-        parent,
+        parent = None,
         props = dict(
-            rng = LambdaMethodMemoizer(
-                "rng")(
-                    lambda self: np.random.RandomState(self.seed)),
+            rng = lambda self: self.rng_class(self.seed),
             next_seed = lambda self: self.rng.randint(1000)
         ),
-        attrs = dict(),
+        attrs = dict(
+            rng_class = np.random.RandomState,
+        ),
         from_parent = ("seed",),
     ):
     return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
 
 
 def WindyGridWorldConf(
-        parent,
+        parent = None,
         props = dict(
             seed = lambda s: s.seed_src.next_seed,
             maze_file_path = lambda s: s.maze_file_path_template.expand(s),
@@ -98,22 +98,18 @@ def WindyGridWorldConf(
 
 
 def LogFileConf(
-        parent,
+        parent = None,
         props = dict(
-        log_file = lambda self: ensuredirs(
-            self.log_file_template.expand(self)),
-        log_file_dir = lambda self: ensuredirs(
-            self.log_file_dir_template.expand(self)),
-        data_dir     = lambda self: os.environ["MID_DIR"],
-        exp_name     = lambda self: self.exp_name_template.expand(self),
-        gitrev       = LambdaMethodMemoizer(
-            "gitrev")(
-                lambda self: git_revision(Path(__file__).parent)),
-        run_month    = lambda self: self.run_time[:6],
-        run_time     = LambdaMethodMemoizer(
-            "run_time")(
-                lambda self: time.strftime(self.run_time_format)),
-        image_file_fmt = lambda self: self.image_file_fmt_template.expand(self)
+            log_file = lambda self: ensuredirs(
+                self.log_file_template.expand(self)),
+            log_file_dir = lambda self: ensuredirs(
+                self.log_file_dir_template.expand(self)),
+            data_dir     = lambda self: os.environ["MID_DIR"],
+            exp_name     = lambda self: self.exp_name_template.expand(self),
+            gitrev       = lambda self: git_revision(Path(__file__).parent),
+            run_month    = lambda self: self.run_time[:6],
+            run_time     = lambda self: time.strftime(self.run_time_format),
+            image_file_fmt = lambda self: self.image_file_fmt_template.expand(self)
         ),
         attrs = dict(
             exp_name_template        = ConfTemplate("{run_month}_{gitrev}_{confname}"),
@@ -126,12 +122,12 @@ def LogFileConf(
             #confname                 = "LogFileConf",
         ),
         from_parent = ("project_name", "confname"),
-    ):
+):
     return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
 
 
 def Act2DSpaceConf(
-        parent,
+        parent = None,
         props = dict(
             seed = lambda s:s.seed_src.next_seed
         ),
@@ -145,7 +141,7 @@ def Act2DSpaceConf(
 
 
 def Obs2DSpaceConf(
-        parent,
+        parent = None,
         props = dict(
             seed = lambda s: s.seed_src.next_seed,
             upper_bound = lambda s: np.array(s.grid_world.shape),
@@ -162,17 +158,17 @@ def Obs2DSpaceConf(
 
 
 def AgentInGridWorldConf(
-        parent,
+        parent = None,
         props = dict(
             seed         = lambda s:s.seed_src.next_seed,
-            grid_world   = lambda s:s.grid_world_conf(),
+            grid_world   = lambda s:s.grid_world_conf.setparent(s)(),
             log_file_dir = lambda s:s.log_file_conf.log_file_dir,
-            action_space = lambda s:s.action_space_conf(),
-            observation_space = lambda s:s.observation_space_conf(),
-            grid_world_conf = WindyGridWorldConf,
-            action_space_conf = Act2DSpaceConf,
-            observation_space_conf = Obs2DSpaceConf,
+            action_space = lambda s:s.action_space_conf.setparent(s)(),
+            observation_space = lambda s:s.observation_space_conf.setparent(s)(),
         ), attrs = dict(
+            grid_world_conf = WindyGridWorldConf(),
+            action_space_conf = Act2DSpaceConf(),
+            observation_space_conf = Obs2DSpaceConf(),
             _call_func      = AgentInGridWorld,
             #log_file_conf   = LogFileConf,
             #seed_src        = SeedSource,
@@ -189,7 +185,7 @@ def AgentInGridWorldConf(
 
 
 def QLearningDiscreteConf(
-        parent,
+        parent = None,
         props = dict(
             seed              = lambda s: s.seed_src.next_seed
         ), attrs = dict (
@@ -221,7 +217,7 @@ def setLoggerConfig(confname, log_file, logging_encdec):
 
 
 def LoggingFactoryConf(
-        parent,
+        parent = None,
         props = dict(
             set_logger_conf = lambda s : setLoggerConfig(s.log_file_conf.confname,
                                                          s.log_file_conf.log_file,
@@ -237,7 +233,7 @@ def LoggingFactoryConf(
 
 
 def LoggingObserverConf(
-        parent,
+        parent = None,
         props = dict(
             logger          = lambda s : s.logger_factory("LoggingObserver"),
         ), attrs = dict (
@@ -252,7 +248,7 @@ def LoggingObserverConf(
 
 
 def LatencyObserverConf(
-        parent,
+        parent = None,
         props = dict(),
         attrs = dict(
             _call_func = LatencyObserver,
@@ -263,7 +259,7 @@ def LatencyObserverConf(
 
 
 def DistineffObsConf(
-        parent,
+        parent = None,
         attrs = dict(
             _call_func = DistineffObs,
             #prob_conf = AgentInGridWorldConf
@@ -275,7 +271,7 @@ def DistineffObsConf(
 
 
 def LogFileReaderConf(
-        parent,
+        parent = None,
         props = dict(
             logfilepath    = lambda s : s.log_file_conf.log_file,
             enc            = lambda s: s.logging_encdec_conf(),
@@ -291,18 +287,18 @@ def LogFileReaderConf(
 
 
 def ComputeMetricsFromLogReplayConf(
-        parent,
+        parent = None,
         props = dict(
-            loggingobserver   = lambda s : s.logging_observer_conf(),
-            metrics_observers = lambda s : [s.latency_observer_conf(),
-                                            s.distineff_observer_conf()],
-            logfilereader     = lambda s : s.log_file_reader_conf(),
-            log_file_reader_conf = LogFileReaderConf,
-            logging_observer_conf = LoggingObserverConf,
-            latency_observer_conf = LatencyObserverConf,
-            distineff_observer_conf = DistineffObsConf,
+            loggingobserver   = lambda s : s.logging_observer_conf.setparent(s)(),
+            metrics_observers = lambda s : [s.latency_observer_conf.setparent(s)(),
+                                            s.distineff_observer_conf.setparent(s)()],
+            logfilereader     = lambda s : s.log_file_reader_conf.setparent(s)(),
         ), attrs = dict(
             _call_func              = ComputeMetricsFromLogReplay,
+            log_file_reader_conf = LogFileReaderConf(),
+            logging_observer_conf = LoggingObserverConf(),
+            latency_observer_conf = LatencyObserverConf(),
+            distineff_observer_conf = DistineffObsConf(),
         ),
         from_parent = ("seed_src", "logger_factory", "project_name",
                        "confname", "log_file_conf", "prob"),
@@ -311,7 +307,7 @@ def ComputeMetricsFromLogReplayConf(
 
 
 def VisualizerConf(
-        parent,
+        parent = None,
         props = dict(
             logger = lambda s : s.logger_factory("Visualizer")
         ),
@@ -326,16 +322,17 @@ def VisualizerConf(
 
 
 def MultiObserverConf(
-        parent,
+        parent = None,
         props = dict(
-            observers = lambda s: {k : v(s)() for k, v in s.observers_conf_gens.items()}
+            observers = lambda s: {k : v.setparent(s)()
+                                   for k, v in s.observers_confs.items()}
         ),
         attrs = dict (
             _call_func = MultiObserver,
-            observers_conf_gens = dict(
+            observers_confs = dict(
                 #logging = LoggingObserverConf,
-                metrics = ComputeMetricsFromLogReplayConf,
-                visualizer = VisualizerConf)
+                metrics = ComputeMetricsFromLogReplayConf(),
+                visualizer = VisualizerConf())
         ),
         from_parent = ("seed_src", "logger_factory", "project_name",
                        "confname", "log_file_conf", "prob"),
@@ -343,7 +340,7 @@ def MultiObserverConf(
     return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
 
 def QLearningLoggerConf(
-        parent,
+        parent = None,
         props = dict(
             logger = lambda self: self.logger_factory("QLearningLogger"),
         ),
@@ -360,36 +357,35 @@ def QLearningLoggerConf(
 def QLearningPlayConf(
         parent,
         props = dict(
-            alg             = lambda self: self.alg_conf(),
-            prob            = lambda self: self.prob_conf(),
-            observer        = lambda self: self.observers_conf(),
+            alg             = lambda self: self.alg_conf.setparent(self)(),
+            prob            = lambda self: self.prob_conf.setparent(self)(),
+            observer        = lambda self: self.observers_conf.setparent(self)(),
             action_space    = lambda self: self.prob.action_space,
             observation_space = lambda self: self.prob.observation_space,
-            alg_conf       = QLearningDiscreteConf,
-            prob_conf      = AgentInGridWorldConf,
-            observers_conf = lambda self: MultiObserverConf(self).copy(
-                attrs = dict(
-                    observers_conf = dict(
-                        visualizer = QLearningDiscreteConf(parent = self)
-                    )
-                )
-            ),
-        ), attrs = dict (
+        ),
+        attrs = dict (
             _call_func     = play,
-            nepisodes            = 3
+            nepisodes      = 3,
+            alg_conf       = QLearningDiscreteConf(),
+            prob_conf      = AgentInGridWorldConf(),
+            observers_conf = MultiObserverConf(),
         ),
         from_parent = ("seed_src", "logger_factory", "project_name",
                        "confname", "log_file_conf"),
     ):
+    attrs = dict_update_recursive(attrs, dict(
+        observers_conf = dict(
+            observers_confs = dict(
+                visualizer = QLearningLoggerConf()))))
     return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
 
 
 def FloydWarshallAlgDiscreteConf(
-        parent,
+        parent = None,
         props = dict(
-            qlearning = lambda s : s.qlearning_conf(),
-            qlearning_conf = QLearningDiscreteConf,
+            qlearning = lambda s : s.qlearning_conf.setparent(s)(),
         ), attrs = dict(
+            qlearning_conf = QLearningDiscreteConf(),
             _call_func = FloydWarshallAlgDiscrete,
         ),
         from_parent = ("seed_src", "action_space", "observation_space"),
@@ -397,28 +393,45 @@ def FloydWarshallAlgDiscreteConf(
     return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
 
 
+def FloydWarshallLoggerConf(
+        parent = None,
+        props = dict(
+            logger = lambda self: self.logger_factory("FloydWarshallLogger"),
+        ),
+        attrs = dict(
+            _call_func = FloydWarshallLogger,
+            log_interval = 1,
+        ),
+        from_parent = ("logger_factory",),
+):
+    return Conf(props = props , attrs = attrs, from_parent =
+                from_parent, parent = parent)
+
+
 def FloydWarshallPlayConf(
         parent,
         props = dict(
-            alg             = lambda self: self.alg_conf(),
-            prob            = lambda self: self.prob_conf(),
-            observer        = lambda self: self.observers_conf(),
+            alg             = lambda self: self.alg_conf.setparent(self)(),
+            prob            = LambdaMethodMemoizer(
+                "prob")(lambda self: self.prob_conf.setparent(self)()),
+            observer        = lambda self: self.observers_conf.setparent(self)(),
             action_space    = lambda self: self.prob.action_space,
             observation_space = lambda self: self.prob.observation_space,
-            alg_conf             = FloydWarshallAlgDiscreteConf,
-            prob_conf            = AgentInGridWorldConf,
-            observers_conf       = lambda self: MultiObserverConf(self).copy(
-                attrs = dict(
-                    observers_conf = dict(
-                        visualizer = Conf(
-                            attrs = dict(_call_func = FloydWarshallLogger))))),
-        ), attrs = dict (
-            _call_func           = play,
-            nepisodes            = 3,
+        ), 
+        attrs = dict(
+            _call_func     = play,
+            alg_conf       = FloydWarshallAlgDiscreteConf(),
+            nepisodes      = 3,
+            prob_conf      = AgentInGridWorldConf(),
+            observers_conf = MultiObserverConf(),
         ),
         from_parent = ("seed_src", "logger_factory", "project_name",
                        "confname", "log_file_conf"),
-    ):
+):
+    attrs = dict_update_recursive(attrs, dict(
+        observers_conf = dict(
+            observers_confs = dict(
+                visualizer = FloydWarshallLoggerConf()))))
     return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
 
 
@@ -432,7 +445,7 @@ def SessionConf(
                 lambda s: s.logger_factory_conf()),
         ),
         attrs = dict(
-            seed = 0,
+            seed         = 0,
             project_name = PROJECT_NAME,
         ),
     ):
@@ -455,8 +468,8 @@ def MultiPlaySessionConf(
             _call_func = lambda multiconf_classes, multiconf_kw : [
                 c(**kw)()
                 for c, kw in zip(multiconf_classes, multiconf_kw)],
-            multiconf_classes = [FloydWarshallPlaySessionConf,
-                         QLearningPlaySessionConf],
+            multiconf_classes = [QLearningPlaySessionConf,
+                                 FloydWarshallPlaySessionConf],
             multiconf_kw = [dict(), dict()]
         ),
     ):

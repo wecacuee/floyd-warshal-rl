@@ -122,10 +122,10 @@ class MultiObserver(object):
     def __getattr__(self, attr):
         if attr in """set_prob set_alg on_new_episode on_episode_end
                         on_new_step on_play_start on_play_end""".split():
-            childattr = [getattr(o, attr)
-                         for o in self.observers.values()]
+            childattr = [(k, getattr(o, attr))
+                         for k, o in self.observers.items()]
             def wrapper(*args, **kwargs):
-                for a in childattr:
+                for k, a in childattr:
                     a(*args, **kwargs)
                     
             return wrapper
