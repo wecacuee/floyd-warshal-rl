@@ -358,7 +358,8 @@ def QLearningPlayConf(
         parent,
         props = dict(
             alg             = lambda self: self.alg_conf.setparent(self)(),
-            prob            = lambda self: self.prob_conf.setparent(self)(),
+            prob            = LambdaMethodMemoizer(
+                "prob")(lambda self: self.prob_conf.setparent(self)()),
             observer        = lambda self: self.observers_conf.setparent(self)(),
             action_space    = lambda self: self.prob.action_space,
             observation_space = lambda self: self.prob.observation_space,
@@ -410,29 +411,17 @@ def FloydWarshallLoggerConf(
 
 def FloydWarshallPlayConf(
         parent,
-        props = dict(
-            alg             = lambda self: self.alg_conf.setparent(self)(),
-            prob            = LambdaMethodMemoizer(
-                "prob")(lambda self: self.prob_conf.setparent(self)()),
-            observer        = lambda self: self.observers_conf.setparent(self)(),
-            action_space    = lambda self: self.prob.action_space,
-            observation_space = lambda self: self.prob.observation_space,
-        ), 
         attrs = dict(
-            _call_func     = play,
-            alg_conf       = FloydWarshallAlgDiscreteConf(),
-            nepisodes      = 3,
-            prob_conf      = AgentInGridWorldConf(),
-            observers_conf = MultiObserverConf(),
-        ),
+            alg_conf = FloydWarshallAlgDiscreteConf(),
+            observers_conf = dict(
+                observers_confs = dict(
+                    visualizer = FloydWarshallLoggerConf())))
         from_parent = ("seed_src", "logger_factory", "project_name",
                        "confname", "log_file_conf"),
 ):
-    attrs = dict_update_recursive(attrs, dict(
-        observers_conf = dict(
-            observers_confs = dict(
-                visualizer = FloydWarshallLoggerConf()))))
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return QLearningPlayConf(parent).copy(
+        attrs = attrs,
+        from_parent = from_parent, parent = parent)
 
 
 def SessionConf(
