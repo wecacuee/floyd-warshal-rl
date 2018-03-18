@@ -75,7 +75,7 @@ def SeedSourceGen(
         ),
         from_parent = ("seed",),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def WindyGridWorldConf(
@@ -94,7 +94,7 @@ def WindyGridWorldConf(
         ),
         from_parent = ("seed_src",),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def LogFileConf(
@@ -123,7 +123,7 @@ def LogFileConf(
         ),
         from_parent = ("project_name", "confname"),
 ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def Act2DSpaceConf(
@@ -137,7 +137,7 @@ def Act2DSpaceConf(
         ),
         from_parent = ("seed_src",),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def Obs2DSpaceConf(
@@ -154,7 +154,7 @@ def Obs2DSpaceConf(
         ),
         from_parent = ("seed_src", "grid_world_conf"),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def AgentInGridWorldConf(
@@ -181,7 +181,7 @@ def AgentInGridWorldConf(
         ),
         from_parent = ("seed_src", "log_file_conf"),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def QLearningDiscreteConf(
@@ -198,12 +198,12 @@ def QLearningDiscreteConf(
         ),
         from_parent = ("seed_src", "action_space", "observation_space"),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def LoggingEncdecConf(attrs = dict(
     _call_func = NPJSONEncDec)):
-    return Conf(attrs = attrs)
+    return Conf(attrs = attrs.copy())
 
 
 def setLoggerConfig(confname, log_file, logging_encdec):
@@ -229,7 +229,7 @@ def LoggingFactoryConf(
         ),
         from_parent = ("log_file_conf",),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def LoggingObserverConf(
@@ -244,7 +244,7 @@ def LoggingObserverConf(
         ),
         from_parent = ("logger_factory", "prob"),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def LatencyObserverConf(
@@ -255,7 +255,7 @@ def LatencyObserverConf(
         ),
         from_parent = ("prob",),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def DistineffObsConf(
@@ -267,7 +267,7 @@ def DistineffObsConf(
         from_parent = ("prob", ),
         props = dict(),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def LogFileReaderConf(
@@ -283,7 +283,7 @@ def LogFileReaderConf(
         ),
         from_parent = ("log_file_conf",),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def ComputeMetricsFromLogReplayConf(
@@ -303,7 +303,7 @@ def ComputeMetricsFromLogReplayConf(
         from_parent = ("seed_src", "logger_factory", "project_name",
                        "confname", "log_file_conf", "prob"),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def VisualizerConf(
@@ -318,7 +318,7 @@ def VisualizerConf(
         ),
         from_parent = ("logger_factory",),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def MultiObserverConf(
@@ -337,7 +337,7 @@ def MultiObserverConf(
         from_parent = ("seed_src", "logger_factory", "project_name",
                        "confname", "log_file_conf", "prob"),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 def QLearningLoggerConf(
         parent = None,
@@ -350,7 +350,7 @@ def QLearningLoggerConf(
         ),
         from_parent = ("logger_factory",),
 ):
-    return Conf(props = props , attrs = attrs, from_parent =
+    return Conf(props = props , attrs = attrs.copy(), from_parent =
                 from_parent, parent = parent)
 
 
@@ -378,7 +378,7 @@ def QLearningPlayConf(
         observers_conf = dict(
             observers_confs = dict(
                 visualizer = QLearningLoggerConf()))))
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def FloydWarshallAlgDiscreteConf(
@@ -391,7 +391,7 @@ def FloydWarshallAlgDiscreteConf(
         ),
         from_parent = ("seed_src", "action_space", "observation_space"),
     ):
-    return Conf(props = props, attrs = attrs, from_parent = from_parent, parent = parent)
+    return Conf(props = props, attrs = attrs.copy(), from_parent = from_parent, parent = parent)
 
 
 def FloydWarshallLoggerConf(
@@ -405,7 +405,7 @@ def FloydWarshallLoggerConf(
         ),
         from_parent = ("logger_factory",),
 ):
-    return Conf(props = props , attrs = attrs, from_parent =
+    return Conf(props = props , attrs = attrs.copy(), from_parent =
                 from_parent, parent = parent)
 
 
@@ -420,7 +420,7 @@ def FloydWarshallPlayConf(
                        "confname", "log_file_conf"),
 ):
     return QLearningPlayConf(parent).copy(
-        attrs = attrs,
+        attrs = attrs.copy(),
         from_parent = from_parent, parent = parent)
 
 
@@ -439,7 +439,7 @@ def SessionConf(
         ),
     ):
     attrs.update(confname = confname)
-    return Conf(props = props, attrs = attrs)
+    return Conf(props = props, attrs = attrs.copy())
 
 
 def QLearningPlaySessionConf(**kw):
@@ -462,7 +462,7 @@ def MultiPlaySessionConf(
             multiconf_kw = [dict(), dict()]
         ),
     ):
-    return Conf(attrs = attrs)
+    return Conf(attrs = attrs.copy())
 
 
 if __name__ == '__main__':
