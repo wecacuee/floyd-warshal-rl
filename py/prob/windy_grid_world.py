@@ -4,15 +4,14 @@ from pathlib import Path
 import numpy as np
 
 from cog import draw
-from cog.memoize import MethodMemoizer
+from cog.memoize import MEMOIZE_METHOD
+from cog.confutils import KWFuncArgs, KWFunc, apply_conf, func_kwonlydefaults
 
 from game.play import Space, Problem
 import logging
 
 def logger():
     return logging.getLogger(__name__)
-
-METHOD_MEMOIZER = MethodMemoizer()
 
 def maze_from_filepath(fpath):
     with open(fpath) as f:
@@ -57,11 +56,13 @@ def maze_from_string(maze_string,
 
 
 class Act2DSpace(Space):
-    NAMES = ["NORTH", "EAST", "WEST",  "SOUTH"]
-    VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
-    def __init__(self, seed):
-        self.rng = np.random.RandomState()
-        self.rng.seed(seed)
+    def __init__(self,
+                 rng,
+                 NAMES = ["NORTH", "EAST", "WEST",  "SOUTH"],
+                 VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])):
+        self.rng = rng
+        self.NAMES = NAMES
+        self.VECTORS = VECTORS
         
     def sample(self):
         act = self.rng.randint(self.size)
@@ -82,12 +83,11 @@ class Act2DSpace(Space):
 
 
 class Loc2DSpace(Space):
-    def __init__(self, lower_bound, upper_bound, seed):
-        self.rng = np.random.RandomState()
-        self.rng.seed(seed)
+    def __init__(self, lower_bound, upper_bound, rng):
+        self.rng = rng
         self.lower_bound = np.asarray(lower_bound)
         self.upper_bound = np.asarray(upper_bound)
-        
+
     def sample(self):
         return np.array([
             self.rng.randint(self.lower_bound[0], self.upper_bound[0]),
@@ -104,19 +104,27 @@ class Loc2DSpace(Space):
         return  (tuple(np.array(index) + self.lower_bound)
                  for index in np.ndindex(
                          tuple(self.upper_bound - self.lower_bound)))
-        
+
 
 class WindyGridWorld(object):
-    CELL_FREE = 0
-    CELL_WALL = 1
-    CELL_WIND_NEWS = [2, 3, 4, 5]
-    WIND_NEWS_NAMES = "NORTH EAST WEST SOUTH".split()
-    WIND_NEWS_VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
-    def __init__(self, seed, maze=None, wind_strength=0.5):
-        self.maze = maze if maze is not None else self.default_maze()
-        self.rng = np.random.RandomState()
-        self.rng.seed(seed)
+    def __init__(self,
+                 rng,
+                 maze,
+                 wind_strength=0.5,
+                 CELL_FREE = 0,
+                 CELL_WALL = 1,
+                 CELL_WIND_NEWS = [2, 3, 4, 5],
+                 WIND_NEWS_NAMES = "NORTH EAST WEST SOUTH".split(),
+                 WIND_NEWS_VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]]),
+    ):
+        self.rng = rng
+        self.maze = maze
         self.wind_strength = wind_strength
+        self.CELL_FREE = CELL_FREE
+        self.CELL_WALL = CELL_WALL
+        self.CELL_WIND_NEWS = CELL_WIND_NEWS
+        self.WIND_NEWS_NAMES = WIND_NEWS_NAMES
+        self.WIND_NEWS_VECTORS = WIND_NEWS_VECTORS
 
     def wind_dir(self, xy):
         row, col = xy[::-1]
@@ -190,18 +198,30 @@ class WindyGridWorld(object):
     def shape(self):
         return self.maze.shape
 
-    @classmethod
-    def default_maze(self):
-        return maze_from_string("\n".join([
-            "  +  ",
-            "  +  ",
-            " ^^^ ",
-            " ^^^ ",
-            "  +  "]))
 
+def WindyGridWorldFromString(
+        props = dict(
+            retval = lambda s: apply_conf(WindyGridWorld, s),
+            rng = lambda s: np.random.RandomState(s.seed),
+            maze = lambda s: maze_from_string(s.maze_string),
+        ),
+        attrs = dict(
+            func_kwonlydefaults(WindyGridWorld),
+            seed = 0,
+            maze_string = "\n".join([
+                "  +  ",
+                "  +  ",
+                " ^^^ ",
+                " ^^^ ",
+                "  +  "])
+        ),
+):
+    return KWFunc(props = props, attrs = attrs.copy())
+        
 
 def random_goal_pose_gen(prob):
     return prob.grid_world.valid_random_pos()
+
 
 def random_start_pose_gen(prob, goal_pose):
     start_pose = goal_pose
@@ -210,11 +230,20 @@ def random_start_pose_gen(prob, goal_pose):
     return start_pose
 
 class AgentInGridWorld(Problem):
-    def __init__(self, seed, grid_world, start_pose_gen,
-                 goal_pose_gen, goal_reward, max_steps, wall_penality,
-                 no_render, log_file_dir,
-                 action_space, observation_space):
-        self.grid_world        = grid_world
+    def __init__(self,
+                 rng,
+                 grid_world,
+                 action_space,
+                 observation_space,
+                 start_pose_gen = random_start_pose_gen,
+                 goal_pose_gen = random_goal_pose_gen,
+                 goal_reward = 10,
+                 max_steps = 300,
+                 wall_penality = 1.0,
+                 no_render = False,
+                 log_file_dir = "/tmp/",
+    ):
+        self.grid_world    = grid_world
         self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
         self.action_space      = action_space #Act2DSpace(seed)
@@ -224,13 +253,12 @@ class AgentInGridWorld(Problem):
         self._last_reward      = 0
         self.no_render         = no_render
         self.log_file_dir      = log_file_dir
-        self.observation_space = observation_space
+        self.observation_space = observation_space # Obs2DSpace
         #Loc2DSpace(
         #    lower_bound = np.array([0, 0]),
         #    upper_bound = np.array(grid_world.shape),
         #    seed        = seed) 
         self.episode_reset(0)
-        METHOD_MEMOIZER.init_obj(self)
 
     @property
     def grid_shape(self):
@@ -306,7 +334,7 @@ class AgentInGridWorld(Problem):
     def done(self):
         return self.steps >= self.max_steps
 
-    @METHOD_MEMOIZER
+    @MEMOIZE_METHOD
     def valid_nbrs(self, pos, samples=10):
         nbrs = set()
         for _ in range(samples):
@@ -339,14 +367,15 @@ class AgentInGridWorldObserver(object):
         
 if __name__ == '__main__':
     agent = AgentInGridWorld(
-        0,
+        np.random.RandomState(0),
         grid_world     = WindyGridWorld(0, WindyGridWorld.default_maze()),
         start_pose_gen = lambda s, g : [1, 1],
         goal_pose_gen  = lambda s : [3, 4],
         goal_reward    = 10,
         max_steps      = 100,
         wall_penality  = 1,
-        no_render      = False
+        no_render      = False,
+        action_space   = Act2DSpace()
     )
 
     direc_ = dict(w=0, a=1, d=2, x=3)

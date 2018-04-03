@@ -51,69 +51,163 @@ def apply_conf(func, conf):
     required_args = list(inspect.signature(func).parameters.keys())
     return func( ** { k : getattr(conf, k) for k in required_args } )
 
-class Conf:
-    attrs = dict()
-    from_parent = ()
-    parent = None
-    def __init__(self, props=dict(), from_parent = (), parent=None,
-                 attrs = dict()):
-        self.attrs = attrs
-        self.attrs.update( self.props2attrs(props) )
-        self.from_parent = from_parent
-        self.parent = parent
+def func_kwonlydefaults(func):
+    return {k : p.default for k, p in inspect.signature(func).parameters.items()
+            if p.default is not inspect._empty}
 
-    def setparent(self, parent):
-        self.parent = parent
+def props2attrs(props):
+    return { k : property(v) for k, v in props.items() }
+
+def call_if_prop(val, args):
+    return val.fget(*args) if isinstance(val, property) else val
+
+
+class KWFunc:
+    def __init__(self,
+                 props = dict(),
+                 attrs = dict(),
+                 retkey = "retval",
+                 **kwargs):
+        self.retkey = retkey
+        self.attrs = dict()
+        self.partial(props, attrs, **kwargs)
+
+    def partial(self, props=dict(), attrs=dict(), **kwargs):
+        self.attrs = dict(self.attrs, **dict(attrs, **kwargs))
+        self.attrs.update( props2attrs(props) )
         return self
 
-    def props2attrs(self, props):
-        return { k : property(v) for k, v in props.items() }
+    def copy(self, props=dict(), attrs=dict(), **kwargs):
+        return type(self)().partial(
+            props = props,
+            attrs = dict(self.attrs, **dict(attrs, **kwargs)))
 
-    def call_if_prop(self, val):
-        if isinstance(val, property):
-            return val.fget(self)
-        return val
-
-    def copy(self, props=dict(), from_parent = (), parent = None, attrs = dict(),
-             recursetypes=(dict,)):
-        attrs.update(self.props2attrs( props) )
-        c = self.__new__ (type(self))
-        c.__init__(props = dict(),
-                   from_parent = from_parent or self.from_parent,
-                   parent = parent or self.parent,
-                   attrs = dict_update_recursive(self.attrs.copy(), attrs,
-                                                 recursetypes=recursetypes))
-        return c
-
-    def __contains__(self, k):
-        return  ( k in self.attrs )
-
-    def keys(self):
-        return self.attrs.keys()
-
-    def items(self):
-        return self.attrs.items()
-
-    def __getitem__(self, k):
-            try:
-                return self.attrs[ k ]
-            except KeyError as e:
-                raise KeyError("missing k:{}. Error: {}; \n self:{} "
-                               .format(k, e, self))
-
-    def __setitem__(self, k, v):
-        self.attrs[ k ] = v
+    def __call__(self, props=dict(), attrs=dict(), **kwargs):
+        self.partial(props, attrs, **kwargs)
+        return getattr(self, self.retkey)
 
     def __getattr__(self, k):
-        if k in self.from_parent:
-            return getattr(self.parent, k)
+        try:
+            return call_if_prop(self.attrs[k], (self,))
+        except KeyError as e:
+            raise AttributeError("missing k:{}. Error: {}; \n self:{} "
+                                    .format(k, e, self.attrs))
+
+def KWFuncArgs(retval, **kwargs):
+    return KWFunc(props = dict(retval = lambda s: apply_conf(retval, s)),
+                  **kwargs)
+
+
+class Conf(KWFunc):
+    def __init__(self,
+                 retfunckey = "retfunc",
+                 default_retval = lambda s: apply_conf(getattr(s, s.retfunckey), s),
+                 fallback = None,
+                 **kwargs):
+        self.retfunckey = retfunckey
+        self.fallback = fallback
+        super().__init__(**kwargs)
+        self.attrs.setdefault(self.retkey, property(default_retval))
+
+    def setfallback(self, fallback):
+        assert fallback is not self
+        self.fallback = fallback
+        return self
+
+    def __getattr__(self, k):
+        if k in "__contains__ __getitem__ __setitem__ keys items".split():
+            return getattr(self.attrs, k)
         else:
             try:
-                return self.call_if_prop(self.__getitem__(k))
-            except KeyError as e:
-                raise AttributeError("missing k:{}. Error: {}; \n self:{} "
-                                        .format(k, e, self))
+                return super().__getattr__(k)
+            except AttributeError as e:
+                if self.fallback:
+                    try: 
+                        return getattr(self.fallback, k)
+                    except AttributeError as e2:
+                        raise e
+                raise e
 
+def makeconf(func, confclass=Conf, **kw):
+    kwargs = dict(dict(__name__ = func.__name__), **kw)
+    return confclass(attrs = dict(func_kwonlydefaults(func)),
+                     retfunc = func,
+                     **kwargs)
+
+
+class FallbackConf(Conf):
+    def __call__(self, fallback, **kwargs):
+        self.setfallback(fallback)
+        return super().__call__(**kwargs)
+
+
+def make_fallback_conf(func, **kwargs):
+    return makeconf(func, confclass=FallbackConf, **kwargs)
+
+
+def conf_to_key_type_default(
+        conf, 
+        typeconvs = {
+            type(True) : lambda str_: False if str_ == "False" else bool(str_)},
+        typeconv_from_default = type,
+        glbls=dict()):
+    key_conv_default = dict()
+    items = conf.items()
+    for k, v in items:
+        if isinstance(v, property) and isinstance(v.fget, type(conf)):
+            vconf = v.fget
+        else:
+            vconf = v
+        if isinstance(vconf, type(conf)):
+            key_conv_default.update(
+                { ".".join((k, k2)) : (".".join((k, k2)), c2, d2)
+                  for _, (k2, c2, d2) in 
+                  conf_to_key_type_default(vconf,
+                                           typeconvs, typeconv_from_default).items()})
+        elif isinstance(v, (float, int, str, bool)):
+            vtype = type(v)
+            conv = typeconv_from_default(v)
+            key_conv_default[k] = (k, typeconvs.get(vtype, conv), v)
+        elif id(v) in map(id, glbls.values()):
+            key_conv_default[k] = (k, lambda s: glbls[s], v)
+        else:
+            # Memoized keys are being skipped
+            #print("Skipping key {} of type {} {}".format(k, v, vconf))
+            pass
+            
+    return key_conv_default
+
+def add_arguments_from_conf(parser, key_conv_default):
+    for key, (_, conv, default) in key_conv_default.items():
+        parser.add_argument("--" + key, default=default, type=conv)
+
+
+class ConfFromDotArgs():
+    def __init__(self, conf):
+        self.conf = conf
+
+    def default_parser(self):
+        parser = ArgumentParser()
+        if self.conf.fallback:
+            key_conv_default = conf_to_key_type_default(self.conf.fallback)
+        else:
+            key_conv_default = dict()
+        key_conv_default.update(conf_to_key_type_default(self.conf))
+        add_arguments_from_conf(parser, key_conv_default)
+        return parser
+
+    def parse_from_args(self, sys_argv):
+        return self.default_parser().parse_known_args(sys_argv)
+
+    def conf_from_args(self, args):
+        return Conf(attrs=vars(args), fallback=self.conf)
+
+    def from_args(self, sys_argv):
+        args, remargv = self.parse_from_args(sys_argv)
+        return self.conf_from_args(args)
+
+
+class ConfFromArgs:
     @classmethod
     def parser(cls, default_config):
         parser = ArgumentParser()
@@ -162,9 +256,6 @@ class Conf:
 
     def run_checks(self):
         return True
-
-    def __call__(self):
-        return apply_conf(self._call_func, self)
 
     def __repr__(self):
         return "{}".format(vars(self))
@@ -223,22 +314,9 @@ def ConfClass(name, props=dict(), defaults=dict(), **kw):
     return NewConfClassInherit(name, props, defaults=defaults, **kw)
 
 
-def format_string_from_conf(strformat, obj):
-    fieldnames = [fn
-                  for lt, fn, fs, conv in Formatter().parse(strformat)
-                  if fn is not None]
-    formattted_string = strformat.format(**{fn : getattr(obj, fn)
-                                            for fn in fieldnames})
-    return formattted_string
-
-class ConfTemplate:
-    def __init__(self, strformat):
-        self.strformat = strformat
-    def expand(self, conf):
-        return format_string_from_conf(self.strformat, conf)
-
 def serialize_list(l):
     return list(map(serialize_any, l))
+
 
 def serialize_dict(d):
     return { k : serialize_any(v) for k, v in d.items() }

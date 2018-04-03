@@ -53,7 +53,7 @@ class LatencyObserver(NoOPObserver):
         self.start_step = steps + 1
 
     def on_new_step_with_pose_steps(self, obs=None, act=None, rew=None,
-                                    pose=None, steps=None, episode_n=None):
+                                    pose=None, steps=None, episode_n=None,**kw):
         if self.prob and self.prob.hit_goal(): self.on_goal_hit(steps)
 
     def on_play_end(self):

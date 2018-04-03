@@ -2,7 +2,7 @@ from game.play import Space, Alg, NoOPObserver
 import numpy as np
 import cog.draw as draw
 import logging
-from .qlearning import QLearningVis, post_process_data_iter
+from .qlearning import QLearningVis, post_process_data_iter, post_process_generic
 
 def logger():
     return logging.getLogger(__name__)
@@ -284,8 +284,9 @@ def post_process_data_tag(data, tag, cellsize, image_file_fmt):
     print("Writing img to: {}".format(fname))
     draw.imwrite(fname, ax)
 
-def post_process(log_file_reader, filter_criteria, image_file_fmt, cellsize):
-    for data, tag in post_process_data_iter(
-            log_file_reader,
-            {**filter_criteria, 'tag' :  "FloydWarshallLogger:action_value" }):
-        post_process_data_tag(data, tag, cellsize, image_file_fmt)
+def addn_filter_criteria():
+    return dict(tag="FloydWarshallLogger:action_value")
+
+def post_process(data_iter=post_process_data_iter,
+                 process_data_tag=post_process_data_tag):
+    return post_process_generic(data_iter, process_data_tag)

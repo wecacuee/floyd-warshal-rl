@@ -211,7 +211,7 @@ class LoggingObserver(NoOPObserver):
         self.info(self.goal_hit_tag,
                   dict(episode_n=self.last_episode_n, steps=current_step))
 
-    def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps):
+    def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps, **kw):
         if self.prob.hit_goal(): self.on_goal_hit(self.prob.steps)
         if steps % self.log_interval == 0:
             self.info(self.new_step_tag,
@@ -222,9 +222,9 @@ class LoggingObserver(NoOPObserver):
                            act       = int(act),
                            pose      = pose.tolist()))
 
-    def on_new_step(self, obs, rew, act):
+    def on_new_step(self, obs, rew, action):
         self.on_new_step_with_pose_steps(
-            obs, rew, act, self.prob.pose, self.prob.steps)
+            obs, rew, action, self.prob.pose, self.prob.steps)
 
     def on_play_end(self):
         self.info(self.play_end_tag, {})
@@ -243,6 +243,9 @@ class LoggingObserver(NoOPObserver):
                 for obs in observers:
                     if hasattr(obs, tag_event_map[tag]):
                         getattr(obs, tag_event_map[tag])(**dct)
+            else: 
+                #print("Ignoring tag '{}'".format(tag))
+                pass
 
 # Sample refrees
 def play(alg, prob, observer, nepisodes, logger_factory):

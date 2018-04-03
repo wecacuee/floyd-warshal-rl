@@ -14,15 +14,15 @@ class QLearningDiscrete(Alg):
     def __init__(self,
                  action_space,
                  observation_space,
-                 seed,
-                 egreedy_epsilon,
-                 action_value_momentum,
-                 init_value,
-                 discount
+                 rng,
+                 egreedy_epsilon       = 0.05,
+                 action_value_momentum = 0.1, # Low momentum changes more frequently
+                 init_value            =   1,
+                 discount              = 0.99,
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
-        self._seed                = seed
+        self.rng                = rng
         self.egreedy_epsilon      = egreedy_epsilon
         self.action_value_momentum= action_value_momentum
         self.init_value           = init_value
@@ -34,8 +34,6 @@ class QLearningDiscrete(Alg):
         self.last_state_idx_act = None
 
     def reset(self):
-        self.rng            = np.random.RandomState()
-        self.rng.seed(self._seed)
         self.action_value    = self._default_action_value(0)
         self.hash_state     = dict()
         self.episode_reset(0)
@@ -125,15 +123,22 @@ class QLearningDiscrete(Alg):
         return False
 
 class QLearningLogger(NoOPObserver):
-    def __init__(self, logger, log_interval):
+    def __init__(self, logger, log_interval,
+                 human_tag        = "INFO",
+                 action_value_tag_template = "{self.__class__.__name__}:action_value",
+                 sep              = "\t",
+    ):
         self.logger           = logger
         self.log_interval     = log_interval
-        self.human_tag        = "INFO"
-        self.action_value_tag = "{self.__class__.__name__}:action_value".format(
-            self=self)
-        self.sep              = "\t"
+        self.human_tag        = human_tag
+        self.action_value_tag_template = action_value_tag_template
+        self.sep = sep
         self.episode_n        = None
         super().__init__()
+
+    @property
+    def action_value_tag(self):
+        return self.action_value_tag_template.format(self=self)
 
     def info(self, tag, dct):
         self.logger.debug("", extra=dict(tag=tag, data=dct))
@@ -358,8 +363,12 @@ def post_process_data_tag(data, tag, cellsize, image_file_fmt):
         episode=data["episode_n"], step=data["steps"]), ax)
 
 
-def post_process(log_file_reader, filter_criteria, image_file_fmt, cellsize):
-    for data, tag in post_process_data_iter(
-            log_file_reader,
-            {**filter_criteria, 'tag' :  "QLearningLogger:action_value" }):
-        post_process_data_tag(data, tag, cellsize, image_file_fmt)
+def post_process_generic(data_iter, process_data_tag=post_process_data_tag):
+    return [process_data_tag(data, tag)
+            for data, tag in data_iter] 
+
+def post_process(data_iter=post_process_data_iter,
+                 process_data_tag=post_process_data_tag):
+    return post_process_generic(data_iter, process_data_tag)
+
+
