@@ -1,4 +1,4 @@
-from argparse import Action
+from argparse import Action, ArgumentParser
 import shlex
 import numpy as np
 import hashlib
@@ -12,9 +12,9 @@ import logging.config
 from pathlib import Path
 import functools
 
-from cog.confutils import (Conf, dict_update_recursive, FallbackConf,
+from cog.confutils import (Conf, dict_update_recursive, 
                            func_kwonlydefaults, makeconf,
-                           make_fallback_conf)
+                           ConfFromDotArgs)
 
 from cog.memoize import MEMOIZE_METHOD, LambdaMethodMemoizer
 from cog.misc import ensuredirs, git_revision, pairwise
@@ -24,7 +24,10 @@ from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
                                      FloydWarshallLogger)
 from alg.qlearning import QLearningDiscrete, QLearningVis, QLearningLogger
 from alg.qlearning import post_process as qlearning_post_process
-from alg.floyd_warshall_grid import post_process as fw_post_process
+from alg.floyd_warshall_grid import (post_process as fw_post_process,
+                                     post_process_data_iter as fw_post_process_data_iter,
+                                     post_process_data_tag as fw_post_process_data_tag)
+
 from game.metrics import (ComputeMetricsFromLogReplay,
                           LatencyObserver, DistineffObs)
 from game.play import (LoggingObserver, MultiObserver, play,
@@ -68,7 +71,7 @@ def logging_dictConfig(log_file, logging_encdec):
     )
 
 
-WindyGridWorldConf = make_fallback_conf(WindyGridWorld)
+WindyGridWorldConf = makeconf(WindyGridWorld)
 
 
 def find_latest_file(dir_):
@@ -76,7 +79,7 @@ def find_latest_file(dir_):
     return max(p_stats, key = lambda p_stat: p_stat[1].st_mtime)[0]
 
 
-LogFileConf = FallbackConf(
+LogFileConf = Conf(
     props = dict(
         log_file = lambda self: ensuredirs(
             self.log_file_template.format(self=self)),
@@ -90,7 +93,6 @@ LogFileConf = FallbackConf(
         run_time     = lambda self: self.run_full_time[6:],
         run_full_time     = LambdaMethodMemoizer(
             "run_full_time") (lambda self: time.strftime(self.run_full_time_format)),
-        image_file_fmt = lambda self: self.image_file_fmt_template.format(self=self),
         log_file_latest = lambda s : find_latest_file(s.log_file_dir),
         retval = lambda s : s
     ),
@@ -100,18 +102,17 @@ LogFileConf = FallbackConf(
         log_file_dir_template    = "{self.data_dir}/{self.project_name}/{self.exp_name}",
         log_file_template        = "{self.log_file_dir}/{self.run_time}.log",
         run_full_time_format     = "%Y%m%d-%H%M%S",
-        image_file_fmt_template  = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
         #project_name             = PROJECT_NAME,
         #confname                 = "LogFileConf",
     ),
 )
 
 
-Obs2DSpaceConf       = make_fallback_conf(Loc2DSpace)
-Act2DSpaceConf       = make_fallback_conf(Act2DSpace)
-AgentInGridWorldConf = make_fallback_conf(AgentInGridWorld)
-QLearningDiscreteConf = make_fallback_conf(QLearningDiscrete)
-LoggingEncdecConf    = make_fallback_conf(NPJSONEncDec)
+Obs2DSpaceConf       = makeconf(Loc2DSpace)
+Act2DSpaceConf       = makeconf(Act2DSpace)
+AgentInGridWorldConf = makeconf(AgentInGridWorld)
+QLearningDiscreteConf = makeconf(QLearningDiscrete)
+LoggingEncdecConf    = makeconf(NPJSONEncDec)
 
 
 def setLoggerConfig(confname, log_file, logging_encdec):
@@ -128,23 +129,23 @@ def logger_factory(set_logger_conf):
     return (lambda name : logging.getLogger(name))
     
 
-LoggerFactoryConf = make_fallback_conf(logger_factory)
-LoggingObserverConf = make_fallback_conf(
+LoggerFactoryConf = makeconf(logger_factory)
+LoggingObserverConf = makeconf(
     LoggingObserver,
     props = dict(
         logger = lambda s : s.logger_factory("LoggingObserver")
     ),
 )
-LatencyObserverConf = make_fallback_conf(LatencyObserver)
-DistineffObsConf = make_fallback_conf(DistineffObs)
-LogFileReaderConf = make_fallback_conf(
+LatencyObserverConf = makeconf(LatencyObserver)
+DistineffObsConf = makeconf(DistineffObs)
+LogFileReaderConf = makeconf(
     LogFileReader,
     props = dict(
         logfilepath    = lambda s : s.log_file_conf.log_file_latest,
         enc            = lambda s : s.logging_encdec,
     ))
 
-ComputeMetricsFromLogReplayConf = make_fallback_conf(
+ComputeMetricsFromLogReplayConf = makeconf(
     ComputeMetricsFromLogReplay,
     props = dict(
         loggingobserver = lambda s: s.logging_observer,
@@ -154,7 +155,7 @@ ComputeMetricsFromLogReplayConf = make_fallback_conf(
     ))
 
 
-VisualizerConf = make_fallback_conf(
+VisualizerConf = makeconf(
     NoOPObserver,
     props = dict(
         logger = lambda s : s.logger_factory("Visualizer")
@@ -163,7 +164,7 @@ VisualizerConf = make_fallback_conf(
     cellsize = 80)
 
 
-MultiObserverConf = make_fallback_conf(
+MultiObserverConf = makeconf(
     MultiObserver,
     props = dict(
         observers = lambda s: dict(
@@ -172,37 +173,37 @@ MultiObserverConf = make_fallback_conf(
             visualizer = s.visualizer_observer)
     ))
 
-QLearningLoggerConf = make_fallback_conf(
+QLearningLoggerConf = makeconf(
     QLearningLogger,
     props = dict(
         logger = lambda self: self.logger_factory("QLearningLogger"),
     ))
 
 
-QLearningPlayConf = make_fallback_conf(
+QLearningPlayConf = makeconf(
     play,
     props = dict(
         alg = QLearningDiscreteConf,
         visualizer_observer = QLearningLoggerConf,
     ))
 
-QLearningPostProcessConf = make_fallback_conf(qlearning_post_process)
+QLearningPostProcessConf = makeconf(qlearning_post_process)
 
 
-FloydWarshallAlgDiscreteConf = make_fallback_conf(
+FloydWarshallAlgDiscreteConf = makeconf(
     FloydWarshallAlgDiscrete,
         props = dict(
             qlearning = QLearningDiscreteConf,
     ))
 
 
-FloydWarshallLoggerConf = make_fallback_conf(
+FloydWarshallLoggerConf = makeconf(
     FloydWarshallLogger,
     props = dict(
         logger = lambda self: self.logger_factory("FloydWarshallLogger"),
     ))
 
-FloydWarshallPlayConf = make_fallback_conf(
+FloydWarshallPlayConf = makeconf(
     play,
     props = dict(
         alg = FloydWarshallAlgDiscreteConf,
@@ -267,14 +268,55 @@ def multiplay(plays):
 MultiPlaySessionConf = makeconf(
     multiplay,
     plays = dict(
-        ql = QLearningPlaySessionConf,
-        fw = FloydWarshallLoggerConf
+        ql = QLearningPlaySessionConf(confname="QLearning"),
+        fw = FloydWarshallPlaySessionConf(confname="FloydWarshall")
     ))
 
-FloydWarshallPostProcessConf = makeconf(fw_post_process,
-        props = dict(
-            image_file_fmt = lambda s: s.log_file_conf.image_file_fmt
-        ))
+FloydWarshallPostProcDataTagConf = makeconf(
+    lambda cellsize, image_file_fmt: functools.partial(
+        fw_post_process_data_tag, cellsize=cellsize, image_file_fmt=image_file_fmt),
+    props = dict(
+        log_file_dir = lambda self: self.log_file_conf.log_file_dir,
+        image_file_fmt = lambda self: self.image_file_fmt_template.format(self=self),
+    ),
+    image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
+    cellsize = 100)
+
+LogFileReaderPostProcConf = makeconf(
+    LogFileReader,
+    enc  = NPJSONEncDec())
+
+FWPostProcDataIterConf = makeconf(
+    lambda log_file_reader, filter_criteria: functools.partial(
+        fw_post_process_data_iter, log_file_reader=log_file_reader,
+        filter_criteria=filter_criteria),
+    props = dict(
+        log_file_reader = LogFileReaderPostProcConf,
+        #logfilepath    = "/tmp/need/some/log/file.path",
+    ),
+    filter_criteria = dict())
+                                              
+
+FloydWarshallPostProcessSessionConf = makeconf(
+    fw_post_process,
+    props = dict(
+        process_data_tag = FloydWarshallPostProcDataTagConf,
+        log_file_conf    = MEMOIZE_METHOD(LogFileConf),
+        data_iter        = FWPostProcDataIterConf,
+    ),
+    project_name     = PROJECT_NAME,
+    confname         = "FWPostProc",
+)
+
+
 
 if __name__ == '__main__':
-    import sys
+    parser = ArgumentParser()
+    parser.add_argument("--config", type=lambda s: globals()[s],
+                        default=MultiPlaySessionConf.copy())
+    a, remargs = parser.parse_known_args()
+    a.config()
+    #import sys
+    #c = FloydWarshallPostProcessConf(confname="FloydWarshall")
+    #conf = ConfFromDotArgs(c).from_args(sys.argv[1:])
+    #conf()

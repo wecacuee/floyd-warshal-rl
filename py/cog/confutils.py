@@ -77,13 +77,16 @@ class KWFunc:
         self.attrs.update( props2attrs(props) )
         return self
 
-    def copy(self, props=dict(), attrs=dict(), **kwargs):
-        return type(self)().partial(
-            props = props,
-            attrs = dict(self.attrs, **dict(attrs, **kwargs)))
+    def copy(self, **kwargs):
+        c = type(self)()
+        return self.merge(c, **kwargs)
 
-    def __call__(self, props=dict(), attrs=dict(), **kwargs):
-        self.partial(props, attrs, **kwargs)
+    def merge(self, c, attrs=dict(), **kwargs):
+        KWFunc.__init__(c, attrs = dict(self.attrs, **dict(attrs)), **kwargs)
+        return c
+
+    def __call__(self, **kwargs):
+        self.partial(**kwargs)
         return getattr(self, self.retkey)
 
     def __getattr__(self, k):
@@ -97,7 +100,6 @@ def KWFuncArgs(retval, **kwargs):
     return KWFunc(props = dict(retval = lambda s: apply_conf(retval, s)),
                   **kwargs)
 
-
 class Conf(KWFunc):
     def __init__(self,
                  retfunckey = "retfunc",
@@ -109,10 +111,21 @@ class Conf(KWFunc):
         super().__init__(**kwargs)
         self.attrs.setdefault(self.retkey, property(default_retval))
 
-    def setfallback(self, fallback):
+    def merge(self, c, **kwargs):
+        KWFunc.merge(self, c, **kwargs)
+        c.retfunckey = kwargs.get("retfunckey", self.retfunckey)
+        c.fallback = kwargs.get("fallback", self.fallback)
+        return c
+
+    def setfb(self, fallback):
         assert fallback is not self
         self.fallback = fallback
         return self
+
+    def __call__(self, fallback=None, **kwargs):
+        if fallback:
+            self.fallback = fallback
+        return KWFunc.__call__(self, **kwargs)
 
     def __getattr__(self, k):
         if k in "__contains__ __getitem__ __setitem__ keys items".split():
@@ -121,7 +134,7 @@ class Conf(KWFunc):
             try:
                 return super().__getattr__(k)
             except AttributeError as e:
-                if self.fallback:
+                if self.fallback and not (k.startswith("__") and k.endswith("__")):
                     try: 
                         return getattr(self.fallback, k)
                     except AttributeError as e2:
@@ -134,16 +147,12 @@ def makeconf(func, confclass=Conf, **kw):
                      retfunc = func,
                      **kwargs)
 
+def args_to_recursive_conf(argparseobj, confclass=Conf, sep="."):
+    for key, value in vars(argparseobj).items():
+        keys = key.split(sep)
 
-class FallbackConf(Conf):
-    def __call__(self, fallback, **kwargs):
-        self.setfallback(fallback)
-        return super().__call__(**kwargs)
-
-
-def make_fallback_conf(func, **kwargs):
-    return makeconf(func, confclass=FallbackConf, **kwargs)
-
+        
+    
 
 def conf_to_key_type_default(
         conf, 
@@ -182,12 +191,12 @@ def add_arguments_from_conf(parser, key_conv_default):
         parser.add_argument("--" + key, default=default, type=conv)
 
 
-class ConfFromDotArgs():
+class ConfFromDotArgs:
     def __init__(self, conf):
         self.conf = conf
 
-    def default_parser(self):
-        parser = ArgumentParser()
+    def default_parser(self, parser = None):
+        parser = parser or ArgumentParser()
         if self.conf.fallback:
             key_conv_default = conf_to_key_type_default(self.conf.fallback)
         else:
@@ -196,14 +205,14 @@ class ConfFromDotArgs():
         add_arguments_from_conf(parser, key_conv_default)
         return parser
 
-    def parse_from_args(self, sys_argv):
-        return self.default_parser().parse_known_args(sys_argv)
+    def parse_from_args(self, sys_argv, parser = None):
+        return self.default_parser(parser).parse_known_args(sys_argv)
 
     def conf_from_args(self, args):
-        return Conf(attrs=vars(args), fallback=self.conf)
+        return self.conf.copy(attrs=vars(args))
 
-    def from_args(self, sys_argv):
-        args, remargv = self.parse_from_args(sys_argv)
+    def from_args(self, sys_argv, parser = None):
+        args, remargv = self.parse_from_args(sys_argv, parser)
         return self.conf_from_args(args)
 
 

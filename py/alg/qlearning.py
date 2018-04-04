@@ -364,8 +364,8 @@ def post_process_data_tag(data, tag, cellsize, image_file_fmt):
 
 
 def post_process_generic(data_iter, process_data_tag=post_process_data_tag):
-    return [process_data_tag(data, tag)
-            for data, tag in data_iter] 
+    return [process_data_tag(data=data, tag=tag)
+            for data, tag in data_iter()] 
 
 def post_process(data_iter=post_process_data_iter,
                  process_data_tag=post_process_data_tag):
