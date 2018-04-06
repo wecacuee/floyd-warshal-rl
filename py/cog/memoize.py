@@ -34,6 +34,30 @@ class Memoizer(object):
 
     def flush(self):
         self.memoize_mem = dict()
+        
+
+def defaultkeyfunc(method, args, kwargs, 
+                    funckey    = lambda f     : f.__name__,
+                    argskey    = lambda args  : args,
+                    kwargskey  = lambda kwargs: tuple(sorted(kwargs.items()))):
+    return funckey(method), argskey(args), kwargskey(kwargs)
+
+
+def method_memoizer(method     = None,
+                    memory_key = "_memoize_cache",
+                    keyfunc    = defaultkeyfunc):
+
+    @functools.wraps(method)
+    def wrapper(s, *args, **kwargs):
+        memory = getattr(s, memory_key, dict())
+        setattr(s, memory_key, memory)
+        key = keyfunc(method, args, kwargs)
+        if key not in memory:
+            return memory.setdefault(key, method(s, *args, **kwargs))
+        else:
+            return memory[key]
+    return wrapper
+
 
 class MethodMemoizer(object):
     def __init__(
@@ -41,7 +65,7 @@ class MethodMemoizer(object):
             memoize_mem_attr = "_memoize_mem",
             f_key = lambda f: f.__name__,
             a_key = lambda a: a,
-            kw_key = lambda kw: tuple(kw.items())
+            kw_key = lambda kw: tuple(sorted(kw.items()))
     ):
         self.memoize_mem_attr = memoize_mem_attr
         self.f_key = f_key
@@ -51,24 +75,8 @@ class MethodMemoizer(object):
     def keyfunc(self, f, a, kw):
         return (self.f_key(f), self.a_key(a), self.kw_key(kw))
 
-    def init_obj(self, s):
-        setattr(s, self.memoize_mem_attr, dict())
-
     def memoize_with_keyfunc(self, method, keyfunc):
-        @functools.wraps(method)
-        def wrapper(s, *args, **kwargs):
-            key = keyfunc(method, args, kwargs)
-            try:
-                memoize_mem = getattr(s, self.memoize_mem_attr)
-            except AttributeError as a:
-                self.init_obj(s)
-                memoize_mem = getattr(s, self.memoize_mem_attr)
-
-            if key not in memoize_mem:
-                memoize_mem[key] =  method(s, *args, **kwargs)
-
-            return memoize_mem[key]
-        return wrapper
+        return method_memoizer(method, keyfunc=keyfunc)
 
     def __call__(self, method):
         return self.memoize_with_keyfunc(method, self.keyfunc)

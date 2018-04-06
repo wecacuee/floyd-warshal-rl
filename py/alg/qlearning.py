@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+#import torch as tch
 from queue import PriorityQueue
 import logging
 
@@ -351,7 +352,7 @@ def filter_by_tag_data(**criteria):
             return False
     return func
 
-def post_process_data_iter(log_file_reader, filter_criteria):
+def post_process_data_iter(log_file_reader = None, filter_criteria = dict()):
     return filter(filter_by_tag_data(**filter_criteria) ,
                   log_file_reader.read_data())
 

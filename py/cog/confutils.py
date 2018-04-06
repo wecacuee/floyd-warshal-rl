@@ -35,6 +35,10 @@ objects or function call on other properties.
 
 ** Shared objects by delegating the shared object to appropriate level of parent hood.
 
+* Features
+** Unification for function and non function properties
+** 
+
 """
 import importlib
 from argparse import Namespace, ArgumentParser, Action
@@ -45,7 +49,7 @@ from collections import namedtuple
 import copy
 import json
 
-from cog.memoize import MethodMemoizer
+from cog.memoize import method_memoizer
 
 def apply_conf(func, conf):
     required_args = list(inspect.signature(func).parameters.keys())
@@ -64,17 +68,17 @@ def call_if_prop(val, args):
 
 class KWFunc:
     def __init__(self,
-                 props = dict(),
                  attrs = dict(),
                  retkey = "retval",
+                 exec_enabled = True,
                  **kwargs):
         self.retkey = retkey
+        self.exec_enabled = exec_enabled
         self.attrs = dict()
-        self.partial(props, attrs, **kwargs)
+        self.partial(attrs, **kwargs)
 
-    def partial(self, props=dict(), attrs=dict(), **kwargs):
+    def partial(self, attrs=dict(), **kwargs):
         self.attrs = dict(self.attrs, **dict(attrs, **kwargs))
-        self.attrs.update( props2attrs(props) )
         return self
 
     def copy(self, **kwargs):
@@ -89,12 +93,35 @@ class KWFunc:
         self.partial(**kwargs)
         return getattr(self, self.retkey)
 
+    def enable_exec(self, val=True):
+        self.exec_enabled = val
+        for k, v in self.attrs.items():
+            if isinstance(v, property) and isinstance(v.fget, KWFunc):
+                v.fget.enable_exec(val)
+            if isinstance(v, KWFunc):
+                v.enable_exec(val)
+
+    def handle_prop(self, prop):
+        func = prop.fget
+        if self.exec_enabled:
+            return func(self)
+        else:
+            return func
+            
+
     def __getattr__(self, k):
         try:
-            return call_if_prop(self.attrs[k], (self,))
+            val = self.attrs[k]
         except KeyError as e:
             raise AttributeError("missing k:{}. Error: {}; \n self:{} "
                                     .format(k, e, self.attrs))
+        return self.handle_prop(val) if isinstance(val, property) else val
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(" + "\n".join(
+            (k + ": " + repr(getattr(self, k))) for k in "retkey exec_enabled attrs".split()
+        ) + ")"
+    
 
 def KWFuncArgs(retval, **kwargs):
     return KWFunc(props = dict(retval = lambda s: apply_conf(retval, s)),
@@ -102,19 +129,25 @@ def KWFuncArgs(retval, **kwargs):
 
 class Conf(KWFunc):
     def __init__(self,
+                 props = dict(),
+                 attrs = dict(),
                  retfunckey = "retfunc",
                  default_retval = lambda s: apply_conf(getattr(s, s.retfunckey), s),
                  fallback = None,
                  **kwargs):
         self.retfunckey = retfunckey
         self.fallback = fallback
-        super().__init__(**kwargs)
+        attrs = dict(props2attrs(props), **attrs)
+        super().__init__(attrs = attrs, **kwargs)
         self.attrs.setdefault(self.retkey, property(default_retval))
 
     def merge(self, c, **kwargs):
-        KWFunc.merge(self, c, **kwargs)
-        c.retfunckey = kwargs.get("retfunckey", self.retfunckey)
-        c.fallback = kwargs.get("fallback", self.fallback)
+        attrs = kwargs.pop("attrs", dict())
+        props = kwargs.pop("props", dict())
+        attrs = dict(props2attrs(props), **attrs)
+        KWFunc.merge(self, c, attrs = attrs, **kwargs)
+        c.retfunckey = kwargs.pop("retfunckey", self.retfunckey)
+        c.fallback = kwargs.pop("fallback", self.fallback)
         return c
 
     def setfb(self, fallback):
@@ -141,18 +174,17 @@ class Conf(KWFunc):
                         raise e
                 raise e
 
-def makeconf(func, confclass=Conf, **kw):
+def makeconf(func, confclass=Conf, attrs=dict(), **kw):
     kwargs = dict(dict(__name__ = func.__name__), **kw)
-    return confclass(attrs = dict(func_kwonlydefaults(func)),
+    return confclass(attrs = dict(func_kwonlydefaults(func), **attrs),
                      retfunc = func,
                      **kwargs)
+
 
 def args_to_recursive_conf(argparseobj, confclass=Conf, sep="."):
     for key, value in vars(argparseobj).items():
         keys = key.split(sep)
 
-        
-    
 
 def conf_to_key_type_default(
         conf, 
@@ -162,23 +194,19 @@ def conf_to_key_type_default(
         glbls=dict()):
     key_conv_default = dict()
     items = conf.items()
-    for k, v in items:
-        if isinstance(v, property) and isinstance(v.fget, type(conf)):
-            vconf = v.fget
-        else:
-            vconf = v
-        if isinstance(vconf, type(conf)):
+    for k, val in items:
+        if isinstance(val, type(conf)):
             key_conv_default.update(
                 { ".".join((k, k2)) : (".".join((k, k2)), c2, d2)
                   for _, (k2, c2, d2) in 
-                  conf_to_key_type_default(vconf,
+                  conf_to_key_type_default(val,
                                            typeconvs, typeconv_from_default).items()})
-        elif isinstance(v, (float, int, str, bool)):
-            vtype = type(v)
-            conv = typeconv_from_default(v)
-            key_conv_default[k] = (k, typeconvs.get(vtype, conv), v)
-        elif id(v) in map(id, glbls.values()):
-            key_conv_default[k] = (k, lambda s: glbls[s], v)
+        elif isinstance(val, (float, int, str, bool)):
+            vtype = type(val)
+            conv = typeconv_from_default(val)
+            key_conv_default[k] = (k, typeconvs.get(vtype, conv), val)
+        elif id(val) in map(id, glbls.values()):
+            key_conv_default[k] = (k, lambda s: glbls[s], val)
         else:
             # Memoized keys are being skipped
             #print("Skipping key {} of type {} {}".format(k, v, vconf))
@@ -354,4 +382,19 @@ def MultiConfGen(name, confs):
                     defaults = lambda self: dict(
                         func = lambda confs: [confs[k].apply_func() for k in conf_keys],
                         confs = Conf(**conf_dict))))
-        
+
+
+class ConfOneArg(Conf):
+    def __init__(self, argname="arg1", **kwargs):
+        self.argname = argname
+        Conf.__init__(self, **kwargs)
+
+    def __call__(self, arg1):
+        self.attrs[self.argname] = arg1
+        return Conf.__call__(self)
+
+MEMOIZE_METHOD = ConfOneArg(argname="method", retfunc=method_memoizer,
+                            **func_kwonlydefaults(method_memoizer))
+
+
+    

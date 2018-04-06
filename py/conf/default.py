@@ -14,16 +14,19 @@ import functools
 
 from cog.confutils import (Conf, dict_update_recursive, 
                            func_kwonlydefaults, makeconf,
-                           ConfFromDotArgs)
+                           ConfFromDotArgs, MEMOIZE_METHOD)
 
-from cog.memoize import MEMOIZE_METHOD, LambdaMethodMemoizer
+from cog.memoize import LambdaMethodMemoizer
 from cog.misc import ensuredirs, git_revision, pairwise
 
 from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
                                      FloydWarshallVisualizer,
                                      FloydWarshallLogger)
 from alg.qlearning import QLearningDiscrete, QLearningVis, QLearningLogger
-from alg.qlearning import post_process as qlearning_post_process
+from alg.qlearning import (post_process as ql_post_process,
+                           post_process_data_iter as ql_post_process_data_iter,
+                           post_process_data_tag as ql_post_process_data_tag)
+
 from alg.floyd_warshall_grid import (post_process as fw_post_process,
                                      post_process_data_iter as fw_post_process_data_iter,
                                      post_process_data_tag as fw_post_process_data_tag)
@@ -187,9 +190,6 @@ QLearningPlayConf = makeconf(
         visualizer_observer = QLearningLoggerConf,
     ))
 
-QLearningPostProcessConf = makeconf(qlearning_post_process)
-
-
 FloydWarshallAlgDiscreteConf = makeconf(
     FloydWarshallAlgDiscrete,
         props = dict(
@@ -213,7 +213,7 @@ FloydWarshallPlayConf = makeconf(
 def QLearningPlaySessionConf(
         confname,
         props = dict(
-            log_file_conf       = MEMOIZE_METHOD(LogFileConf),
+            log_file_conf       = MEMOIZE_METHOD(LogFileConf.copy()),
             logging_encdec      = LoggingEncdecConf,
             set_logger_conf     = lambda s : setLoggerConfig(s.log_file_conf.confname,
                                                              s.log_file_conf.log_file,
@@ -272,42 +272,54 @@ MultiPlaySessionConf = makeconf(
         fw = FloydWarshallPlaySessionConf(confname="FloydWarshall")
     ))
 
-FloydWarshallPostProcDataTagConf = makeconf(
-    lambda cellsize, image_file_fmt: functools.partial(
-        fw_post_process_data_tag, cellsize=cellsize, image_file_fmt=image_file_fmt),
-    props = dict(
-        log_file_dir = lambda self: self.log_file_conf.log_file_dir,
-        image_file_fmt = lambda self: self.image_file_fmt_template.format(self=self),
-    ),
-    image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
-    cellsize = 100)
+def PostProcDataTagConf(post_process_data_tag_func):
+    return makeconf(
+        lambda cellsize, image_file_fmt: functools.partial(
+            post_process_data_tag_func, cellsize=cellsize, image_file_fmt=image_file_fmt),
+        props = dict(
+            log_file_dir = lambda self: self.log_file_conf.log_file_dir,
+            image_file_fmt = lambda self: self.image_file_fmt_template.format(self=self),
+        ),
+        image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
+        cellsize = 100)
 
 LogFileReaderPostProcConf = makeconf(
     LogFileReader,
     enc  = NPJSONEncDec())
 
-FWPostProcDataIterConf = makeconf(
-    lambda log_file_reader, filter_criteria: functools.partial(
-        fw_post_process_data_iter, log_file_reader=log_file_reader,
-        filter_criteria=filter_criteria),
-    props = dict(
-        log_file_reader = LogFileReaderPostProcConf,
-        #logfilepath    = "/tmp/need/some/log/file.path",
-    ),
-    filter_criteria = dict())
+def PostProcDataIterConf(post_process_iter_func):
+    return makeconf(
+        lambda log_file_reader, filter_criteria: functools.partial(
+            post_process_iter_func, log_file_reader=log_file_reader,
+            filter_criteria=filter_criteria),
+        props = dict(
+            log_file_reader = LogFileReaderPostProcConf,
+            #logfilepath    = "/tmp/need/some/log/file.path",
+        ),
+        filter_criteria = dict())
                                               
 
 FloydWarshallPostProcessSessionConf = makeconf(
     fw_post_process,
     props = dict(
-        process_data_tag = FloydWarshallPostProcDataTagConf,
-        log_file_conf    = MEMOIZE_METHOD(LogFileConf),
-        data_iter        = FWPostProcDataIterConf,
+        process_data_tag = PostProcDataTagConf(fw_post_process_data_tag),
+        log_file_conf    = MEMOIZE_METHOD(LogFileConf.copy()),
+        data_iter        = PostProcDataIterConf(fw_post_process_data_iter),
     ),
     project_name     = PROJECT_NAME,
     confname         = "FWPostProc",
 )
 
+QLearningPostProcSessionConf = makeconf(
+    ql_post_process,
+    props = dict(
+        process_data_tag = PostProcDataTagConf(ql_post_process_data_tag),
+        log_file_conf    = MEMOIZE_METHOD(LogFileConf.copy()),
+        data_iter        = PostProcDataIterConf(ql_post_process_data_iter),
+    ),
+    project_name     = PROJECT_NAME,
+    confname         = "QLPostProc",
+)
 
 
 if __name__ == '__main__':
