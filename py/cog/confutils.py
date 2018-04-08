@@ -137,7 +137,7 @@ class Conf(KWFunc):
                  **kwargs):
         self.retfunckey = retfunckey
         self.fallback = fallback
-        attrs = dict(props2attrs(props), **attrs)
+        attrs = dict(attrs, **props2attrs(props))
         super().__init__(attrs = attrs, **kwargs)
         self.attrs.setdefault(self.retkey, property(default_retval))
 

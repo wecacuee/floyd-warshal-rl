@@ -74,7 +74,8 @@ def logging_dictConfig(log_file, logging_encdec):
     )
 
 
-WindyGridWorldConf = makeconf(WindyGridWorld)
+def WindyGridWorldConf():
+    return makeconf(WindyGridWorld)
 
 
 def find_latest_file(dir_):
@@ -82,7 +83,8 @@ def find_latest_file(dir_):
     return max(p_stats, key = lambda p_stat: p_stat[1].st_mtime)[0]
 
 
-LogFileConf = Conf(
+def LogFileConf():
+    return Conf(
     props = dict(
         log_file = lambda self: ensuredirs(
             self.log_file_template.format(self=self)),
@@ -111,11 +113,11 @@ LogFileConf = Conf(
 )
 
 
-Obs2DSpaceConf       = makeconf(Loc2DSpace)
-Act2DSpaceConf       = makeconf(Act2DSpace)
-AgentInGridWorldConf = makeconf(AgentInGridWorld)
-QLearningDiscreteConf = makeconf(QLearningDiscrete)
-LoggingEncdecConf    = makeconf(NPJSONEncDec)
+Obs2DSpaceConf        = lambda : makeconf(Loc2DSpace)
+Act2DSpaceConf        = lambda : makeconf(Act2DSpace)
+AgentInGridWorldConf  = lambda : makeconf(AgentInGridWorld)
+QLearningDiscreteConf = lambda : makeconf(QLearningDiscrete)
+LoggingEncdecConf     = lambda : makeconf(NPJSONEncDec)
 
 
 def setLoggerConfig(confname, log_file, logging_encdec):
@@ -132,112 +134,129 @@ def logger_factory(set_logger_conf):
     return (lambda name : logging.getLogger(name))
     
 
-LoggerFactoryConf = makeconf(logger_factory)
-LoggingObserverConf = makeconf(
-    LoggingObserver,
-    props = dict(
-        logger = lambda s : s.logger_factory("LoggingObserver")
-    ),
-)
-LatencyObserverConf = makeconf(LatencyObserver)
-DistineffObsConf = makeconf(DistineffObs)
-LogFileReaderConf = makeconf(
-    LogFileReader,
-    props = dict(
-        logfilepath    = lambda s : s.log_file_conf.log_file_latest,
-        enc            = lambda s : s.logging_encdec,
-    ))
+def LoggerFactoryConf():
+    return makeconf(logger_factory)
 
-ComputeMetricsFromLogReplayConf = makeconf(
-    ComputeMetricsFromLogReplay,
-    props = dict(
-        loggingobserver = lambda s: s.logging_observer,
-        metrics_observers = lambda s : [s.latency_observer,
-                                        s.distineff_observer],
-        logfilereader   = lambda s: s.log_file_reader
-    ))
-
-
-VisualizerConf = makeconf(
-    NoOPObserver,
-    props = dict(
-        logger = lambda s : s.logger_factory("Visualizer")
-    ),
-    log_interval = 1,
-    cellsize = 80)
-
-
-MultiObserverConf = makeconf(
-    MultiObserver,
-    props = dict(
-        observers = lambda s: dict(
-            logging = s.logging_observer,
-            metrics = s.metrics_observer,
-            visualizer = s.visualizer_observer)
-    ))
-
-QLearningLoggerConf = makeconf(
-    QLearningLogger,
-    props = dict(
-        logger = lambda self: self.logger_factory("QLearningLogger"),
-    ))
-
-
-QLearningPlayConf = makeconf(
-    play,
-    props = dict(
-        alg = QLearningDiscreteConf,
-        visualizer_observer = QLearningLoggerConf,
-    ))
-
-FloydWarshallAlgDiscreteConf = makeconf(
-    FloydWarshallAlgDiscrete,
+def LoggingObserverConf():
+    return makeconf(
+        LoggingObserver,
         props = dict(
-            qlearning = QLearningDiscreteConf,
-    ))
+            logger = lambda s : s.logger_factory("LoggingObserver")
+        ),
+    )
+
+def LatencyObserverConf():
+    return makeconf(LatencyObserver)
+
+def DistineffObsConf():
+    return makeconf(DistineffObs)
+
+def LogFileReaderConf():
+    return makeconf(
+        LogFileReader,
+        props = dict(
+            logfilepath    = lambda s : s.log_file_conf.log_file_latest,
+            enc            = lambda s : s.logging_encdec,
+        ))
+
+def ComputeMetricsFromLogReplayConf():
+    return makeconf(
+        ComputeMetricsFromLogReplay,
+        props = dict(
+            loggingobserver = lambda s: s.logging_observer,
+            metrics_observers = lambda s : [s.latency_observer,
+                                            s.distineff_observer],
+            logfilereader   = lambda s: s.log_file_reader
+        ))
 
 
-FloydWarshallLoggerConf = makeconf(
-    FloydWarshallLogger,
-    props = dict(
-        logger = lambda self: self.logger_factory("FloydWarshallLogger"),
-    ))
+def VisualizerConf():
+    return makeconf(
+        NoOPObserver,
+        props = dict(
+            logger = lambda s : s.logger_factory("Visualizer")
+        ),
+        log_interval = 1,
+        cellsize = 80)
 
-FloydWarshallPlayConf = makeconf(
-    play,
-    props = dict(
-        alg = FloydWarshallAlgDiscreteConf,
-        visualizer_observer = FloydWarshallLoggerConf,
-    ))
+
+def MultiObserverConf():
+    return makeconf(
+        MultiObserver,
+        props = dict(
+            observers = lambda s: dict(
+                logging = s.logging_observer,
+                metrics = s.metrics_observer,
+                visualizer = s.visualizer_observer)
+        ))
+
+def QLearningLoggerConf():
+    return makeconf(
+        QLearningLogger,
+        props = dict(
+            logger = lambda self: self.logger_factory("QLearningLogger"),
+        ))
+
+
+def QLearningPlayConf():
+    return makeconf(
+        play,
+        props = dict(
+            alg = QLearningDiscreteConf(),
+            visualizer_observer = QLearningLoggerConf(),
+        ))
+
+def FloydWarshallAlgDiscreteConf():
+    return makeconf(
+        FloydWarshallAlgDiscrete,
+        props = dict(
+            qlearning = QLearningDiscreteConf(),
+        ))
+
+
+def FloydWarshallLoggerConf():
+    return makeconf(
+        FloydWarshallLogger,
+        props = dict(
+            logger = lambda self: self.logger_factory("FloydWarshallLogger"),
+        ))
+
+def FloydWarshallPlayConf():
+    return makeconf(
+        play,
+        props = dict(
+            alg = FloydWarshallAlgDiscreteConf(),
+            visualizer_observer = FloydWarshallLoggerConf(),
+        ))
 
 def QLearningPlaySessionConf(
         confname,
         props = dict(
-            log_file_conf       = MEMOIZE_METHOD(LogFileConf.copy()),
-            logging_encdec      = LoggingEncdecConf,
+            log_file_conf       = MEMOIZE_METHOD(LogFileConf()),
+            logging_encdec      = LoggingEncdecConf(),
             set_logger_conf     = lambda s : setLoggerConfig(s.log_file_conf.confname,
                                                              s.log_file_conf.log_file,
                                                              s.logging_encdec),
-            logger_factory      = MEMOIZE_METHOD(LoggerFactoryConf),
+            logger_factory      = MEMOIZE_METHOD(LoggerFactoryConf()),
             rng                 = LambdaMethodMemoizer("rng")(
                 lambda s: np.random.RandomState(seed=0)),
             maze                = lambda s: maze_from_filepath(
                 s.maze_file_path_template.format(self = s)),
             file_work_dir       = lambda s: Path(__file__).parent,
-            grid_world          = MEMOIZE_METHOD(WindyGridWorldConf),
+            grid_world          = MEMOIZE_METHOD(WindyGridWorldConf()),
             upper_bound         = lambda s: np.array(s.grid_world.shape),
             log_file_dir        = lambda s: s.log_file_conf.log_file_dir,
-            action_space        = Act2DSpaceConf,
-            observation_space   = Obs2DSpaceConf,
-            prob                = MEMOIZE_METHOD(AgentInGridWorldConf),
-            logging_observer    = LoggingObserverConf,
-            metrics_observer    = ComputeMetricsFromLogReplayConf,
-            latency_observer    = LatencyObserverConf,
-            distineff_observer  = DistineffObsConf,
-            log_file_reader     = LogFileReaderConf,
-            observer            = MultiObserverConf,
-            play                = QLearningPlayConf,
-            visualizer_observer = QLearningLoggerConf,
+            action_space        = Act2DSpaceConf(),
+            observation_space   = Obs2DSpaceConf(),
+            prob                = MEMOIZE_METHOD(AgentInGridWorldConf()),
+            logging_observer    = LoggingObserverConf(),
+            metrics_observer    = ComputeMetricsFromLogReplayConf(),
+            latency_observer    = LatencyObserverConf(),
+            distineff_observer  = DistineffObsConf(),
+            log_file_reader     = LogFileReaderConf(),
+            observer            = MultiObserverConf(),
+            play                = QLearningPlayConf(),
+            visualizer_observer = QLearningLoggerConf(),
         ),
         attrs = dict(
             seed                    = 1,
@@ -256,8 +275,8 @@ def FloydWarshallPlaySessionConf(confname):
     return Conf(
         retkey = "play",
         props = dict(
-            play                = FloydWarshallPlayConf,
-            visualizer_observer = FloydWarshallLoggerConf,
+            play                = FloydWarshallPlayConf(),
+            visualizer_observer = FloydWarshallLoggerConf(),
         ),
         fallback = QLearningPlaySessionConf(confname))
     
@@ -265,12 +284,13 @@ def FloydWarshallPlaySessionConf(confname):
 def multiplay(plays):
     return { k : v() for k, v in plays.items() } 
 
-MultiPlaySessionConf = makeconf(
-    multiplay,
-    plays = dict(
-        ql = QLearningPlaySessionConf(confname="QLearning"),
-        fw = FloydWarshallPlaySessionConf(confname="FloydWarshall")
-    ))
+def MultiPlaySessionConf():
+    return makeconf(
+        multiplay,
+        plays = dict(
+            ql = QLearningPlaySessionConf(confname="QLearning"),
+            fw = FloydWarshallPlaySessionConf(confname="FloydWarshall")
+        ))
 
 def PostProcDataTagConf(post_process_data_tag_func):
     return makeconf(
@@ -283,49 +303,56 @@ def PostProcDataTagConf(post_process_data_tag_func):
         image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
         cellsize = 100)
 
-LogFileReaderPostProcConf = makeconf(
-    LogFileReader,
-    enc  = NPJSONEncDec())
+def LogFileReaderPostProcConf():
+    return makeconf(
+        LogFileReader,
+        enc  = NPJSONEncDec())
 
-def PostProcDataIterConf(post_process_iter_func):
+def PostProcDataIterConf(post_process_iter_func, filter_tag):
     return makeconf(
         lambda log_file_reader, filter_criteria: functools.partial(
             post_process_iter_func, log_file_reader=log_file_reader,
             filter_criteria=filter_criteria),
         props = dict(
-            log_file_reader = LogFileReaderPostProcConf,
+            log_file_reader = LogFileReaderPostProcConf(),
             #logfilepath    = "/tmp/need/some/log/file.path",
         ),
-        filter_criteria = dict())
+        filter_criteria = dict(tag = filter_tag))
                                               
 
-FloydWarshallPostProcessSessionConf = makeconf(
-    fw_post_process,
-    props = dict(
-        process_data_tag = PostProcDataTagConf(fw_post_process_data_tag),
-        log_file_conf    = MEMOIZE_METHOD(LogFileConf.copy()),
-        data_iter        = PostProcDataIterConf(fw_post_process_data_iter),
-    ),
-    project_name     = PROJECT_NAME,
-    confname         = "FWPostProc",
-)
+def FloydWarshallPostProcessSessionConf():
+    return makeconf(
+        fw_post_process,
+        props = dict(
+            process_data_tag = PostProcDataTagConf(fw_post_process_data_tag),
+            log_file_conf    = MEMOIZE_METHOD(LogFileConf()),
+            data_iter = PostProcDataIterConf(
+                fw_post_process_data_iter,
+                'FloydWarshallLogger:action_value'),
+        ),
+        project_name     = PROJECT_NAME,
+        confname         = "FWPostProc",
+    )
 
-QLearningPostProcSessionConf = makeconf(
-    ql_post_process,
-    props = dict(
-        process_data_tag = PostProcDataTagConf(ql_post_process_data_tag),
-        log_file_conf    = MEMOIZE_METHOD(LogFileConf.copy()),
-        data_iter        = PostProcDataIterConf(ql_post_process_data_iter),
-    ),
-    project_name     = PROJECT_NAME,
-    confname         = "QLPostProc",
-)
+def QLearningPostProcSessionConf():
+    return makeconf(
+        ql_post_process,
+        props = dict(
+            process_data_tag = PostProcDataTagConf(ql_post_process_data_tag),
+            log_file_conf    = MEMOIZE_METHOD(LogFileConf()),
+            data_iter        = PostProcDataIterConf(
+                ql_post_process_data_iter,
+                'QLearningLogger:action_value'),
+        ),
+        project_name     = PROJECT_NAME,
+        confname         = "QLPostProc",
+    )
 
 
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--config", type=lambda s: globals()[s],
-                        default=MultiPlaySessionConf.copy())
+                        default=MultiPlaySessionConf())
     a, remargs = parser.parse_known_args()
     a.config()
     #import sys

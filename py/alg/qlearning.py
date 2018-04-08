@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 #import torch as tch
+import os
 from queue import PriorityQueue
 import logging
 
@@ -259,8 +260,17 @@ class QLearningVis(NoOPObserver):
                              thickness=5,
                              tipLength=10)
 
-    def visualize(self, ax, action_value, hash_state, wait_time,
-                  grid_shape, cellsize):
+
+    def alg_policy(self, ax, action_value, hash_state):
+        # policy = np.zeros(len(self.alg.hash_state.keys()), dtype='i8')
+        # for obs, k in self.alg.hash_state.items():
+        #     policy[k] = self.alg.policy(obs)
+        # return policy
+        return 
+
+
+    def visualize(self, ax, action_value, hash_state, wait_time = None,
+                  grid_shape = None, cellsize = None):
         ax.set_position([0, 0, 0.5, 1])
         ax.clear()
         ax.axis('equal')
@@ -281,7 +291,10 @@ class QLearningVis(NoOPObserver):
         ax2.set_yticks([])
         ax2.set_xlim([0, grid_shape[1]*cellsize])
         ax2.set_ylim([0, grid_shape[0]*cellsize])
-        self.visualize_policy(ax2, self.alg.policy, hash_state, grid_shape)
+        self.visualize_policy(ax2,
+                              lambda obs: (np.argmax(action_value[hash_state[obs], :])
+                                         if action_value.size else 0),
+                              hash_state, grid_shape)
 
     def normalize_by_std(self, mat):
         if not np.any(mat):
@@ -333,7 +346,9 @@ def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
     ax = draw.white_img(
         (grid_shape[1] * vis.cellsize, grid_shape[0] * 2 * vis.cellsize),
         dpi = cellsize)
-    vis.visualize(ax, action_value, hash_state)
+    vis.visualize(ax, action_value, hash_state,
+                  grid_shape = grid_shape,
+                  cellsize = cellsize)
     return ax
 
 
@@ -360,8 +375,12 @@ def post_process_data_iter(log_file_reader = None, filter_criteria = dict()):
 def post_process_data_tag(data, tag, cellsize, image_file_fmt):
     ax = visualize_action_value(
         data["action_value"], data["hash_state"], data["grid_shape"], cellsize)
-    draw.imwrite(image_file_fmt.format( tag = "action_value",
-        episode=data["episode_n"], step=data["steps"]), ax)
+    img_filepath = image_file_fmt.format( tag = "action_value",
+        episode=data["episode_n"], step=data["steps"])
+    img_filedir = os.path.dirname(img_filepath)
+    if not os.path.exists(img_filedir):
+        os.makedirs(img_filedir)
+    draw.imwrite(img_filepath, ax)
 
 
 def post_process_generic(data_iter, process_data_tag=post_process_data_tag):
