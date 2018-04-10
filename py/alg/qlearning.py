@@ -4,6 +4,7 @@ import numpy as np
 import os
 from queue import PriorityQueue
 import logging
+import operator
 
 from cog.misc import NumpyEncoder
 import cog.draw as draw
@@ -351,8 +352,19 @@ def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
                   cellsize = cellsize)
     return ax
 
+def condition_by_type_map():
+    return { str : operator.eq,
+             list : operator.contains }
 
-def filter_by_tag_data(**criteria):
+def comparison_op(criteria_val, data_val):
+    return condition_by_type_map()[type(criteria_val)](criteria_val, data_val)
+
+def data_cmp_criteria(data, criteria,
+                      cmp_op = comparison_op):
+    return all(cmp_op(v, data.get(k, None)) for k, v in criteria.items())
+
+def filter_by_tag_data(data_cmp_criteria = data_cmp_criteria,
+                       **criteria):
     def func(data_tag):
         data, tag = data_tag
         if not isinstance(data, dict):
@@ -361,7 +373,7 @@ def filter_by_tag_data(**criteria):
         if "tag" in data:
             raise NotImplementedError("Data should not have tag")
         data["tag"] = tag
-        if all(data.get(k, None) == v for k, v in criteria.items()):
+        if data_cmp_criteria(data, criteria):
             return True
         else:
             return False

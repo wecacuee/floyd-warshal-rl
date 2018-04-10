@@ -40,7 +40,8 @@ from prob.windy_grid_world import (WindyGridWorld, AgentInGridWorld,
                                    random_goal_pose_gen,
                                    random_start_pose_gen,
                                    maze_from_filepath,
-                                   Act2DSpace, Loc2DSpace)
+                                   Act2DSpace, Loc2DSpace,
+                                   DrawAgentGridWorldFromLogs)
 PROJECT_NAME = "floyd_warshall_rl"
 
 def logging_dictConfig(log_file, logging_encdec):
@@ -346,6 +347,28 @@ def QLearningPostProcSessionConf():
         ),
         project_name     = PROJECT_NAME,
         confname         = "QLPostProc",
+    )
+
+def AgentVisSessionConf():
+    return makeconf(
+        ql_post_process,
+        props = dict(
+            windy_grid_world = WindyGridWorldConf(),
+            process_data_tag = PostProcDataTagConf(None).copy(
+                retfunc = DrawAgentGridWorldFromLogs().partial),
+            log_file_conf    = MEMOIZE_METHOD(LogFileConf()),
+            rng              = LambdaMethodMemoizer("rng")(
+                lambda s: np.random.RandomState(seed=0)),
+            data_iter        = PostProcDataIterConf(
+                ql_post_process_data_iter,
+                ['LoggingObserver:new_episode', 'LoggingObserver:new_step']),
+            maze                = lambda s: maze_from_filepath(
+                s.maze_file_path_template.format(self = s)),
+            file_work_dir       = lambda s: Path(__file__).parent,
+        ),
+        maze_file_path_template = "{self.file_work_dir}/maze_5x5_no_wind.txt",
+        project_name     = PROJECT_NAME,
+        confname         = "AgentVis",
     )
 
 

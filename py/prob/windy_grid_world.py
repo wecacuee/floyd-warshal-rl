@@ -2,6 +2,8 @@
 from __future__ import absolute_import, division, print_function
 from pathlib import Path
 import numpy as np
+import functools
+import os
 
 from cog import draw
 from cog.memoize import MEMOIZE_METHOD
@@ -229,6 +231,33 @@ def random_start_pose_gen(prob, goal_pose):
         start_pose = prob.grid_world.valid_random_pos()
     return start_pose
 
+def render_block(ax, pose, cellsize, color):
+    pose_top_left = pose * cellsize
+    draw.rectangle(ax, pose_top_left, pose_top_left + cellsize,
+                   color=color, thickness = -1)
+    return ax
+
+
+def render_agent(ax, pose, cellsize, color=draw.color_from_rgb((0, 0, 255))):
+    return render_block(ax, pose, cellsize, color)
+
+
+def render_goal(ax, pose, cellsize, color=draw.color_from_rgb((0, 255, 0))):
+    return render_block(ax, pose, cellsize, color)
+
+def render_agent_grid_world(canvas, grid_world, agent_pose, goal_pose,
+                            cellsize,
+                            render_goal = render_goal,
+                            render_agent = render_agent):
+    grid_size = cellsize 
+    grid_world.render(canvas, grid_size)
+    # Render goal
+    render_goal(canvas, goal_pose, grid_size)
+
+    # Render agent
+    render_agent(canvas, agent_pose, grid_size)
+    return canvas
+
 class AgentInGridWorld(Problem):
     def __init__(self,
                  rng,
@@ -300,18 +329,9 @@ class AgentInGridWorld(Problem):
             
         if canvas is None:
             canvas = draw.white_img(np.array(self.grid_world.shape) * 100)
-        self.grid_world.render(canvas, grid_size)
-        # Render goal
-        goal_top_left = self.goal_pose * grid_size
-        draw.rectangle(canvas, goal_top_left, goal_top_left + grid_size,
-                       color=draw.color_from_rgb((0, 255, 0)),
-                       thickness=-1)
-
-        # Render agent
-        top_left = self.pose * grid_size
-        draw.rectangle(canvas, top_left, top_left + grid_size,
-                       color=draw.color_from_rgb((255, 0, 0)),
-                       thickness = -1)
+        canvas = render_agent_grid_world(
+            canvas, self.grid_world, self.pose, self.goal_pose,
+            grid_world)
         if wait_time != 0:
             draw.imshow(self.__class__.__name__, canvas)
         if self.log_file_dir is not None:
@@ -364,7 +384,42 @@ class AgentInGridWorld(Problem):
 class AgentInGridWorldObserver(object):
     pass
 
-        
+
+class DrawAgentGridWorldFromLogs:
+    def __init__(self):
+        self.new_episode_data = None
+
+    def partial(self, windy_grid_world=None,
+                 cellsize=None, image_file_fmt=None):
+        return functools.partial(self.__call__,
+                                 windy_grid_world = windy_grid_world,
+                                 cellsize = cellsize,
+                                 image_file_fmt = image_file_fmt)
+
+    def __call__(self, data = None, tag = None, windy_grid_world=None,
+                 cellsize=None, image_file_fmt=None):
+        if tag == "LoggingObserver:new_episode":
+            self.new_episode_data = data
+        elif tag == "LoggingObserver:new_step":
+            if  self.new_episode_data is not None:
+                assert self.new_episode_data["episode_n"] == data["episode_n"]
+                ax = windy_grid_world.render(None, cellsize)
+                # Render goal
+                render_goal(ax, np.asarray(self.new_episode_data["goal_pose"]), cellsize)
+
+                # Render agent
+                render_agent(ax, np.asarray(data["pose"]), cellsize)
+                img_filepath = image_file_fmt.format(
+                    tag = "agent_grid_world",
+                    episode=data["episode_n"], step=data["steps"])
+                img_filedir = os.path.dirname(img_filepath)
+                if not os.path.exists(img_filedir):
+                    os.makedirs(img_filedir)
+
+                draw.imwrite(img_filepath, ax)
+        else:
+            raise ValueError("Unknown tag {}".format(tag))
+            
 if __name__ == '__main__':
     agent = AgentInGridWorld(
         np.random.RandomState(0),
@@ -383,7 +438,7 @@ if __name__ == '__main__':
     for i in range(10):
         pose = agent.step(k)
         rew = agent.reward()
-        print(f"rew = {rew}")
+        print("rew = {rew}".format(rew=rew))
         grid_size=100
         cnvs = agent.render(
             canvas=draw.white_img(np.array(agent.grid_world.shape) * grid_size),
