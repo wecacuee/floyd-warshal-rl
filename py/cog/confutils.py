@@ -49,6 +49,7 @@ from collections import namedtuple
 import copy
 import json
 import functools
+from contextlib import contextmanager
 
 from cog.memoize import method_memoizer
 
@@ -62,8 +63,8 @@ def func_need_args(func):
 
 def apply_conf(func, conf):
     required_args = func_need_args(func)
-    args_from_conf = { k : getattr(conf, k) for k in required_args
-                       if hasattr(conf, k) }
+    args_from_conf = { k : conf.get(k) for k in required_args
+                       if k in conf }
     return func(**args_from_conf)
 
 def func_kwonlydefaults(func):
@@ -98,26 +99,29 @@ process_kwprop_noexec = functools.partial(
     process_kwprop,
     prop_handler=prop_noexec_handler)
 
-class KWProps(dict):
-    pass
 
-def merge_props(kwargs_in):
-    kwargs = kwargs_in.copy()
-    if "props" in kwargs and isinstance(kwargs["props"], KWProps):
-        pattrs = props2attrs(kwargs.pop("props"))
-        kwargs = dict(pattrs, **kwargs)
-    return kwargs
+@contextmanager
+def confmode(wrapfunc):
+    change_post_proc(wrapfunc, process_kwprop_noexec)
+    yield wrapfunc
+    change_post_proc(wrapfunc, process_kwprop)
 
 class WrapFunc:
-    post_process_class = process_kwprop
     def __init__(self, func,
-                 post_process = lambda s, v: s.post_process_class(v),
+                 post_process = process_kwprop,
                  **kwargs):
         self.func = func
         self.post_process = post_process
-        self.attrs = merge_props(kwargs)
+        self.attrs = kwargs
         self._func_defaults = None
         functools.update_wrapper(self, func)
+
+    def change_post_proc(self, post_process):
+        self.post_process = post_process
+        for k, v in chain(self.func_defaults.items(), self.attrs.items()):
+            if isinstance(v, KWProp) and isinstance(v.fget, WrapFunc):
+                v.fget.change_post_proc(post_process) 
+
 
     def partial(self, **kwargs):
         self.attrs.update(kwargs)
@@ -133,8 +137,7 @@ class WrapFunc:
 
     @property
     def func_defaults(self):
-        self._func_defaults = self._func_defaults or merge_props(
-            func_kwonlydefaults(self.func))
+        self._func_defaults = self._func_defaults or func_kwonlydefaults(self.func)
         return self._func_defaults
 
     def _getattr(self, attr):
@@ -145,8 +148,14 @@ class WrapFunc:
         else:
             raise AttributeError(attr)
 
-    def __getattr__(self, attr):
+    def __contains__(self, attr):
+        return attr in self.attrs or attr in self.func_defaults
+
+    def get(self, attr):
         return self.post_process(self, self._getattr(attr))
+
+    def __getattr__(self, attr):
+        return self.get(attr)
 
     def __repr__(self):
         return " ".join("""{self.__class__.__name__}(
@@ -180,15 +189,18 @@ class WFuncFB(WrapFunc):
         return self
 
     def __call__(self, fb = None, **kwargs):
-        self.fb = fb
+        self.fb = fb or self.fb
         return WrapFunc.__call__(self, **kwargs)
 
+    def __contains__(self, attr):
+        return (attr in self.fb_attrs and attr in self.fb) or  WrapFunc.__contains__(
+            self, attr)
 
-    def __getattr__(self, attr):
+    def get(self, attr):
         if attr in self.fb_attrs:
-            return getattr(self.fb, attr)
+            return self.fb.get(attr)
         else:
-            return WrapFunc.__getattr__(self, attr)
+            return WrapFunc.get(self, attr)
             
 WFuncFBNoExec = functools.partial(WFuncFB,
                                   post_process = process_kwprop_noexec)
@@ -196,117 +208,7 @@ WFuncFBNoExec = functools.partial(WFuncFB,
 def KWFuncExp(func, exp_attrs, **kwargs):
     return KWProp(WFuncFB(func, **kwargs).expects(exp_attrs))
 
-class KWFunc:
-    def __init__(self,
-                 attrs = dict(),
-                 retkey = "retval",
-                 prop_handler = prop_exec_handler,
-                 **kwargs):
-        self.retkey = retkey
-        self.prop_handler = prop_handler
-        self.attrs = dict()
-        self.partial(attrs, **kwargs)
-
-    def partial(self, attrs=dict(), **kwargs):
-        self.attrs = dict(self.attrs, **dict(attrs, **kwargs))
-        return self
-
-    def copy(self, **kwargs):
-        c = type(self)()
-        return self.merge(c, **kwargs)
-
-    def merge(self, c, attrs=dict(), **kwargs):
-        KWFunc.__init__(c, attrs = dict(self.attrs, **dict(attrs)), **kwargs)
-        return c
-
-    def __call__(self, **kwargs):
-        c = self.copy(**kwargs)
-        return getattr(c, c.retkey)
-
-    def exec_props(self, val=True):
-        self.prop_handler = prop_exec_handler if val else prop_noexec_handler
-        for k, v in self.attrs.items():
-            if isinstance(v, property) and isinstance(v.fget, KWFunc):
-                v.fget.exec_props(val)
-            if isinstance(v, KWFunc):
-                v.exec_props(val)
-
-    def handle_prop(self, prop):
-        return self.prop_handler(self, prop)
-
-    def __getattr__(self, k):
-        try:
-            val = self.attrs[k]
-        except KeyError as e:
-            raise AttributeError("missing k:{}. Error: {}; \n self:{} "
-                                    .format(k, e, self.attrs))
-        return self.handle_prop(val) if isinstance(val, property) else val
-
-    def __repr__(self):
-        return self.__class__.__name__ + "(" + "\n".join(
-            (k + ": " + repr(getattr(self, k))) for k in "retkey prop_handler attrs".split()
-        ) + ")"
-    
-
-def KWFuncArgs(retval, **kwargs):
-    return KWFunc(props = dict(retval = functools.partial(apply_conf, func = retval)),
-                  **kwargs)
-
-class Conf(KWFunc):
-    def __init__(self,
-                 props = dict(),
-                 attrs = dict(),
-                 retfunckey = "retfunc",
-                 default_retval = lambda s: apply_conf( getattr(s, s.retfunckey), s),
-                 fallback = None,
-                 **kwargs):
-        self.retfunckey = retfunckey
-        self.fallback = fallback
-        attrs = dict(attrs, **props2attrs(props))
-        super().__init__(attrs = attrs, **kwargs)
-        self.attrs.setdefault(self.retkey, property(default_retval))
-
-    def merge(self, c, **kwargs):
-        attrs = kwargs.pop("attrs", dict())
-        props = kwargs.pop("props", dict())
-        attrs = dict(props2attrs(props), **attrs)
-        KWFunc.merge(self, c, attrs = attrs, **kwargs)
-        c.retfunckey = kwargs.pop("retfunckey", self.retfunckey)
-        c.fallback = kwargs.pop("fallback", self.fallback)
-        return c
-
-    def setfb(self, fallback):
-        assert fallback is not self
-        self.fallback = fallback
-        return self
-
-    def __call__(self, fallback=None, **kwargs):
-        if fallback:
-            self.fallback = fallback
-        return KWFunc.__call__(self, **kwargs)
-
-    def __getattr__(self, k):
-        if k in "__contains__ __getitem__ __setitem__ keys items".split():
-            return getattr(self.attrs, k)
-        else:
-            try:
-                return super().__getattr__(k)
-            except AttributeError as e:
-                if self.fallback and not (k.startswith("__") and k.endswith("__")):
-                    try: 
-                        return getattr(self.fallback, k)
-                    except AttributeError as e2:
-                        raise e
-                raise e
-
-def makeconf(func, confclass=Conf, attrs=dict(), **kw):
-    kwargs = dict(dict(__name__ = func.__name__), **kw)
-    return confclass(attrs = dict(func_kwonlydefaults(func), **attrs),
-                     retfunc = func,
-                     **kwargs)
-
-
-def args_to_recursive_conf(argparseobj, confclass=Conf, sep="."):
+def args_to_recursive_conf(argparseobj, confclass=WFuncFB, sep="."):
     for key, value in vars(argparseobj).items():
         keys = key.split(sep)
 
@@ -398,7 +300,7 @@ class ConfFromArgs:
     def parse_remargs(self, remargs, glbls):
         parser = self.parser(self.__class__.__name__)
         for key, defval in vars(self).items():
-            if isinstance(defval, Conf):
+            if isinstance(defval, WFuncFB):
                 defvalcopy = copy.copy(defval)
                 parser.add_argument(
                     "--{k}".format(k=key), default=None,
@@ -422,7 +324,7 @@ class ConfFromArgs:
     def __repr__(self):
         return "{}".format(vars(self))
 
-def dict_update_recursive(ddest, dsrc, recursetypes=(dict, Conf)):
+def dict_update_recursive(ddest, dsrc, recursetypes=(dict, WFuncFB)):
     for k, v in dsrc.items():
         if isinstance(v, recursetypes):
             if k in ddest: 
@@ -434,7 +336,7 @@ def dict_update_recursive(ddest, dsrc, recursetypes=(dict, Conf)):
 
     return ddest
 
-def NewConfClassInherit(name, props, parents=(Conf,), defaults=dict()):
+def NewConfClassInherit(name, props, parents=(WFuncFB,), defaults=dict()):
     """
     Defines a new class with name = name and
     initialize kwargs attributes as property objects.
@@ -491,7 +393,7 @@ def serialize_any(obj):
         return serialize_list(obj)
     elif isinstance(obj, dict):
         return serialize_dict(obj)
-    elif isinstance(obj, Conf):
+    elif isinstance(obj, WFuncFB):
         return serialize_dict(vars(obj))
     else:
         #print(f"serialize_any : ignoring {type(obj)}")
@@ -502,21 +404,21 @@ def MultiConfGen(name, confs):
                  if isinstance(confs, dict)
                  else { str(k) : v for k, v in enumerate(confs) })
     conf_keys = conf_dict.keys()
-    return type(name, (Conf, ),
+    return type(name, (WFuncFB, ),
                 dict(
                     defaults = lambda self: dict(
                         func = lambda confs: [confs[k].apply_func() for k in conf_keys],
-                        confs = Conf(**conf_dict))))
+                        confs = WFuncFB(**conf_dict))))
 
 
-class ConfOneArg(Conf):
+class ConfOneArg(WFuncFB):
     def __init__(self, argname="arg1", **kwargs):
         self.argname = argname
-        Conf.__init__(self, **kwargs)
+        WFuncFB.__init__(self, lambda : 0, **kwargs)
 
     def __call__(self, arg1):
         self.attrs[self.argname] = arg1
-        return Conf.__call__(self)
+        return WFuncFB.__call__(self)
 
 MEMOIZE_METHOD = ConfOneArg(argname="method", retfunc=method_memoizer,
                             **func_kwonlydefaults(method_memoizer))

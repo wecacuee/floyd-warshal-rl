@@ -186,7 +186,7 @@ class LogFileReader(object):
 
 
 class LoggingObserver(NoOPObserver):
-    def __init__(self, logger, log_interval):
+    def __init__(self, logger, log_interval = 1):
         self._logger = logger
         self.log_interval = log_interval
         self.human_tag       = "INFO"

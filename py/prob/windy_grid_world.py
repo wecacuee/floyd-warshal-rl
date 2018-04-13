@@ -146,7 +146,7 @@ class WindyGridWorld(object):
                          
     @classmethod
     def from_maze_file_path(cls,
-                            maze_file_path,
+                            maze_file_path = None,
                             seed = 0,
                             maze = KWP(lambda s: maze_from_filepath(s.maze_file_path)),
                             rng  = KWP(lambda s: np.random.RandomState(s.seed)),
@@ -154,7 +154,7 @@ class WindyGridWorld(object):
     ):
         if not maze_file_path:
             raise ValueError("need maze_file_path")
-        return WFuncFB(cls, **dict(locals(), **kwargs))
+        return WFuncFB(cls, **dict(locals(), **kwargs))()
 
     def wind_dir(self, xy):
         row, col = xy[::-1]
@@ -299,7 +299,7 @@ class AgentInGridWorld(Problem):
 
     @classmethod
     def from_maze_file_path(cls,
-                            maze_file_path,
+                            maze_file_path = None,
                             seed = 0,
                             rng = KWP(lambda s: np.random.RandomState(s.seed)),
                             action_space = KWFuncExp(Act2DSpace, ["rng"]),
@@ -314,7 +314,7 @@ class AgentInGridWorld(Problem):
                             **kwargs):
         if not maze_file_path:
             raise ValueError("need maze_file_path")
-        return WFuncFB(cls).partial(**dict(locals(), **kwargs))()
+        return WFuncFB(cls, **dict(locals(), **kwargs))()
 
     @property
     def grid_shape(self):
