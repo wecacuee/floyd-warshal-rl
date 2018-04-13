@@ -1,5 +1,6 @@
 from game.play import Space, Alg, NoOPObserver
 import numpy as np
+import os
 import cog.draw as draw
 import logging
 from .qlearning import QLearningVis, post_process_data_iter, post_process_generic
@@ -281,6 +282,9 @@ def post_process_data_tag(data, tag, cellsize, image_file_fmt):
     fname = image_file_fmt.format(
         tag = "action_value",
         episode=data["episode_n"], step=data["steps"])
+    img_dir = os.path.dirname(fname)
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
     print("Writing img to: {}".format(fname))
     draw.imwrite(fname, ax)
 

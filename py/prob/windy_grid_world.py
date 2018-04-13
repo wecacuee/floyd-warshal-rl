@@ -7,7 +7,7 @@ import os
 
 from cog import draw
 from cog.memoize import MEMOIZE_METHOD
-from cog.confutils import KWFuncArgs, KWFunc, apply_conf, func_kwonlydefaults
+from cog.confutils import (WFuncFB, KWProp as KWP, KWFuncExp)
 
 from game.play import Space, Problem
 import logging
@@ -128,6 +128,34 @@ class WindyGridWorld(object):
         self.WIND_NEWS_NAMES = WIND_NEWS_NAMES
         self.WIND_NEWS_VECTORS = WIND_NEWS_VECTORS
 
+    @classmethod
+    def from_maze_string(cls,
+                         seed = 0,
+                         maze_string = "\n".join([
+                             "  +  ",
+                             "  +  ",
+                             " ^^^ ",
+                             " ^^^ ",
+                             "  +  "]),
+                         maze = KWP(lambda s: maze_from_string(s.maze_string)),
+                         rng  = KWP(lambda s: np.random.RandomState(s.seed)),
+                         **kwargs
+    ):
+
+        return WFuncFB(cls, **dict(locals(), **kwargs))
+                         
+    @classmethod
+    def from_maze_file_path(cls,
+                            maze_file_path,
+                            seed = 0,
+                            maze = KWP(lambda s: maze_from_filepath(s.maze_file_path)),
+                            rng  = KWP(lambda s: np.random.RandomState(s.seed)),
+                            **kwargs
+    ):
+        if not maze_file_path:
+            raise ValueError("need maze_file_path")
+        return WFuncFB(cls, **dict(locals(), **kwargs))
+
     def wind_dir(self, xy):
         row, col = xy[::-1]
         return self.wind_vectors(self.maze[row, col])
@@ -201,26 +229,6 @@ class WindyGridWorld(object):
         return self.maze.shape
 
 
-def WindyGridWorldFromString(
-        props = dict(
-            retval = lambda s: apply_conf(WindyGridWorld, s),
-            rng = lambda s: np.random.RandomState(s.seed),
-            maze = lambda s: maze_from_string(s.maze_string),
-        ),
-        attrs = dict(
-            func_kwonlydefaults(WindyGridWorld),
-            seed = 0,
-            maze_string = "\n".join([
-                "  +  ",
-                "  +  ",
-                " ^^^ ",
-                " ^^^ ",
-                "  +  "])
-        ),
-):
-    return KWFunc(props = props, attrs = attrs.copy())
-        
-
 def random_goal_pose_gen(prob):
     return prob.grid_world.valid_random_pos()
 
@@ -260,7 +268,6 @@ def render_agent_grid_world(canvas, grid_world, agent_pose, goal_pose,
 
 class AgentInGridWorld(Problem):
     def __init__(self,
-                 rng,
                  grid_world,
                  action_space,
                  observation_space,
@@ -272,7 +279,7 @@ class AgentInGridWorld(Problem):
                  no_render = False,
                  log_file_dir = "/tmp/",
     ):
-        self.grid_world    = grid_world
+        self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
         self.action_space      = action_space #Act2DSpace(seed)
@@ -288,6 +295,26 @@ class AgentInGridWorld(Problem):
         #    upper_bound = np.array(grid_world.shape),
         #    seed        = seed) 
         self.episode_reset(0)
+
+
+    @classmethod
+    def from_maze_file_path(cls,
+                            maze_file_path,
+                            seed = 0,
+                            rng = KWP(lambda s: np.random.RandomState(s.seed)),
+                            action_space = KWFuncExp(Act2DSpace, ["rng"]),
+                            observation_space = KWFuncExp(
+                                Loc2DSpace
+                                ,"rng lower_bound upper_bound".split()),
+                            lower_bound = np.array([0, 0]),
+                            upper_bound = KWP(lambda s : s.grid_world.shape),
+                            grid_world = KWFuncExp(
+                                WindyGridWorld.from_maze_file_path,
+                                "rng maze_file_path".split()),
+                            **kwargs):
+        if not maze_file_path:
+            raise ValueError("need maze_file_path")
+        return WFuncFB(cls).partial(**dict(locals(), **kwargs))()
 
     @property
     def grid_shape(self):
@@ -379,10 +406,6 @@ class AgentInGridWorld(Problem):
                  for nbr in unvisited_nbrs],
                 default = np.inf)
             return length + 1#, [tuple(start)] + path
-
-
-class AgentInGridWorldObserver(object):
-    pass
 
 
 class DrawAgentGridWorldFromLogs:

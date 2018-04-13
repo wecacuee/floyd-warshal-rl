@@ -48,32 +48,162 @@ from string import Formatter
 from collections import namedtuple
 import copy
 import json
+import functools
 
 from cog.memoize import method_memoizer
 
+def empty_to_none(v):
+    return None if v is inspect._empty else v
+
+def func_need_args(func):
+    params = inspect.signature(func).parameters
+    required_args = list(params.keys())
+    return required_args
+
 def apply_conf(func, conf):
-    required_args = list(inspect.signature(func).parameters.keys())
-    return func( ** { k : getattr(conf, k) for k in required_args } )
+    required_args = func_need_args(func)
+    args_from_conf = { k : getattr(conf, k) for k in required_args
+                       if hasattr(conf, k) }
+    return func(**args_from_conf)
 
 def func_kwonlydefaults(func):
     return {k : p.default for k, p in inspect.signature(func).parameters.items()
             if p.default is not inspect._empty}
 
-def props2attrs(props):
-    return { k : property(v) for k, v in props.items() }
+class KWProp:
+    __slots__ = ["fget"]
+    def __init__(self, fget):
+        if not callable(fget):
+            raise ValueError("fget should be callable")
+        self.fget = fget
+    def __repr__(self):
+        return "{self.__class__.__name__}({self.fget})".format(self=self)
 
-def call_if_prop(val, args):
-    return val.fget(*args) if isinstance(val, property) else val
+def props2attrs(props, propclass=KWProp):
+    return { k : propclass(v) for k, v in props.items() }
 
+def prop_exec_handler(self, p):
+    return p.fget(self)
+
+def prop_noexec_handler(s, p):
+    return p.fget if isinstance(p.fget, type(s)) else type(s)(p.fget)
+
+def process_kwprop(self, val, prop_handler=prop_exec_handler):
+    if isinstance(val, KWProp):
+        return prop_handler(self, val)
+    else:
+        return val
+
+process_kwprop_noexec = functools.partial(
+    process_kwprop,
+    prop_handler=prop_noexec_handler)
+
+class KWProps(dict):
+    pass
+
+def merge_props(kwargs_in):
+    kwargs = kwargs_in.copy()
+    if "props" in kwargs and isinstance(kwargs["props"], KWProps):
+        pattrs = props2attrs(kwargs.pop("props"))
+        kwargs = dict(pattrs, **kwargs)
+    return kwargs
+
+class WrapFunc:
+    post_process_class = process_kwprop
+    def __init__(self, func,
+                 post_process = lambda s, v: s.post_process_class(v),
+                 **kwargs):
+        self.func = func
+        self.post_process = post_process
+        self.attrs = merge_props(kwargs)
+        self._func_defaults = None
+        functools.update_wrapper(self, func)
+
+    def partial(self, **kwargs):
+        self.attrs.update(kwargs)
+        return self
+
+    def copy(self, func = None, **kw):
+        c = type(self)
+        return c(func or self.func, **dict(self.attrs, **kw))
+
+    def __call__(self, **kw):
+        c = self.copy(**kw)
+        return apply_conf(c.func, c)
+
+    @property
+    def func_defaults(self):
+        self._func_defaults = self._func_defaults or merge_props(
+            func_kwonlydefaults(self.func))
+        return self._func_defaults
+
+    def _getattr(self, attr):
+        if attr in self.attrs:
+            return self.attrs[attr]
+        elif attr in self.func_defaults:
+            return self.func_defaults[attr]
+        else:
+            raise AttributeError(attr)
+
+    def __getattr__(self, attr):
+        return self.post_process(self, self._getattr(attr))
+
+    def __repr__(self):
+        return " ".join("""{self.__class__.__name__}(
+            {self.func.__name__},
+            func_defaults = {self.func_defaults},
+            **{self.attrs}
+            )""".split()).format(self=self)
+
+
+def from_conf(f):
+    return WrapFunc(lambda conf, f: apply_conf(func, conf), f = f)
+
+WrapFuncNoExec = functools.partial(WrapFunc, post_process =
+                                   process_kwprop_noexec)
+
+
+class WFuncFB(WrapFunc):
+    def __init__(self, func, **kwargs):
+        self.fb_attrs = []
+        self.fb = None
+        super().__init__(func, **kwargs)
+
+    def copy(self, func = None, **kwargs):
+        c = WrapFunc.copy(self, func = func, **kwargs)
+        c.fb_attrs = self.fb_attrs.copy()
+        c.fb = self.fb
+        return c
+        
+    def expects(self, attrs):
+        self.fb_attrs = attrs
+        return self
+
+    def __call__(self, fb = None, **kwargs):
+        self.fb = fb
+        return WrapFunc.__call__(self, **kwargs)
+
+
+    def __getattr__(self, attr):
+        if attr in self.fb_attrs:
+            return getattr(self.fb, attr)
+        else:
+            return WrapFunc.__getattr__(self, attr)
+            
+WFuncFBNoExec = functools.partial(WFuncFB,
+                                  post_process = process_kwprop_noexec)
+
+def KWFuncExp(func, exp_attrs, **kwargs):
+    return KWProp(WFuncFB(func, **kwargs).expects(exp_attrs))
 
 class KWFunc:
     def __init__(self,
                  attrs = dict(),
                  retkey = "retval",
-                 exec_enabled = True,
+                 prop_handler = prop_exec_handler,
                  **kwargs):
         self.retkey = retkey
-        self.exec_enabled = exec_enabled
+        self.prop_handler = prop_handler
         self.attrs = dict()
         self.partial(attrs, **kwargs)
 
@@ -90,24 +220,19 @@ class KWFunc:
         return c
 
     def __call__(self, **kwargs):
-        self.partial(**kwargs)
-        return getattr(self, self.retkey)
+        c = self.copy(**kwargs)
+        return getattr(c, c.retkey)
 
-    def enable_exec(self, val=True):
-        self.exec_enabled = val
+    def exec_props(self, val=True):
+        self.prop_handler = prop_exec_handler if val else prop_noexec_handler
         for k, v in self.attrs.items():
             if isinstance(v, property) and isinstance(v.fget, KWFunc):
-                v.fget.enable_exec(val)
+                v.fget.exec_props(val)
             if isinstance(v, KWFunc):
-                v.enable_exec(val)
+                v.exec_props(val)
 
     def handle_prop(self, prop):
-        func = prop.fget
-        if self.exec_enabled:
-            return func(self)
-        else:
-            return func
-            
+        return self.prop_handler(self, prop)
 
     def __getattr__(self, k):
         try:
@@ -119,12 +244,12 @@ class KWFunc:
 
     def __repr__(self):
         return self.__class__.__name__ + "(" + "\n".join(
-            (k + ": " + repr(getattr(self, k))) for k in "retkey exec_enabled attrs".split()
+            (k + ": " + repr(getattr(self, k))) for k in "retkey prop_handler attrs".split()
         ) + ")"
     
 
 def KWFuncArgs(retval, **kwargs):
-    return KWFunc(props = dict(retval = lambda s: apply_conf(retval, s)),
+    return KWFunc(props = dict(retval = functools.partial(apply_conf, func = retval)),
                   **kwargs)
 
 class Conf(KWFunc):
@@ -132,7 +257,7 @@ class Conf(KWFunc):
                  props = dict(),
                  attrs = dict(),
                  retfunckey = "retfunc",
-                 default_retval = lambda s: apply_conf(getattr(s, s.retfunckey), s),
+                 default_retval = lambda s: apply_conf( getattr(s, s.retfunckey), s),
                  fallback = None,
                  **kwargs):
         self.retfunckey = retfunckey

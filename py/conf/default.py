@@ -230,23 +230,32 @@ def FloydWarshallPlayConf():
             visualizer_observer = FloydWarshallLoggerConf(),
         ))
 
+def SessionConf(confname,
+                props = dict(
+                    log_file_conf       = MEMOIZE_METHOD(LogFileConf()),
+                    logging_encdec      = LoggingEncdecConf(),
+                    set_logger_conf     = lambda s : setLoggerConfig(s.log_file_conf.confname,
+                                                                     s.log_file_conf.log_file,
+                                                                     s.logging_encdec),
+                    logger_factory      = MEMOIZE_METHOD(LoggerFactoryConf()),
+                    rng                 = LambdaMethodMemoizer("rng")(
+                        lambda s: np.random.RandomState(seed=0)),
+                    maze                = lambda s: maze_from_filepath(
+                        s.maze_file_path_template.format(self = s)),
+                    file_work_dir       = lambda s: Path(__file__).parent,
+                    log_file_dir        = lambda s: s.log_file_conf.log_file_dir,
+                ),
+                attrs = dict(
+                    maze_file_path_template = "{self.file_work_dir}/maze_5x5_no_wind.txt",
+                )
+):
+    return Conf(props = props, attrs = dict(attrs, confname = confname))
+
 def QLearningPlaySessionConf(
         confname,
         props = dict(
-            log_file_conf       = MEMOIZE_METHOD(LogFileConf()),
-            logging_encdec      = LoggingEncdecConf(),
-            set_logger_conf     = lambda s : setLoggerConfig(s.log_file_conf.confname,
-                                                             s.log_file_conf.log_file,
-                                                             s.logging_encdec),
-            logger_factory      = MEMOIZE_METHOD(LoggerFactoryConf()),
-            rng                 = LambdaMethodMemoizer("rng")(
-                lambda s: np.random.RandomState(seed=0)),
-            maze                = lambda s: maze_from_filepath(
-                s.maze_file_path_template.format(self = s)),
-            file_work_dir       = lambda s: Path(__file__).parent,
             grid_world          = MEMOIZE_METHOD(WindyGridWorldConf()),
             upper_bound         = lambda s: np.array(s.grid_world.shape),
-            log_file_dir        = lambda s: s.log_file_conf.log_file_dir,
             action_space        = Act2DSpaceConf(),
             observation_space   = Obs2DSpaceConf(),
             prob                = MEMOIZE_METHOD(AgentInGridWorldConf()),
@@ -262,15 +271,21 @@ def QLearningPlaySessionConf(
         attrs = dict(
             seed                    = 1,
             project_name            = PROJECT_NAME,
-            maze_file_path_template = "{self.file_work_dir}/maze_5x5_no_wind.txt",
             lower_bound             = np.array([0, 0]),
             nepisodes               = 3,
             log_interval            = 1,
         ),
         retkey = "play",
     ):
-    return Conf(props = props, attrs = dict(attrs, confname = confname), retkey=retkey)
+    return Conf(props = props, attrs = dict(attrs), retkey=retkey,
+                fallback = SessionConf(confname))
 
+def ql_play(alg = QLearningDiscrete,
+            prob = AgentInGridWorld,
+            observer = MultiObserver,
+            nepisodes = 3):
+    return play(alg, prob, observer, nepisodes, logger_factory)
+            
 
 def FloydWarshallPlaySessionConf(confname):
     return Conf(
@@ -278,6 +293,7 @@ def FloydWarshallPlaySessionConf(confname):
         props = dict(
             play                = FloydWarshallPlayConf(),
             visualizer_observer = FloydWarshallLoggerConf(),
+            observer            = MultiObserverConf(),
         ),
         fallback = QLearningPlaySessionConf(confname))
     
