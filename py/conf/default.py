@@ -64,44 +64,38 @@ def grid_world_play(
 
 
 def ql_grid_world_play(
-        kw = dict(
-            confname       = "ql_grid_world_play",
-            alg            = xargs(
-                QLearningDiscrete,
-                "action_space observation_space rng".split()),
-            action_space   = prop(lambda s : s.prob.action_space),
-            observation_space   = prop(lambda s : s.prob.observation_space),
-            def_observer   = xargs(MultiObserver,
-                                   "prob logger_factory log_file_path logging_encdec".split()),
-            observer       = prop(lambda s:
-                                  s.def_observer.add_observer(
-                                      visualizer_observer = s.qlearning_vis)),
-            logger         = prop(lambda s: s.logger_factory("QLearningLogger")),
-            qlearning_vis  = xargs(QLearningLogger, ["logger"]),
-        ),
-        **kwargs
+        confname       = "ql_grid_world_play",
+        alg            = xargs(
+            QLearningDiscrete,
+            "action_space observation_space rng".split()),
+        action_space   = prop(lambda s : s.prob.action_space),
+        observation_space   = prop(lambda s : s.prob.observation_space),
+        def_observer   = xargs(MultiObserver,
+                               "prob logger_factory log_file_path logging_encdec".split()),
+        observer       = prop(lambda s:
+                              s.def_observer.add_observer(
+                                  visualizer_observer = s.qlearning_vis)),
+        logger         = prop(lambda s: s.logger_factory("QLearningLogger")),
+        qlearning_vis  = xargs(QLearningLogger, ["logger"]),
 ):
-    return grid_world_play(**dict(kw, **kwargs))
+    return grid_world_play(**locals())
 
 
 def fw_grid_world_play(
-        kw = dict(
-            confname = "fw_grid_world_play",
-            alg = xargs(FloydWarshallAlgDiscrete,
-                        "action_space observation_space rng".split()),
-            action_space   = prop(lambda s : s.prob.action_space),
-            observation_space   = prop(lambda s : s.prob.observation_space),
-            def_observer = xargs(
-                MultiObserver,
-                "prob logger_factory log_file_path logging_encdec".split()),
-            observer = prop(lambda s:
-                            s.def_observer.add_observer(
-                                visualizer_observer = s.fw_vis)),
-            logger         = prop(lambda s: s.logger_factory("FloydWarshallLogger")),
-            fw_vis = xargs(FloydWarshallLogger, ["logger"]),
-        ),
-        **kwargs):
-    return grid_world_play(**dict(kw, **kwargs))
+        confname = "fw_grid_world_play",
+        alg = xargs(FloydWarshallAlgDiscrete,
+                    "action_space observation_space rng".split()),
+        action_space   = prop(lambda s : s.prob.action_space),
+        observation_space   = prop(lambda s : s.prob.observation_space),
+        def_observer = xargs(
+            MultiObserver,
+            "prob logger_factory log_file_path logging_encdec".split()),
+        observer = prop(lambda s:
+                        s.def_observer.add_observer(
+                            visualizer_observer = s.fw_vis)),
+        logger         = prop(lambda s: s.logger_factory("FloydWarshallLogger")),
+        fw_vis = xargs(FloydWarshallLogger, ["logger"])):
+    return grid_world_play(**locals())
 
 
 def multiplay(**plays):

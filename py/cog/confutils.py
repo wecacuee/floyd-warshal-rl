@@ -21,6 +21,7 @@ from collections import namedtuple, OrderedDict
 import copy
 import json
 import functools
+from functools import partial
 from contextlib import contextmanager
 
 from cog.memoize import method_memoizer
@@ -41,15 +42,23 @@ def func_kwonlydefaults(func):
     return {k : p.default for k, p in inspect.signature(func).parameters.items()
             if p.default is not inspect._empty}
 
-#class KWProp:
-#    __slots__ = ["fget"]
-#    def __init__(self, fget):
-#        if not callable(fget):
-#            raise ValueError("fget should be callable")
-#        self.fget = fget
-#    def __repr__(self):
-#        return "{self.__class__.__name__}({self.fget})".format(self=self)
-KWProp = property
+class KWProp:
+    def __init__(self, func):
+        if not callable(func):
+            raise ValueError("fget should be callable")
+        self.fget = func
+        functools.update_wrapper(self, func)
+
+    def __call__(self, *a, **kw):
+        return self.fget(*a, **kw)
+
+    def __getattr__(self, a):
+        return getattr(self.fget, a)
+
+    def __repr__(self):
+        return "{self.__class__.__name__}({self.fget})".format(self=self)
+
+#KWProp = property
 
 def props2attrs(props, propclass=KWProp):
     return { k : propclass(v) for k, v in props.items() }
@@ -118,16 +127,6 @@ def update_signature(wrapper, wrapped, args, kwargs):
         parameters = OrderedDict(chain(params.items(), kwparam.items())))
     return wrapper
 
-
-def partial(func, *args, **kwargs):
-    """
-    partial with signature and defaults copying
-
-    """
-    return functools.partial(func, *args, **kwargs)
-    #return update_signature(wrapper, func, args, kwargs)
-
-
 def wrap_funcs(func, wrapper):
     return (wrapper(func)
             if callable(func)
@@ -151,44 +150,28 @@ class FuncAttr:
     >>> FuncAttr(two).one
     1
     """
-    def __init__(self, func, post_process = (wrap_funcs, undo_wrap_funcs)):
+    def __init__(self, func):
         self.func = func
-        self._func_defaults_ = None
-        self._wr_kw = dict()
         self._partial = dict()
-        self._post_process = post_process[0]
-        self._undo_post_process = post_process[1]
         functools.update_wrapper(self, func)
 
+    def _wrap_child(self, v):
+        return type(self)(func = v) if callable(v) else v
+
+    def _wrap_kwdefaults(self, kwd):
+        return { k : self._wrap_child(v) for k, v in kwd.items() }
+
     @property
-    def _func_defaults(self):
-        self._func_defaults_ = (
-            self._func_defaults_ or func_kwonlydefaults(self.func))
-        return self._func_defaults_
-
-    def _kwarg(self, k):
-        if k in self._partial:
-            v = self._partial[k]
-            return v.fget if isinstance(v, KWProp) else v
-        elif k not in self._wr_kw:
-            self._wr_kw[k]  = self._post_process(self._func_defaults[k], type(self))
-        return self._wr_kw[k]
-
-    def _get_partial(self):
-        for k, v in self._wr_kw.items():
-            if isinstance(v, FuncAttr) and v._get_partial():
-                self._partial[k] = self._undo_post_process(self._func_defaults[k], v)
+    def partial(self):
+        self._partial = (
+            self._partial or self._wrap_kwdefaults(func_kwonlydefaults(self.func)))
         return self._partial
 
     def __call__(self, *args, **kw):
-        return self.func(*args, **dict(self._get_partial(), **kw))
-
-    @property
-    def __signature__(self):
-        return inspect.signature(self.func)
+        return self.func(*args, **dict(self.partial, **kw))
 
     def __getattr__(self, k):
-        return getattr(self.func, k, self._kwarg(k))
+        return getattr(self.func, k, self.partial[k])
 
     def __setattr__(self, k, v):
         if (k in """func _func_defaults_ _wr_kw _partial _post_process
@@ -198,15 +181,20 @@ class FuncAttr:
         else:
             self._partial[k] = v
 
+    def __repr__(self):
+        return """{self.__class__.__name__}({self.func.__name__},
+        **{self.partial})""".format(self=self)
+
+
 def extended_kwprop(func):
     """
     >>> p = KWProp
     >>> two = lambda one = 1: one + 1
     >>> two()
     2
-    >>> ptwo = partial(two, one = p(lambda s : s.zero + 1), zero = p(lambda s : 10))
+    >>> ptwo = partial(two, one = p(lambda s : s.zero + 1))
     >>> two2 = extended_kwprop(ptwo)
-    >>> two2()
+    >>> two2(zero = 10)
     12
     """
     attrs = func_kwonlydefaults(func)
