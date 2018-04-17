@@ -260,7 +260,7 @@ class FloydWarshallLogger(NoOPObserver):
 
 def visualize_action_value(action_value, policy, path_cost, net_value,
                            hash_state, grid_shape, goal_pose, cellsize):
-    vis = FloydWarshallVisualizer(1, cellsize, None)
+    vis = FloydWarshallVisualizer(update_interval = 1, cellsize = cellsize, log_file_dir = None)
     ax = draw.white_img(
         (grid_shape[1] * vis.cellsize, grid_shape[0] * 2 * vis.cellsize),
         dpi = cellsize)

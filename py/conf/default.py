@@ -109,48 +109,44 @@ def multiplay(**plays):
 
 @extended_kwprop
 def fw_post_process_run(
-        log_file_path = None,
-        project_name     = PROJECT_NAME,
-        confname         = "FWPostProc",
+        log_file_path           = None,
+        project_name            = PROJECT_NAME,
+        confname                = "FWPostProc",
         image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
-        cellsize = 100,
-        log_file_conf    = xargmem(LogFileConf,
+        cellsize                = 100,
+        log_file_conf           = xargmem(LogFileConf,
                                    "project_name confname".split()),
-        log_file_dir = lambda s: s.log_file_conf.log_file_dir,
-        image_file_fmt = lambda s: s.image_file_fmt_template.format(self=s),
-        log_file_reader = xargs(LogFileReader,
-                                ["log_file_path"], enc = NPJSONEncDec()),
-        process_data_tag = xargs(
-            functools.partial,
-            "log_file_dir image_file_fmt".split(),
-            fw_post_process_data_tag),
-        filter_criteria = dict( tag = "FloydWarshallLogger:action_value"),
-        data_iter = xargs(
-            functools.partial,
-            "log_file_reader filter_criteria".split(),
-            fw_post_process_data_iter),
+        log_file_dir            = prop(lambda s: s.log_file_conf.log_file_dir),
+        image_file_fmt          = prop(lambda s: s.image_file_fmt_template.format(self=s)),
+        log_file_reader         = xargs(LogFileReader, ["log_file_path"], enc = NPJSONEncDec()),
+        process_data_tag        = xargs(functools.partial,
+                                 "cellsize image_file_fmt".split(),
+                                 fw_post_process_data_tag),
+        filter_criteria         = dict( tag = "FloydWarshallLogger:action_value"),
+        data_iter               = xargs(functools.partial,
+                          "log_file_reader filter_criteria".split(),
+                          fw_post_process_data_iter),
         ):
     return fw_post_process(process_data_tag = process_data_tag, data_iter = data_iter)
 
 @extended_kwprop
 def ql_post_process_run(
-        log_file_path = None,
-        project_name     = PROJECT_NAME,
-        confname         = "QLPostProc",
+        log_file_path           = None,
+        project_name            = PROJECT_NAME,
+        confname                = "QLPostProc",
         image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
-        cellsize = 100,
-        log_file_conf    = xargmem(LogFileConf,
+        cellsize                = 100,
+        log_file_conf           = xargmem(LogFileConf,
                                    "project_name confname".split()),
-        log_file_dir = prop(lambda s: s.log_file_conf.log_file_dir),
-        image_file_fmt = prop(lambda s: s.image_file_fmt_template.format(self=s)),
-        log_file_reader = xargs(LogFileReader,
-                                ["log_file_path"], enc = NPJSONEncDec()),
-        process_data_tag = xargs(
+        log_file_dir            = prop(lambda s: s.log_file_conf.log_file_dir),
+        image_file_fmt          = prop(lambda s: s.image_file_fmt_template.format(self=s)),
+        log_file_reader         = xargs(LogFileReader, ["log_file_path"], enc = NPJSONEncDec()),
+        process_data_tag        = xargs(
             functools.partial,
             "cellsize image_file_fmt".split(),
             ql_post_process_data_tag),
-        filter_criteria = dict( tag = "QLearningLogger:action_value"),
-        data_iter = xargs(
+        filter_criteria         = dict( tag = "QLearningLogger:action_value"),
+        data_iter               = xargs(
             functools.partial,
             "log_file_reader filter_criteria".split(),
             ql_post_process_data_iter),
@@ -159,28 +155,29 @@ def ql_post_process_run(
 
 @extended_kwprop
 def AgentVisSessionConf(
-        windy_grid_world = xargs(
+        log_file_path           = None,
+        windy_grid_world        = xargs(
             WindyGridWorld.from_maze_file_path,
             "rng maze_file_path".split()),
-        cellsize         = 100,
-        process_data_tag = xargs(
+        cellsize                = 100,
+        process_data_tag        = xargs(
             functools.partial,
             "windy_grid_world cellsize image_file_fmt".split(),
             DrawAgentGridWorldFromLogs()),
-        log_file_conf    = MEMOIZE_METHOD(LogFileConf),
-        rng              = LambdaMethodMemoizer("rng")(
-            lambda s: np.random.RandomState(seed=0)),
-        data_iter        = xargs(
+        log_file_conf           = xargmem(LogFileConf,
+                                   "project_name confname".split()),
+        rng                     = xargmem(random_state),
+        data_iter               = xargs(
             functools.partial,
             "log_file_reader filter_criteria".split(),
             ql_post_process_data_iter),
-        filter_criteria    = dict(tag = 
+        filter_criteria         = dict(tag = 
             ['LoggingObserver:new_episode', 'LoggingObserver:new_step']),
-        maze_file_path      = prop(lambda s: s.maze_file_path_template.format(self = s)),
-        file_work_dir       = prop(lambda s: Path(__file__).parent),
+        maze_file_path          = prop(lambda s: s.maze_file_path_template.format(self = s)),
+        file_work_dir           = prop(lambda s: Path(__file__).parent),
         maze_file_path_template = "{self.file_work_dir}/maze_5x5_no_wind.txt",
-        project_name     = PROJECT_NAME,
-        confname         = "AgentVis",
+        project_name            = PROJECT_NAME,
+        confname                = "AgentVis",
 ):
     return ql_post_process(process_data_tag, data_iter)
 
@@ -188,7 +185,7 @@ def AgentVisSessionConf(
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("--config", type=lambda s: globals()[s],
-                        default=MultiPlaySessionConf())
+                        default=ql_grid_world_play)
     a, remargs = parser.parse_known_args()
     a.config()
     #import sys
