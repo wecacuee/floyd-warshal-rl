@@ -3,14 +3,19 @@ import numpy as np
 import os
 import cog.draw as draw
 import logging
-from .qlearning import QLearningVis, post_process_data_iter, post_process_generic
+from .qlearning import (QLearningDiscrete, QLearningVis,
+                        post_process_data_iter, post_process_generic)
+from cog.confutils import extended_kwprop, KWProp as prop, xargs
 
 def logger():
     return logging.getLogger(__name__)
 
 class FloydWarshallAlgDiscrete(object):
+    @extended_kwprop
     def __init__(self,
-                 qlearning,):
+                 qlearning = xargs(
+                     QLearningDiscrete,
+                     "action_space observation_space rng".split())):
         self.qlearning            = qlearning
         self.per_edge_cost        = self.qlearning.init_value * (1-self.qlearning.discount)
         # Need some big number but too big that arithmetic does not work
@@ -202,7 +207,7 @@ class FloydWarshallVisualizer(QLearningVis):
 
 
 class FloydWarshallLogger(NoOPObserver):
-    def __init__(self, logger, log_interval):
+    def __init__(self, logger, log_interval = 1):
         self.logger           = logger
         self.log_interval     = log_interval
         self.human_tag        = "INFO"

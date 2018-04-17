@@ -1,7 +1,7 @@
 import json
-from game.play import NoOPObserver
 import numpy as np
 from functools import reduce
+from cog.confutils import extended_kwprop, KWProp as prop, xargs
 
 def mean(l):
     return sum(l) / len(l)
@@ -18,21 +18,8 @@ def compute_latency(times_to_goal_hit_all_episodes):
     return (mean(latencies_all_episode),
             min(latencies_all_episode), max(latencies_all_episode))
 
-class ComputeMetricsFromLogReplay(NoOPObserver):
-    def __init__(self, loggingobserver, metrics_observers, logfilereader):
-        self.loggingobserver = loggingobserver
-        self.metrics_observers = metrics_observers
-        self.logfilereader = logfilereader
-        super().__init__()
 
-    def __getattr__(self, attr):
-        return lambda *args, **kwargs : 0
-
-    def on_play_end(self):
-        self.loggingobserver.replay_observers_from_logs(
-            self.metrics_observers, self.logfilereader)
-
-class LatencyObserver(NoOPObserver):
+class LatencyObserver:
     def __init__(self, prob):
         self.prob = prob
         self.times_to_goal_hit_all_episodes = []
@@ -63,7 +50,8 @@ class LatencyObserver(NoOPObserver):
             self.times_to_goal_hit_all_episodes)
         print(f"latency : {mean_latency}; min latency {min_l}; max latency {max_l}")
 
-class DistineffObs(NoOPObserver):
+
+class DistineffObs:
     def __init__(self, prob):
         self.prob                      = prob
         self.distineff_all_episodes    = []
@@ -122,3 +110,27 @@ class DistineffObs(NoOPObserver):
         print(f"""mean distineff = {mean_distineff} +-
                   ({mean_distineff - min_distineff},
                    {max_distineff - mean_distineff})""")
+
+class ComputeMetricsFromLogReplay:
+    @extended_kwprop
+    def __init__(self,
+                 logging_observer = None,
+                 log_file_reader = None,
+                 metrics_observers = prop(lambda s : [s.latency_observer,
+                                                      s.distineff_observer]),
+                 
+                 latency_observer = xargs(LatencyObserver, ["prob"]),
+                 distineff_observer = xargs(DistineffObs, ["prob"]),
+                 ):
+        self.logging_observer = logging_observer
+        self.metrics_observers = metrics_observers
+        self.log_file_reader = log_file_reader
+        super().__init__()
+
+    def __getattr__(self, attr):
+        return lambda *args, **kwargs : 0
+
+    def on_play_end(self):
+        self.logging_observer.replay_observers_from_logs(
+            self.metrics_observers, self.log_file_reader)
+

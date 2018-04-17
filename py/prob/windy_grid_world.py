@@ -7,7 +7,7 @@ import os
 
 from cog import draw
 from cog.memoize import MEMOIZE_METHOD
-from cog.confutils import (WFuncFB, KWProp as KWP, KWFuncExp)
+from cog.confutils import (extended_kwprop, KWProp as prop, xargs)
 
 from game.play import Space, Problem
 import logging
@@ -129,6 +129,7 @@ class WindyGridWorld(object):
         self.WIND_NEWS_VECTORS = WIND_NEWS_VECTORS
 
     @classmethod
+    @extended_kwprop
     def from_maze_string(cls,
                          seed = 0,
                          maze_string = "\n".join([
@@ -137,24 +138,23 @@ class WindyGridWorld(object):
                              " ^^^ ",
                              " ^^^ ",
                              "  +  "]),
-                         maze = KWP(lambda s: maze_from_string(s.maze_string)),
-                         rng  = KWP(lambda s: np.random.RandomState(s.seed)),
+                         maze = prop(lambda s: maze_from_string(s.maze_string)),
+                         rng  = prop(lambda s: np.random.RandomState(s.seed)),
                          **kwargs
     ):
 
-        return WFuncFB(cls, **dict(locals(), **kwargs))
+        return cls(rng = rng, maze = maze, **kwargs)
                          
     @classmethod
+    @extended_kwprop
     def from_maze_file_path(cls,
                             maze_file_path = None,
                             seed = 0,
-                            maze = KWP(lambda s: maze_from_filepath(s.maze_file_path)),
-                            rng  = KWP(lambda s: np.random.RandomState(s.seed)),
+                            maze = prop(lambda s: maze_from_filepath(s.maze_file_path)),
+                            rng  = prop(lambda s: np.random.RandomState(s.seed)),
                             **kwargs
     ):
-        if not maze_file_path:
-            raise ValueError("need maze_file_path")
-        return WFuncFB(cls, **dict(locals(), **kwargs))()
+        return cls(rng = rng, maze = maze, **kwargs)
 
     def wind_dir(self, xy):
         row, col = xy[::-1]
@@ -298,23 +298,24 @@ class AgentInGridWorld(Problem):
 
 
     @classmethod
+    @extended_kwprop
     def from_maze_file_path(cls,
                             maze_file_path = None,
                             seed = 0,
-                            rng = KWP(lambda s: np.random.RandomState(s.seed)),
-                            action_space = KWFuncExp(Act2DSpace, ["rng"]),
-                            observation_space = KWFuncExp(
+                            rng = prop(lambda s: np.random.RandomState(s.seed)),
+                            action_space = xargs(Act2DSpace, ["rng"]),
+                            observation_space = xargs(
                                 Loc2DSpace
                                 ,"rng lower_bound upper_bound".split()),
                             lower_bound = np.array([0, 0]),
-                            upper_bound = KWP(lambda s : s.grid_world.shape),
-                            grid_world = KWFuncExp(
+                            upper_bound = prop(lambda s : s.grid_world.shape),
+                            grid_world = xargs(
                                 WindyGridWorld.from_maze_file_path,
                                 "rng maze_file_path".split()),
                             **kwargs):
-        if not maze_file_path:
-            raise ValueError("need maze_file_path")
-        return WFuncFB(cls, **dict(locals(), **kwargs))()
+        return cls(grid_world = grid_world,
+                   action_space = action_space,
+                   observation_space = observation_space, **kwargs)
 
     @property
     def grid_shape(self):
@@ -411,13 +412,6 @@ class AgentInGridWorld(Problem):
 class DrawAgentGridWorldFromLogs:
     def __init__(self):
         self.new_episode_data = None
-
-    def partial(self, windy_grid_world=None,
-                 cellsize=None, image_file_fmt=None):
-        return functools.partial(self.__call__,
-                                 windy_grid_world = windy_grid_world,
-                                 cellsize = cellsize,
-                                 image_file_fmt = image_file_fmt)
 
     def __call__(self, data = None, tag = None, windy_grid_world=None,
                  cellsize=None, image_file_fmt=None):

@@ -126,7 +126,7 @@ class QLearningDiscrete(Alg):
         return False
 
 class QLearningLogger(NoOPObserver):
-    def __init__(self, logger, log_interval,
+    def __init__(self, logger, log_interval = 1,
                  human_tag        = "INFO",
                  action_value_tag_template = "{self.__class__.__name__}:action_value",
                  sep              = "\t",
@@ -180,7 +180,9 @@ class QLearningLogger(NoOPObserver):
 
 
 class QLearningVis(NoOPObserver):
-    def __init__(self, update_interval, cellsize, log_file_dir):
+    def __init__(self, log_file_dir,
+                 update_interval = 1,
+                 cellsize = 80):
         self.update_interval = update_interval
         self.cellsize = cellsize
         self.log_file_dir = log_file_dir
@@ -319,7 +321,7 @@ class QLearningVis(NoOPObserver):
         self.goal_pose = goal_pose
         return ax
 
-    def on_new_step(self, obs, act, rew):
+    def on_new_step(self, obs, rew, action):
         if not np.any(self.goal_pose == self.prob.goal_pose):
             self.on_new_goal_pose(self.prob.goal_pose)
             
@@ -343,7 +345,7 @@ class QLearningVis(NoOPObserver):
 
 
 def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
-    vis = QLearningVis(1, cellsize, None)
+    vis = QLearningVis(update_interval = 1, cellsize = cellsize, log_file_dir = None)
     ax = draw.white_img(
         (grid_shape[1] * vis.cellsize, grid_shape[0] * 2 * vis.cellsize),
         dpi = cellsize)

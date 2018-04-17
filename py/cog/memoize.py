@@ -37,7 +37,7 @@ class Memoizer(object):
         
 
 def defaultkeyfunc(method, args, kwargs, 
-                    funckey    = lambda f     : f.__name__,
+                    funckey    = lambda f     : id(f),
                     argskey    = lambda args  : args,
                     kwargskey  = lambda kwargs: tuple(sorted(kwargs.items()))):
     return funckey(method), argskey(args), kwargskey(kwargs)
