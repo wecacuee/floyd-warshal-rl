@@ -300,18 +300,16 @@ class AgentInGridWorld(Problem):
     @classmethod
     @extended_kwprop
     def from_maze_file_path(cls,
-                            maze_file_path = None,
-                            seed = 0,
-                            rng = prop(lambda s: np.random.RandomState(s.seed)),
-                            action_space = xargs(Act2DSpace, ["rng"]),
-                            observation_space = xargs(
-                                Loc2DSpace
-                                ,"rng lower_bound upper_bound".split()),
-                            lower_bound = np.array([0, 0]),
-                            upper_bound = prop(lambda s : s.grid_world.shape),
-                            grid_world = xargs(
-                                WindyGridWorld.from_maze_file_path,
-                                "rng maze_file_path".split()),
+                            maze_file_path    = None,
+                            seed              = 0,
+                            rng               = prop(lambda s: np.random.RandomState(s.seed)),
+                            action_space      = xargs(Act2DSpace, ["rng"]),
+                            observation_space = xargs(Loc2DSpace,
+                                                      "rng lower_bound upper_bound".split()),
+                            lower_bound       = np.array([0, 0]),
+                            upper_bound       = prop(lambda s : s.grid_world.shape),
+                            grid_world        = xargs(WindyGridWorld.from_maze_file_path,
+                                               "rng maze_file_path".split()),
                             **kwargs):
         return cls(grid_world = grid_world,
                    action_space = action_space,

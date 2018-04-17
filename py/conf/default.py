@@ -32,14 +32,6 @@ from prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
                                    DrawAgentGridWorldFromLogs)
 PROJECT_NAME = "floyd_warshall_rl"
 
-def random_state(seed = 0):
-    return np.random.RandomState(seed = 0)
-
-def agent_from_maze_file_path(rng, maze_file_path, **kwargs):
-    return AgentInGridWorld.from_maze_file_path(
-        rng = rng,
-        maze_file_path = maze_file_path, **kwargs)
-
 @extended_kwprop
 def grid_world_play(
         alg            = None,
@@ -48,11 +40,11 @@ def grid_world_play(
         seed           = 0,
         log_file_conf  = xargmem(LogFileConf,
                                "project_name confname".split()),
-        rng            = xargs(random_state, ["seed"]),
+        rng            = xargs(np.random.RandomState, ["seed"]),
         log_file_path  = prop(lambda s: s.log_file_conf.log_file),
         logger_factory = prop(lambda s: s.log_file_conf.logger_factory),
         logging_encdec = prop(lambda s: s.log_file_conf.logging_encdec),
-        prob           = xargmem(agent_from_maze_file_path,
+        prob           = xargmem(AgentInGridWorld.from_maze_file_path,
                                   "rng maze_file_path".split()),
         project_name   = PROJECT_NAME,
         maze_file_path = prop(lambda s:
@@ -160,7 +152,7 @@ def AgentVisSessionConf(
             DrawAgentGridWorldFromLogs()),
         log_file_conf           = xargmem(LogFileConf,
                                    "project_name confname".split()),
-        rng                     = xargmem(random_state),
+        rng                     = xargmem(np.random.RandomState),
         data_iter               = xargs(
             functools.partial,
             "log_file_reader filter_criteria".split(),
