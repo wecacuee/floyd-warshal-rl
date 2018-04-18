@@ -37,7 +37,7 @@ def py_version_dir():
     return "python{0.major}.{0.minor}".format(sys.version_info)
 
 def pip_provided(conf, packages):
-    with relpath(Path("setup") / "pipload.sh").open("w") as f:
+    with relpath(Path("envsetup") / "pipload.sh").open("w") as f:
         f.write("""export PYTHOHPATH={pypath}""".format(
             pypath=":".join(
                 [str(builddir(conf) / "lib" /
@@ -48,8 +48,8 @@ def builddir(conf):
     return relpath(conf.builddir, rootdir=project_mid_dir(conf))
 
 def module_provided(conf, packages):
-    with relpath(Path("setup") / "moduleload.sh").open("w") as f:
-        f.write("""module load miniconda3 numpy/py3.6 cuda opencv/3.4.0 matplotlib ipython""")
+    with relpath(Path("envsetup") / "moduleload.sh").open("w") as f:
+        f.write("""module load miniconda3 numpy/py3.6 cuda opencv/3.4.0 matplotlib ipython cudnn/8.0-v6.0 sw/pytorch/py3.6/0.2.0""")
 
 def touch(filepath):
     filepath.parent.mkdir(parents=True, exist_ok=True)

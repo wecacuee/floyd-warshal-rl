@@ -1,6 +1,5 @@
 from argparse import Action, ArgumentParser
 import shlex
-import numpy as np
 import hashlib
 import pickle
 import time
@@ -9,6 +8,8 @@ import json
 from string import Formatter
 from pathlib import Path
 import functools
+
+import torch as tch
 
 from cog.confutils import (extended_kwprop, KWProp as prop, xargs,
                            xargmem, FuncAttr, FuncProp)
@@ -32,6 +33,26 @@ from prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
                                    DrawAgentGridWorldFromLogs)
 PROJECT_NAME = "floyd_warshall_rl"
 
+class TorchRng:
+    @staticmethod
+    def rand(size = 1):
+        return tch.rand(size)
+    randn = staticmethod(tch.randn)
+
+    @staticmethod
+    def uniform(size = 1):
+        return tch.FloatTensor((size,)).uniform_()
+
+    def randint(self, low, high = None, size = 1):
+        if high is None:
+            low, high = 0, low
+        return tch.LongTensor((size,)).random_(low, high, generator = self.gen)
+
+def random_state(seed):
+    rng = TorchRng()
+    rng.gen = tch.random.manual_seed(seed)
+    return rng
+
 @extended_kwprop
 def grid_world_play(
         alg            = None,
@@ -40,7 +61,7 @@ def grid_world_play(
         seed           = 0,
         log_file_conf  = xargmem(LogFileConf,
                                "project_name confname".split()),
-        rng            = xargs(np.random.RandomState, ["seed"]),
+        rng            = xargs(random_state, ["seed"]),
         log_file_path  = prop(lambda s: s.log_file_conf.log_file),
         logger_factory = prop(lambda s: s.log_file_conf.logger_factory),
         logging_encdec = prop(lambda s: s.log_file_conf.logging_encdec),
@@ -152,7 +173,7 @@ def AgentVisSessionConf(
             DrawAgentGridWorldFromLogs()),
         log_file_conf           = xargmem(LogFileConf,
                                    "project_name confname".split()),
-        rng                     = xargmem(np.random.RandomState),
+        rng                     = xargmem(random_state, ["seed"]),
         data_iter               = xargs(
             functools.partial,
             "log_file_reader filter_criteria".split(),

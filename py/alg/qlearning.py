@@ -1,6 +1,6 @@
 from pathlib import Path
-import numpy as np
-#import torch as tch
+#import numpy as np
+import torch as tch
 import os
 from queue import PriorityQueue
 import logging
@@ -42,11 +42,11 @@ class QLearningDiscrete(Alg):
         self.episode_reset(0)
 
     def _default_action_value(self, state_size):
-        return self.init_value * np.ones((state_size, self.action_space.size))
+        return self.init_value * tch.ones((state_size, self.action_space.size))
 
     def _resize_action_value(self, new_size):
         new_action_value = self._default_action_value(new_size)
-        if self.action_value.size:
+        if self.action_value.shape[0]:
             new_action_value[:self.action_value.shape[0], :] = self.action_value
         return new_action_value
 
@@ -82,7 +82,7 @@ class QLearningDiscrete(Alg):
         #logger().debug(
         #    "state = {state}; action_values = {av}".format(
         #        av=self.action_value[state_idx, :], state=state))
-        return np.argmax(self.action_value[state_idx, :])
+        return tch.argmax(self.action_value[state_idx, :])
 
     def _hit_goal(self, rew):
         return rew >= 9
@@ -111,7 +111,7 @@ class QLearningDiscrete(Alg):
         d = self.discount
 
         # Update step from online observed reward
-        Q[stm1, act] = (1-qm) * (rew + d * np.max(Q[st, :])) + qm * Q[stm1, act]
+        Q[stm1, act] = (1-qm) * (rew + d * tch.max(Q[st, :])) + qm * Q[stm1, act]
 
     def close(self):
         pass
@@ -147,7 +147,7 @@ class QLearningLogger(NoOPObserver):
         self.logger.debug("", extra=dict(tag=tag, data=dct))
 
     def policy(self):
-        policy = np.zeros(len(self.alg.hash_state.keys()), dtype='i8')
+        policy = tch.zeros(len(self.alg.hash_state.keys()), dtype=tch.int8)
         for obs, k in self.alg.hash_state.items():
             policy[k] = self.alg.policy(obs)
         return policy
@@ -208,19 +208,19 @@ class QLearningVis(NoOPObserver):
         return self._invert_hash_state(hash_state)[state_idx]
 
     def _action_value_to_mat(self, action_value, hash_state, grid_shape):
-        mat = np.ones(grid_shape) * self.alg.init_value
+        mat = tch.ones(grid_shape) * self.alg.init_value
         if action_value.size:
             for state_pose, state_idx in hash_state.items():
-                mat[state_pose] = np.max(action_value[state_idx, :])
+                mat[state_pose] = tch.max(action_value[state_idx, :])
         return mat
 
     def _action_value_to_matrices(self, action_value, hash_state, grid_shape):
-        big_mat = np.zeros(np.array(grid_shape) * 2)
+        big_mat = tch.zeros(tch.array(grid_shape) * 2)
         # if self.action_space.size != 4:
         #     raise NotImplementedError("Do not know how to visualize")
 
         for act in range(4):
-            mat = np.zeros(grid_shape) * 0
+            mat = tch.zeros(grid_shape) * 0
             for state_pose, state_idx in hash_state.items():
                 mat[state_pose] = action_value(state_idx, act) or mat[state_pose]
             big_r = act // 2
@@ -233,13 +233,13 @@ class QLearningVis(NoOPObserver):
         cellsize = ax.get_xlim()[1] / grid_shape[1]
         action_value_mat = self._action_value_to_matrices(
             action_value, hash_state, grid_shape)
-        action_value_mat += np.min(action_value_mat[:])
+        action_value_mat += tch.min(action_value_mat[:])
         draw.matshow(ax, self.normalize_by_std(action_value_mat))
         c50 = cellsize/2
         c25 = cellsize/4
         c75 = cellsize*3/4
-        for i, j in np.ndindex(action_value_mat.shape):
-            center = np.array((i*c50 + c25, j*c50 + c25))
+        for i, j in tch.ndindex(action_value_mat.shape):
+            center = tch.array((i*c50 + c25, j*c50 + c25))
             if i % 2 == 0 and j % 2 == 0:
                 draw.rectangle(ax, center - c25, center + c75, (0, 0, 0))
             draw.putText(ax, f"{action_value_mat[i, j]:.3}",
@@ -250,12 +250,12 @@ class QLearningVis(NoOPObserver):
 
     def visualize_policy(self, ax, policy_func, hash_state, grid_shape):
         cellsize = ax.get_xlim()[1] / grid_shape[0]
-        VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
+        VECTORS = tch.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
 
         for state in hash_state.keys():
             act = policy_func(state)
-            act_vec = np.array(VECTORS[act, :])
-            center = (np.array(state) + 0.5) * cellsize
+            act_vec = tch.array(VECTORS[act, :])
+            center = (tch.array(state) + 0.5) * cellsize
             draw.arrowedLine(ax,
                              center - act_vec * cellsize / 4,
                              center + act_vec * cellsize / 4,
@@ -265,7 +265,7 @@ class QLearningVis(NoOPObserver):
 
 
     def alg_policy(self, ax, action_value, hash_state):
-        # policy = np.zeros(len(self.alg.hash_state.keys()), dtype='i8')
+        # policy = tch.zeros(len(self.alg.hash_state.keys()), dtype='i8')
         # for obs, k in self.alg.hash_state.items():
         #     policy[k] = self.alg.policy(obs)
         # return policy
@@ -295,15 +295,15 @@ class QLearningVis(NoOPObserver):
         ax2.set_xlim([0, grid_shape[1]*cellsize])
         ax2.set_ylim([0, grid_shape[0]*cellsize])
         self.visualize_policy(ax2,
-                              lambda obs: (np.argmax(action_value[hash_state[obs], :])
+                              lambda obs: (tch.argmax(action_value[hash_state[obs], :])
                                          if action_value.size else 0),
                               hash_state, grid_shape)
 
     def normalize_by_std(self, mat):
-        if not np.any(mat):
+        if not tch.any(mat):
             return mat
-        median_mat = np.median(mat[:])
-        std_mat = np.std(mat[:])
+        median_mat = tch.median(mat[:])
+        std_mat = tch.std(mat[:])
         norm_mat = (mat - median_mat)
         if std_mat:
              norm_mat = norm_mat / (1.5*std_mat)
@@ -322,7 +322,7 @@ class QLearningVis(NoOPObserver):
         return ax
 
     def on_new_step(self, obs, rew, action):
-        if not np.any(self.goal_pose == self.prob.goal_pose):
+        if not tch.any(self.goal_pose == self.prob.goal_pose):
             self.on_new_goal_pose(self.prob.goal_pose)
             
         if self.update_steps % self.update_interval == 0:
