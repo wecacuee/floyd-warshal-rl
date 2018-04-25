@@ -433,7 +433,7 @@ class DrawAgentGridWorldFromLogs:
 
                 draw.imwrite(img_filepath, ax)
         else:
-            raise ValueError("Unknown tag {}".format(tag))
+            print("Skipping Unknown tag {}".format(tag))
             
 if __name__ == '__main__':
     agent = AgentInGridWorld(

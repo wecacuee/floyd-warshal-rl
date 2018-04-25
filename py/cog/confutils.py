@@ -45,9 +45,19 @@ def apply_conf(func, conf, args=()):
     args_from_conf = { k : getattr(conf, k) for k in args }
     return func(**args_from_conf)
 
-def func_kwonlydefaults(func):
-    return {k : p.default for k, p in inspect.signature(func).parameters.items()
+def func_kwonlydefaults_from_sig(func):
+    return {k : p.default
+            for k, p in inspect.signature(func).parameters.items()
             if p.default is not inspect._empty}
+
+def func_kwonlydefaults(func):
+    if isinstance(func, functools.partial):
+        kw = func_kwonlydefaults(func.func)
+        kw.update(func.keywords)
+    else:
+        kw = func_kwonlydefaults_from_sig(func)
+    return kw
+
 
 class KWProp:
     _kwprop = object()
@@ -159,6 +169,15 @@ def wrap_key_to_attr_error(func):
     except KeyError as e:
         raise AttributeError(e)
 
+def hassignature(v):
+    try:
+        return inspect.signature(v)
+    except ValueError as e:
+        return False
+
+def callablewithsignature(v):
+    return callable(v) and hassignature(v)
+
 class KWAsAttr:
     """
     Lets you access the default kwargs of function as it's attributes.
@@ -168,12 +187,11 @@ class KWAsAttr:
     1
     """
     def __init__(self, func):
-        self.func = func
         self._partial = dict()
         functools.update_wrapper(self, func)
 
     def _wrap_child(self, v):
-        return type(self)(func = v) if callable(v) else v
+        return type(self)(func = v) if callablewithsignature(v) else v
 
     def _wrap_kwdefaults(self, kwd):
         return { k : self._wrap_child(v) for k, v in kwd.items() }
@@ -181,16 +199,17 @@ class KWAsAttr:
     @property
     def partial(self):
         self._partial = (
-            self._partial or self._wrap_kwdefaults(func_kwonlydefaults(self.func)))
+            self._partial or self._wrap_kwdefaults(
+                func_kwonlydefaults(self.__wrapped__)))
         return self._partial
 
     def __call__(self, *args, **kw):
-        return self.func(*args, **dict(self.partial, **kw))
+        return self.__wrapped__(*args, **dict(self.partial, **kw))
 
 
     def __getattr__(self, k):
         try:
-            return getattr(self.func, k)
+            return getattr(self.__wrapped__, k)
         except AttributeError as e:
             return wrap_key_to_attr_error(lambda : self.partial[k])
 
@@ -205,10 +224,10 @@ class KWAsAttr:
     def __repr__(self):
         if self._partial:
             return " ".join("""
-            {self.__class__.__name__}( {self.func.__name__}, {self.partial} )
+            {self.__class__.__name__}( {self.__wrapped__}, {self.partial} )
             """.split()).format(self=self)
         else:
-            return self.__class__.__name__ + "(" + repr(self.func) + ")"
+            return self.__class__.__name__ + "(" + repr(self.__wrapped__) + ")"
 
 
 def extended_kwprop(func):
@@ -217,7 +236,7 @@ def extended_kwprop(func):
     >>> two = lambda one = 1: one + 1
     >>> two()
     2
-    >>> ptwo = partial(two, one = p(lambda s : s.zero + 1))
+    >>> ptwo = functools.partial(two, one = p(lambda s : s.zero + 1))
     >>> two2 = extended_kwprop(ptwo)
     >>> two2(zero = 10)
     12
@@ -233,8 +252,11 @@ def extended_kwprop(func):
 
     return wrapper
 
+def kwasattr_to_propdict(kwasattr):
+    return PropDict(kwasattr.partial)
+
 def xargs_(func, expect_args=(), *args, **kwargs):
-    pfunc = partial(func, *args, **kwargs)
+    pfunc = functools.partial(func, *args, **kwargs)
     @functools.wraps(pfunc)
     def wrapper(conf):
         return apply_conf(pfunc, conf, expect_args)
@@ -247,6 +269,9 @@ def xargs(func, expect_args=(), *args, **kwargs):
 def xargmem(func, expect_args=(), *args, **kwargs):
     return KWProp(method_memoizer(xargs_(func, expect_args, *args, **kwargs)))
 
+def xargspartial(func, expect_args=(), *args, **kwargs):
+    return KWProp(xargs_(functools.partial(functools.partial, func),
+                         expect_args, *args, **kwargs))
     
 def kwasattr_to_key_default(kwasattr):
     key_default = []

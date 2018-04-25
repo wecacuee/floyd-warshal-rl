@@ -13,7 +13,8 @@ import functools
 import numpy as np
 
 from cog.confutils import (extended_kwprop, KWProp as prop, xargs,
-                           xargmem, parse_args_update_kwasattr, KWAsAttr)
+                           xargmem, xargspartial,
+                           parse_args_update_kwasattr, KWAsAttr)
 
 from cog.memoize import LambdaMethodMemoizer, MEMOIZE_METHOD
 
@@ -82,47 +83,47 @@ def grid_world_play(
     return play(alg, prob, observer, nepisodes, logger_factory)
 
 
-def ql_grid_world_play(
-        confname       = "ql_grid_world_play",
-        alg            = xargs(
-            QLearningDiscrete,
-            "action_space observation_space rng".split()),
-        action_space   = prop(lambda s : s.prob.action_space),
-        observation_space   = prop(lambda s : s.prob.observation_space),
-        def_observer   = xargs(MultiObserver,
-                               "prob logger_factory log_file_path logging_encdec".split()),
-        observer       = prop(lambda s:
-                              s.def_observer.add_observer(
-                                  visualizer_observer = s.qlearning_vis)),
-        logger         = prop(lambda s: s.logger_factory("QLearningLogger")),
-        qlearning_vis  = xargs(QLearningLogger, ["logger"]),
-):
-    return grid_world_play(**locals())
+ql_grid_world_play = functools.partial(
+    grid_world_play,
+    confname       = "ql_grid_world_play",
+    alg            = xargs(
+        QLearningDiscrete,
+        "action_space observation_space rng".split()),
+    action_space   = prop(lambda s : s.prob.action_space),
+    observation_space   = prop(lambda s : s.prob.observation_space),
+    def_observer   = xargs(MultiObserver,
+                           "prob logger_factory log_file_path logging_encdec".split()),
+    observer       = prop(lambda s:
+                          s.def_observer.add_observer(
+                              visualizer_observer = s.qlearning_vis)),
+    logger         = prop(lambda s: s.logger_factory("QLearningLogger")),
+    qlearning_vis  = xargs(QLearningLogger, ["logger"]),
+)
 
 
-def fw_grid_world_play(
-        confname = "fw_grid_world_play",
-        alg = xargs(FloydWarshallAlgDiscrete,
-                    "action_space observation_space rng".split()),
-        action_space   = prop(lambda s : s.prob.action_space),
-        observation_space   = prop(lambda s : s.prob.observation_space),
-        def_observer = xargs(
-            MultiObserver,
-            "prob logger_factory log_file_path logging_encdec".split()),
-        observer = prop(lambda s:
-                        s.def_observer.add_observer(
-                            visualizer_observer = s.fw_vis)),
-        logger         = prop(lambda s: s.logger_factory("FloydWarshallLogger")),
-        fw_vis = xargs(FloydWarshallLogger, ["logger"])):
-    return grid_world_play(**locals())
-
+fw_grid_world_play = functools.partial(
+    grid_world_play,
+    confname = "fw_grid_world_play",
+    alg = xargs(FloydWarshallAlgDiscrete,
+                "action_space observation_space rng".split()),
+    action_space   = prop(lambda s : s.prob.action_space),
+    observation_space   = prop(lambda s : s.prob.observation_space),
+    def_observer = xargs(
+        MultiObserver,
+        "prob logger_factory log_file_path logging_encdec".split()),
+    observer = prop(lambda s:
+                    s.def_observer.add_observer(
+                        visualizer_observer = s.fw_vis)),
+    logger         = prop(lambda s: s.logger_factory("FloydWarshallLogger")),
+    fw_vis = xargs(FloydWarshallLogger, ["logger"])
+)
 
 def multiplay(**plays):
     return { k : v() for k, v in plays.items() } 
 
 @extended_kwprop
 def fw_post_process_run(
-        log_file_path           = None,
+        log_file_path,
         project_name            = PROJECT_NAME,
         confname                = "FWPostProc",
         image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
@@ -144,7 +145,7 @@ def fw_post_process_run(
 
 @extended_kwprop
 def ql_post_process_run(
-        log_file_path           = None,
+        log_file_path,
         project_name            = PROJECT_NAME,
         confname                = "QLPostProc",
         image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
@@ -164,26 +165,30 @@ def ql_post_process_run(
             "log_file_reader filter_criteria".split(),
             ql_post_process_data_iter),
         ):
-    return ql_post_process(process_data_tag = process_data_tag, data_iter = data_iter)
+    return ql_post_process(data_iter = data_iter, process_data_tag = process_data_tag)
 
 @extended_kwprop
 def AgentVisSessionConf(
-        log_file_path           = None,
+        log_file_path,
         windy_grid_world        = xargs(
             WindyGridWorld.from_maze_file_path,
             "rng maze_file_path".split()),
         cellsize                = 100,
-        process_data_tag        = xargs(
-            functools.partial,
-            "windy_grid_world cellsize image_file_fmt".split(),
-            DrawAgentGridWorldFromLogs()),
+        process_data_tag        = xargspartial(
+            DrawAgentGridWorldFromLogs(),
+            "windy_grid_world cellsize image_file_fmt".split()),
+        image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
+        image_file_fmt          = prop(lambda s: s.image_file_fmt_template.format(self=s)),
+        log_file_dir_template   = prop(lambda s : str(Path(s.log_file_path).parent)),
+        log_file_dir            = prop(lambda s: s.log_file_conf.log_file_dir),
         log_file_conf           = xargmem(LogFileConf,
-                                   "project_name confname".split()),
+                                   "project_name confname log_file_dir_template".split()),
+        log_file_reader         = xargs(LogFileReader, ["log_file_path"], enc = NPJSONEncDec()),
         rng                     = xargmem(random_state, ["seed"]),
-        data_iter               = xargs(
-            functools.partial,
-            "log_file_reader filter_criteria".split(),
-            ql_post_process_data_iter),
+        seed                    = 0,
+        data_iter               = xargspartial(
+            ql_post_process_data_iter,
+            "log_file_reader filter_criteria".split()),
         filter_criteria         = dict(tag = 
             ['LoggingObserver:new_episode', 'LoggingObserver:new_step']),
         maze_file_path          = prop(lambda s: s.maze_file_path_template.format(self = s)),
@@ -192,7 +197,7 @@ def AgentVisSessionConf(
         project_name            = PROJECT_NAME,
         confname                = "AgentVis",
 ):
-    return ql_post_process(process_data_tag, data_iter)
+    return ql_post_process(data_iter, process_data_tag)
 
 def listget(l, i, default):
     return l[i] if i < len(l) else default
