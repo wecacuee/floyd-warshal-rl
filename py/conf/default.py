@@ -9,10 +9,11 @@ from string import Formatter
 from pathlib import Path
 import functools
 
-import torch as tch
+#import torch as tch
+import numpy as np
 
 from cog.confutils import (extended_kwprop, KWProp as prop, xargs,
-                           xargmem, FuncAttr, FuncProp)
+                           xargmem, parse_args_update_kwasattr, KWAsAttr)
 
 from cog.memoize import LambdaMethodMemoizer, MEMOIZE_METHOD
 
@@ -37,7 +38,10 @@ class TorchRng:
     @staticmethod
     def rand(size = 1):
         return tch.rand(size)
-    randn = staticmethod(tch.randn)
+
+    @staticmethod
+    def randn():
+        return tch.randn()
 
     @staticmethod
     def uniform(size = 1):
@@ -48,10 +52,12 @@ class TorchRng:
             low, high = 0, low
         return tch.LongTensor((size,)).random_(low, high, generator = self.gen)
 
-def random_state(seed):
+def random_state_torch(seed):
     rng = TorchRng()
     rng.gen = tch.random.manual_seed(seed)
     return rng
+
+random_state = np.random.RandomState
 
 @extended_kwprop
 def grid_world_play(
@@ -188,14 +194,14 @@ def AgentVisSessionConf(
 ):
     return ql_post_process(process_data_tag, data_iter)
 
+def listget(l, i, default):
+    return l[i] if i < len(l) else default
 
 if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument("--config", type=lambda s: globals()[s],
-                        default=ql_grid_world_play)
-    a, remargs = parser.parse_known_args()
-    a.config()
-    #import sys
-    #c = FloydWarshallPostProcessConf(confname="FloydWarshall")
-    #conf = ConfFromDotArgs(c).from_args(sys.argv[1:])
-    #conf()
+    import sys
+    main_func = globals()[listget(sys.argv, 1, 'ql_grid_world_play')]
+    kwasattr = parse_args_update_kwasattr(KWAsAttr(main_func),
+                                          argv = sys.argv[2:])
+    print(kwasattr)
+    kwasattr()
+

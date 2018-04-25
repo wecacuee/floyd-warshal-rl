@@ -34,6 +34,13 @@ def func_need_args(func):
     return { k : empty_to_none(p.default) for k, p in params.items()
              if p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD }
 
+def nondefault_argnames(func):
+    params = inspect.signature(func).parameters
+    return [k for k, p in params.items() if
+            (p.default is inspect.Parameter.empty
+             and p.kind in (inspect.Parameter.POSITIONAL_ONLY,
+                            inspect.Parameter.POSITIONAL_OR_KEYWORD))]
+
 def apply_conf(func, conf, args=()):
     args_from_conf = { k : getattr(conf, k) for k in args }
     return func(**args_from_conf)
@@ -43,6 +50,7 @@ def func_kwonlydefaults(func):
             if p.default is not inspect._empty}
 
 class KWProp:
+    _kwprop = object()
     def __init__(self, func):
         if not callable(func):
             raise ValueError("fget should be callable")
@@ -57,6 +65,9 @@ class KWProp:
 
     def __repr__(self):
         return "{self.__class__.__name__}({self.fget})".format(self=self)
+    @classmethod
+    def isinstance(cls, obj):
+        return hasattr(obj, '_kwprop') and obj._kwprop is cls._kwprop
 
 #KWProp = property
 
@@ -70,7 +81,7 @@ def prop_noexec_handler(s, p):
     return p.fget if isinstance(p.fget, type(s)) else type(s)(p.fget)
 
 def process_kwprop(self, val, prop_handler=prop_exec_handler):
-    if isinstance(val, KWProp):
+    if KWProp.isinstance(val):
         return prop_handler(self, val)
     else:
         return val
@@ -89,18 +100,18 @@ def confmode(wrapfunc):
     change_post_proc(wrapfunc, process_kwprop)
 
 
-class FuncProp:
+class PropDict:
     """
     Makes the function evaluation opaque. The function definition
     decides how to return the value rather then user.
 
-    >>> f = FuncProp(n = 1, np1 = KWProp(lambda s : s.n + 1))
+    >>> f = PropDict(dict(n = 1, np1 = KWProp(lambda s : s.n + 1)))
     >>> f.np1
     2
     """
     post_process = process_kwprop
-    def __init__(self, **kw):
-        self.attrs = kw
+    def __init__(self, attrs):
+        self.attrs = attrs
 
     def get(self, attr):
         return self.post_process(self.attrs[attr])
@@ -131,23 +142,29 @@ def wrap_funcs(func, wrapper):
     return (wrapper(func)
             if callable(func)
             else wrapper(func.fget)
-            if isinstance(func, KWProp)
+            if KWProp.isinstance(func)
             else func)
 
 def undo_wrap_funcs(func, wrapper):
     return  (KWProp(wrapper)
-             if isinstance(func, KWProp)
+             if KWProp.isinstance(func)
              else wrapper)
 
 def identity(func):
     return func
 
-class FuncAttr:
+def wrap_key_to_attr_error(func):
+    try:
+        return func()
+    except KeyError as e:
+        raise AttributeError(e)
+
+class KWAsAttr:
     """
     Lets you access the default kwargs of function as it's attributes.
 
     >>> def two(one = 1): return one + 1
-    >>> FuncAttr(two).one
+    >>> KWAsAttr(two).one
     1
     """
     def __init__(self, func):
@@ -170,8 +187,12 @@ class FuncAttr:
     def __call__(self, *args, **kw):
         return self.func(*args, **dict(self.partial, **kw))
 
+
     def __getattr__(self, k):
-        return getattr(self.func, k, self.partial[k])
+        try:
+            return getattr(self.func, k)
+        except AttributeError as e:
+            return wrap_key_to_attr_error(lambda : self.partial[k])
 
     def __setattr__(self, k, v):
         if (k in """func _func_defaults_ _wr_kw _partial _post_process
@@ -179,11 +200,15 @@ class FuncAttr:
             k.startswith("__") and k.endswith("__")):
             object.__setattr__(self, k, v)
         else:
-            self._partial[k] = v
+            self.partial[k] = v
 
     def __repr__(self):
-        return """{self.__class__.__name__}({self.func.__name__},
-        **{self.partial})""".format(self=self)
+        if self._partial:
+            return " ".join("""
+            {self.__class__.__name__}( {self.func.__name__}, {self.partial} )
+            """.split()).format(self=self)
+        else:
+            return self.__class__.__name__ + "(" + repr(self.func) + ")"
 
 
 def extended_kwprop(func):
@@ -200,16 +225,19 @@ def extended_kwprop(func):
     attrs = func_kwonlydefaults(func)
     @functools.wraps(func)
     def wrapper(*args, **kw):
-        kwprops_m = FuncProp(**dict(attrs, **kw))
-        return apply_conf(partial(func, *args), kwprops_m, attrs.keys())
+        argnames = nondefault_argnames(func)
+        namedargs = dict(zip(argnames, args))
+        kw.update(namedargs)
+        kwprops_m = PropDict(dict(attrs, **kw))
+        return apply_conf(func, kwprops_m, chain(argnames, attrs.keys()))
 
     return wrapper
 
 def xargs_(func, expect_args=(), *args, **kwargs):
     pfunc = partial(func, *args, **kwargs)
     @functools.wraps(pfunc)
-    def wrapper(conf, *a, **kw):
-        return apply_conf(partial(pfunc, *a, **kw), conf, expect_args)
+    def wrapper(conf):
+        return apply_conf(pfunc, conf, expect_args)
 
     return wrapper
 
@@ -220,3 +248,80 @@ def xargmem(func, expect_args=(), *args, **kwargs):
     return KWProp(method_memoizer(xargs_(func, expect_args, *args, **kwargs)))
 
     
+def kwasattr_to_key_default(kwasattr):
+    key_default = []
+    for k, v in kwasattr.partial.items():
+        if isinstance(v, type(kwasattr)):
+            key_default.extend(
+                [ ([k] + k1, v1) for k1, v1 in kwasattr_to_key_default(v) ])
+        else:
+            key_default.append(([k], v))
+    return key_default
+
+def stringify_key_defaults(key_default, sep="."):
+    return [(sep.join(k), v) for k, v in key_default]
+
+def split_key_values(key_values, sep="."):
+    return [(k.split(sep), v) for k, v in key_values]
+
+def parse_bool(s):
+    return False if s == 'False' else bool(s)
+
+def type_parser(t, glbls={}):
+    if issubclass(t, bool):
+        return parse_bool
+    elif issubclass(t, (float, int, str)):
+        return t
+    elif issubclass(t, (dict, list)):
+        return json.loads
+    elif glbls: 
+        return lambda s : glbls[s]
+    else:
+        raise ValueError("Do not know how to parse from string for type " + str(t))
+
+@extended_kwprop
+def update_argparser(kwasattr,
+                     parser                   = KWProp(ArgumentParser),
+                     key_default              = xargs(
+                         kwasattr_to_key_default, ["kwasattr"]),
+                     stringified_key_defaults = xargs(
+                         stringify_key_defaults, ["key_default"])
+):
+    for k, deflt in stringified_key_defaults:
+        try:
+            parser.add_argument("--" + k, default=deflt,
+                                type=type_parser(type(deflt)))
+        except ValueError as e:
+            pass
+    return parser
+
+def rec_setattr(obj, keys, val):
+    for k in keys[:-1]:
+        obj = getattr(obj, k)
+    setattr(obj, keys[-1], val)
+        
+@extended_kwprop
+def update_kwasattr_from_argparse(kwasattr, 
+                                  args,
+                                  split_key_values = KWProp(
+                                      lambda s: split_key_values(
+                                          vars(s.args).items()))
+):
+    for k, v in split_key_values:
+        rec_setattr(kwasattr, k, v)
+    return kwasattr
+    
+
+@extended_kwprop
+def parse_args_update_kwasattr(kwasattr,
+                               argv = KWProp(
+                                   lambda _ : sys.argv[1:]),
+                               prep_parser = xargs(
+                                   update_argparser,
+                                   ["kwasattr"]),
+                               args = KWProp(lambda s: s.prep_parser.parse_args(s.argv)),
+                               updated_kwasattr = xargs(
+                                   update_kwasattr_from_argparse,
+                                   ["kwasattr", "args"])):
+    return updated_kwasattr
+                               
