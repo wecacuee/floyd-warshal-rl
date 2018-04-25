@@ -202,6 +202,5 @@ if __name__ == '__main__':
     main_func = globals()[listget(sys.argv, 1, 'ql_grid_world_play')]
     kwasattr = parse_args_update_kwasattr(KWAsAttr(main_func),
                                           argv = sys.argv[2:])
-    print(kwasattr)
     kwasattr()
 
