@@ -318,4 +318,3 @@ def parse_args_update_kwasattr(kwasattr,
                                    update_kwasattr_from_argparse,
                                    ["kwasattr", "args"])):
     return updated_kwasattr
-                               

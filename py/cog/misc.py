@@ -126,3 +126,15 @@ def pairwise(iterable):
     "s -> (s0,s1), (s2,s3), (s4, s5), ..."
     a, b = tee(iterable)
     return zip(islice(a, None, None, 2), islice(b, 1, None, 2))
+
+class compose:
+    def __init__(self, *fs):
+        if len(fs) < 2: raise ValueError("Need at least two functions to compose")
+        self.fs = fs
+        functools.update_wrapper(self, fs[-1])
+
+    def __call__(self, *a, **kw):
+        ret = self.fs[-1](*a, **kw)
+        for f in self.fs[:-1]:
+            ret = f(ret)
+        return ret
