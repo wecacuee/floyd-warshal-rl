@@ -12,17 +12,11 @@ There three main features
 
 
 """
-import importlib
-from argparse import Namespace, ArgumentParser, Action
+from argparse import ArgumentParser
 import inspect
 from itertools import chain
-from string import Formatter
-from collections import namedtuple, OrderedDict
-import copy
 import json
 import functools
-from functools import partial
-from contextlib import contextmanager
 
 from cog.memoize import method_memoizer
 
@@ -101,15 +95,6 @@ process_kwprop_noexec = functools.partial(
     process_kwprop,
     prop_handler=prop_noexec_handler)
 
-
-
-@contextmanager
-def confmode(wrapfunc):
-    change_post_proc(wrapfunc, process_kwprop_noexec)
-    yield wrapfunc
-    change_post_proc(wrapfunc, process_kwprop)
-
-
 class PropDict:
     """
     Makes the function evaluation opaque. The function definition
@@ -131,22 +116,6 @@ class PropDict:
             return self.get(attr)
         except KeyError as e:
             raise AttributeError(e)
-
-def update_signature(wrapper, wrapped, args, kwargs):
-    """
-    Updates the signature of wrapper with wrapped if 
-
-    >>> 
-    """
-    oldsig = inspect.signature(wrapped)
-    oldp = oldsig.parameters
-    params = OrderedDict( (k, p.replace(default = arg))
-                          for arg, (k, p) in zip(args, oldp.items()))
-    kwparam = OrderedDict( (k , oldp[k].replace(default = kwargs[k]))
-                            for k, v in kwargs.items() )
-    inspect.signature(wrapper).replace(
-        parameters = OrderedDict(chain(params.items(), kwparam.items())))
-    return wrapper
 
 def wrap_funcs(func, wrapper):
     return (wrapper(func)
