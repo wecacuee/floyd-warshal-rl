@@ -103,8 +103,9 @@ def LogFileConf(
         run_month             = prop(lambda self: self.run_full_time[:6]),
         run_time              = prop(lambda self: self.run_full_time[6:]),
         run_full_time         = prop(MEMOIZE_METHOD(run_full_time)),
-        set_logger_conf       = prop(lambda s: setLoggerConfig(s.confname, s.log_file, s.logging_encdec)),
-        logger_factory        = prop(MEMOIZE_METHOD(logger_factory)),
+        set_logger_conf       = prop(MEMOIZE_METHOD(
+            lambda s: setLoggerConfig(s.confname, s.log_file, s.logging_encdec))),
+        logger_factory        = prop(logger_factory),
         logging_encdec        = NPJSONEncDec(),
         exp_name_template     = "{self.run_month}_{self.gitrev}_{self.confname}",
         log_file_dir_template = "{self.data_dir}/{self.project_name}/{self.exp_name}",

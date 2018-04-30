@@ -1,11 +1,13 @@
 from game.play import Space, Alg, NoOPObserver
 import numpy as np
 import os
+import functools
 import cog.draw as draw
 import logging
 from .qlearning import (QLearningDiscrete, QLearningVis,
+                        post_process_from_log_conf as ql_post_process_from_log_conf,
                         post_process_data_iter, post_process_generic)
-from cog.confutils import extended_kwprop, KWProp as prop, xargs
+from cog.confutils import xargs, xargspartial, xargmem, KWProp as prop, extended_kwprop
 
 def logger():
     return logging.getLogger(__name__)
@@ -206,14 +208,62 @@ class FloydWarshallVisualizer(QLearningVis):
         pass
 
 
+def visualize_action_value(action_value, policy, path_cost, net_value,
+                           hash_state, grid_shape, goal_pose, cellsize):
+    vis = FloydWarshallVisualizer(update_interval = 1, cellsize = cellsize, log_file_dir = None)
+    ax = draw.white_img(
+        (grid_shape[1] * vis.cellsize, grid_shape[0] * 2 * vis.cellsize),
+        dpi = cellsize)
+    return vis.visualize_all(ax,
+                             action_value = lambda s, a: action_value[s, a],
+                             policy       = lambda obs: policy[hash_state[obs]],
+                             path_cost    = path_cost,
+                             net_value    = lambda s, a: net_value[s, a],
+                             hash_state   = hash_state,
+                             grid_shape   = grid_shape,
+                             goal_pose    = goal_pose,
+                             cellsize     = cellsize)
+
+def post_process_data_tag(data, tag, cellsize, image_file_fmt):
+    ax = visualize_action_value(
+        action_value = data["action_value"],
+        policy       = data["policy"],
+        path_cost    = data["path_cost"],
+        net_value    = data["net_value"],
+        hash_state   = data["hash_state"],
+        grid_shape   = data["grid_shape"],
+        goal_pose    = data["goal_pose"],
+        cellsize     = cellsize)
+    fname = image_file_fmt.format(
+        tag = "action_value",
+        episode=data["episode_n"], step=data["steps"])
+    img_dir = os.path.dirname(fname)
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
+    print("Writing img to: {}".format(fname))
+    draw.imwrite(fname, ax)
+
+post_process_from_log_conf = functools.partial(
+    ql_post_process_from_log_conf,
+    process_data_tag = xargspartial(
+        post_process_data_tag,
+        "cellsize image_file_fmt".split()),
+)
+
 class FloydWarshallLogger(NoOPObserver):
-    def __init__(self, logger, log_interval = 1):
+    @extended_kwprop
+    def __init__(self, logger, log_interval = 1,
+                 action_value_tag = "FloydWarshallLogger:action_value",
+                 post_process     = xargspartial(
+                     post_process_from_log_conf,
+                     "image_file_fmt log_file_reader action_value_tag".split()),
+    ):
         self.logger           = logger
         self.log_interval     = log_interval
         self.human_tag        = "INFO"
-        self.action_value_tag = "{self.__class__.__name__}:action_value".format(
-            self=self)
+        self.action_value_tag = action_value_tag
         self.episode_n        = None
+        self.post_process     = post_process
         super().__init__()
 
     def info(self, tag, dct):
@@ -257,45 +307,7 @@ class FloydWarshallLogger(NoOPObserver):
     def on_new_episode(self, episode_n):
         self.episode_n = episode_n
 
+    def on_play_end(self):
+        logging.shutdown()
+        self.post_process()
 
-def visualize_action_value(action_value, policy, path_cost, net_value,
-                           hash_state, grid_shape, goal_pose, cellsize):
-    vis = FloydWarshallVisualizer(update_interval = 1, cellsize = cellsize, log_file_dir = None)
-    ax = draw.white_img(
-        (grid_shape[1] * vis.cellsize, grid_shape[0] * 2 * vis.cellsize),
-        dpi = cellsize)
-    return vis.visualize_all(ax,
-                             action_value = lambda s, a: action_value[s, a],
-                             policy       = lambda obs: policy[hash_state[obs]],
-                             path_cost    = path_cost,
-                             net_value    = lambda s, a: net_value[s, a],
-                             hash_state   = hash_state,
-                             grid_shape   = grid_shape,
-                             goal_pose    = goal_pose,
-                             cellsize     = cellsize)
-
-def post_process_data_tag(data, tag, cellsize, image_file_fmt):
-    ax = visualize_action_value(
-        action_value = data["action_value"],
-        policy       = data["policy"],
-        path_cost    = data["path_cost"],
-        net_value    = data["net_value"],
-        hash_state   = data["hash_state"],
-        grid_shape   = data["grid_shape"],
-        goal_pose    = data["goal_pose"],
-        cellsize     = cellsize)
-    fname = image_file_fmt.format(
-        tag = "action_value",
-        episode=data["episode_n"], step=data["steps"])
-    img_dir = os.path.dirname(fname)
-    if not os.path.exists(img_dir):
-        os.makedirs(img_dir)
-    print("Writing img to: {}".format(fname))
-    draw.imwrite(fname, ax)
-
-def addn_filter_criteria():
-    return dict(tag="FloydWarshallLogger:action_value")
-
-def post_process(data_iter=post_process_data_iter,
-                 process_data_tag=post_process_data_tag):
-    return post_process_generic(data_iter, process_data_tag)

@@ -4,6 +4,7 @@ import json
 from contextlib import closing
 from functools import lru_cache
 import numpy as np
+import operator
 
 from cog.memoize import MEMOIZE_METHOD
 from cog.confutils import extended_kwprop, KWProp as prop, xargs
@@ -212,10 +213,9 @@ class MultiObserver(object):
                  metrics_observers = xargs(ComputeMetricsFromLogReplay,
                                            """logging_observer log_file_reader
                                            prob""".split()),
-                 observers         = prop(lambda s : dict(
-                     logging = s.logging_observer,
-                     metrics_observers = s.metrics_observers,
-                 ))
+                 observer_keys     = "logging_observer metrics_observers".split(),
+                 observers         = prop(lambda s : { k : getattr(s, k)
+                                          for k in s.observer_keys }),
     ):
         self.observers = observers
         for o in self.observers.values():
@@ -280,3 +280,38 @@ def play_episode(alg, prob, observer, episode_n):
         obs, rew = prob.step(action)
         # prob.render(None, 100, wait_time=0)
     observer.on_episode_end(episode_n)
+
+def condition_by_type_map():
+    return { str : operator.eq,
+             list : operator.contains }
+
+def comparison_op(criteria_val, data_val):
+    return condition_by_type_map()[type(criteria_val)](criteria_val, data_val)
+
+def data_cmp_criteria(data, criteria,
+                      cmp_op = comparison_op):
+    return all(cmp_op(v, data.get(k, None)) for k, v in criteria.items())
+
+def filter_by_tag_data(data_cmp_criteria = data_cmp_criteria,
+                       **criteria):
+    def func(data_tag):
+        data, tag = data_tag
+        if not isinstance(data, dict):
+            return False
+            
+        if "tag" in data:
+            raise NotImplementedError("Data should not have tag")
+        data["tag"] = tag
+        if data_cmp_criteria(data, criteria):
+            return True
+        else:
+            return False
+    return func
+
+def post_process_data_iter(log_file_reader = None, filter_criteria = dict()):
+    return filter(filter_by_tag_data(**filter_criteria) ,
+                  log_file_reader.read_data())
+
+def post_process_generic(data_iter, process_data_tag):
+    return [process_data_tag(data=data, tag=tag)
+            for data, tag in data_iter()] 

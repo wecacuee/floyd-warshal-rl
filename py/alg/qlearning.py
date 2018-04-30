@@ -5,10 +5,12 @@ import os
 from queue import PriorityQueue
 import logging
 import operator
+import functools
 
 from cog.misc import NumpyEncoder
+from cog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwprop
 import cog.draw as draw
-from game.play import Space, Alg, NoOPObserver
+from game.play import Space, Alg, NoOPObserver, post_process_data_iter
 
 def logger():
     return logging.getLogger(__name__)
@@ -124,60 +126,6 @@ class QLearningDiscrete(Alg):
 
     def done(self):
         return False
-
-class QLearningLogger(NoOPObserver):
-    def __init__(self, logger, log_interval = 1,
-                 human_tag        = "INFO",
-                 action_value_tag_template = "{self.__class__.__name__}:action_value",
-                 sep              = "\t",
-    ):
-        self.logger           = logger
-        self.log_interval     = log_interval
-        self.human_tag        = human_tag
-        self.action_value_tag_template = action_value_tag_template
-        self.sep = sep
-        self.episode_n        = None
-        super().__init__()
-
-    @property
-    def action_value_tag(self):
-        return self.action_value_tag_template.format(self=self)
-
-    def info(self, tag, dct):
-        self.logger.debug("", extra=dict(tag=tag, data=dct))
-
-    def policy(self):
-        policy = np.zeros(len(self.alg.hash_state.keys()), dtype=np.int8)
-        for obs, k in self.alg.hash_state.items():
-            policy[k] = self.alg.policy(obs)
-        return policy
-
-    def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps,
-                                    grid_shape, goal_pose):
-        if steps % self.log_interval == 0:
-            self.info(self.action_value_tag,
-                      dict(episode_n    = int(self.episode_n),
-                           steps        = int(steps),
-                           obs          = obs.tolist(),
-                           rew          = float(rew),
-                           act          = int(act),
-                           pose         = pose,
-                           grid_shape   = grid_shape,
-                           goal_pose    = goal_pose,
-                           action_value = self.alg.action_value,
-                           policy       = self.policy(),
-                           hash_state   = self.alg.hash_state))
-
-    def on_new_step(self, obs, rew, action):
-        self.on_new_step_with_pose_steps(
-            obs = obs, rew = rew,
-            act = action, pose = self.prob.pose, steps = self.prob.steps,
-            grid_shape = self.prob.grid_shape,
-            goal_pose = self.prob.grid_shape)
-
-    def on_new_episode(self, episode_n):
-        self.episode_n = episode_n
-
 
 class QLearningVis(NoOPObserver):
     def __init__(self, log_file_dir,
@@ -354,38 +302,6 @@ def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
                   cellsize = cellsize)
     return ax
 
-def condition_by_type_map():
-    return { str : operator.eq,
-             list : operator.contains }
-
-def comparison_op(criteria_val, data_val):
-    return condition_by_type_map()[type(criteria_val)](criteria_val, data_val)
-
-def data_cmp_criteria(data, criteria,
-                      cmp_op = comparison_op):
-    return all(cmp_op(v, data.get(k, None)) for k, v in criteria.items())
-
-def filter_by_tag_data(data_cmp_criteria = data_cmp_criteria,
-                       **criteria):
-    def func(data_tag):
-        data, tag = data_tag
-        if not isinstance(data, dict):
-            return False
-            
-        if "tag" in data:
-            raise NotImplementedError("Data should not have tag")
-        data["tag"] = tag
-        if data_cmp_criteria(data, criteria):
-            return True
-        else:
-            return False
-    return func
-
-def post_process_data_iter(log_file_reader = None, filter_criteria = dict()):
-    return filter(filter_by_tag_data(**filter_criteria) ,
-                  log_file_reader.read_data())
-
-
 def post_process_data_tag(data, tag, cellsize, image_file_fmt):
     ax = visualize_action_value(
         data["action_value"], data["hash_state"], data["grid_shape"], cellsize)
@@ -401,8 +317,84 @@ def post_process_generic(data_iter, process_data_tag=post_process_data_tag):
     return [process_data_tag(data=data, tag=tag)
             for data, tag in data_iter()] 
 
-def post_process(data_iter=post_process_data_iter,
-                 process_data_tag=post_process_data_tag):
+@extended_kwprop
+def post_process(
+        data_iter    = xargspartial(
+            post_process_data_iter,
+            "log_file_reader filter_criteria".split()),
+        process_data_tag = xargspartial(
+            post_process_data_tag,
+            "cellsize image_file_fmt".split())):
     return post_process_generic(data_iter, process_data_tag)
 
+post_process_from_log_conf = functools.partial(
+    post_process,
+    cellsize         = 80,
+    filter_criteria  = KWProp(
+        lambda s : dict( tag = s.action_value_tag)),
+    # Needs
+    # image_file_fmt,
+    # log_file_reader,
+    # action_value_tag,
+)
+
+class QLearningLogger(NoOPObserver):
+    @extended_kwprop
+    def __init__(self,
+                 logger,
+                 log_interval     = 1,
+                 human_tag        = "INFO",
+                 action_value_tag = "QLearningLogger:action_value",
+                 sep              = "\t",
+                 post_process     = xargspartial(
+                     post_process_from_log_conf,
+                     "image_file_fmt log_file_reader action_value_tag".split()),
+    ):
+        self.logger           = logger
+        self.log_interval     = log_interval
+        self.human_tag        = human_tag
+        self.action_value_tag = action_value_tag
+        self.sep = sep
+        self.episode_n        = None
+        self.post_process     = post_process
+        super().__init__()
+
+    def info(self, tag, dct):
+        self.logger.debug("", extra=dict(tag=tag, data=dct))
+
+    def policy(self):
+        policy = np.zeros(len(self.alg.hash_state.keys()), dtype=np.int8)
+        for obs, k in self.alg.hash_state.items():
+            policy[k] = self.alg.policy(obs)
+        return policy
+
+    def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps,
+                                    grid_shape, goal_pose):
+        if steps % self.log_interval == 0:
+            self.info(self.action_value_tag,
+                      dict(episode_n    = int(self.episode_n),
+                           steps        = int(steps),
+                           obs          = obs.tolist(),
+                           rew          = float(rew),
+                           act          = int(act),
+                           pose         = pose,
+                           grid_shape   = grid_shape,
+                           goal_pose    = goal_pose,
+                           action_value = self.alg.action_value,
+                           policy       = self.policy(),
+                           hash_state   = self.alg.hash_state))
+
+    def on_new_step(self, obs, rew, action):
+        self.on_new_step_with_pose_steps(
+            obs = obs, rew = rew,
+            act = action, pose = self.prob.pose, steps = self.prob.steps,
+            grid_shape = self.prob.grid_shape,
+            goal_pose = self.prob.grid_shape)
+
+    def on_new_episode(self, episode_n):
+        self.episode_n = episode_n
+
+    def on_play_end(self):
+        logging.shutdown()
+        self.post_process()
 

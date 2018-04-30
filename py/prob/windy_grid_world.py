@@ -7,9 +7,12 @@ import os
 
 from cog import draw
 from cog.memoize import MEMOIZE_METHOD
-from cog.confutils import (extended_kwprop, KWProp as prop, xargs)
+from cog.confutils import (extended_kwprop, KWProp as prop, xargs, xargspartial, xargmem)
 
-from game.play import Space, Problem
+from game.play import (Space, Problem, NoOPObserver,
+                       post_process_data_iter,
+                       post_process_generic, LogFileReader)
+from game.logging import NPJSONEncDec
 import logging
 
 def logger():
@@ -434,6 +437,39 @@ class DrawAgentGridWorldFromLogs:
                 draw.imwrite(img_filepath, ax)
         else:
             print("Skipping Unknown tag {}".format(tag))
+
+class AgentVisObserver(NoOPObserver):
+    @extended_kwprop
+    def __init__(self,
+                 windy_grid_world        = xargs(
+                     WindyGridWorld.from_maze_file_path,
+                     "rng maze_file_path".split()),
+                 cellsize                = 80,
+                 process_data_tag = xargspartial(
+                     DrawAgentGridWorldFromLogs(),
+                     "windy_grid_world cellsize image_file_fmt".split()),
+                 image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
+                 image_file_fmt          = prop(lambda s: s.image_file_fmt_template.format(self=s)),
+                 log_file_reader = xargs(LogFileReader,
+                                         ["log_file_path"], enc = NPJSONEncDec()),
+                 rng                     = xargmem(np.random.RandomState, ["seed"]),
+                 seed                    = 0,
+                 data_iter               = xargspartial(
+                     post_process_data_iter,
+                     "log_file_reader filter_criteria".split()),
+                 filter_criteria         = dict(
+                     tag = ['LoggingObserver:new_episode', 'LoggingObserver:new_step']),
+                 post_process = xargspartial(
+                     post_process_generic,
+                     "data_iter process_data_tag".split()),
+                 # Needs: log_file_path, log_file_dir, maze_file_path
+    ):
+        self.post_process = post_process
+
+    def on_play_end(self):
+        logging.shutdown()
+        self.post_process()
+
             
 if __name__ == '__main__':
     agent = AgentInGridWorld(

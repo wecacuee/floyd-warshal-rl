@@ -104,12 +104,12 @@ class PropDict:
     >>> f.np1
     2
     """
-    post_process = process_kwprop
+    _pd_post_process = process_kwprop
     def __init__(self, attrs):
         self.attrs = attrs
 
     def get(self, attr):
-        return self.post_process(self.attrs[attr])
+        return self._pd_post_process(self.attrs[attr])
 
     def __getattr__(self, attr):
         try:
