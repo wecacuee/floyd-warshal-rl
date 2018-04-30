@@ -32,7 +32,7 @@ from game.play import (MultiObserver, play, LogFileReader, NoOPObserver)
 from game.logging import NPJSONEncDec, LogFileConf
 from prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
                                    DrawAgentGridWorldFromLogs, AgentVisObserver)
-from game.vis_imgs_to_video import combine_imgs_to_video
+from game.vis_imgs_to_video import combine_imgs_to_videos
 
 PROJECT_NAME = "floyd_warshall_rl"
 
@@ -61,25 +61,6 @@ def random_state_torch(seed):
 
 random_state = np.random.RandomState
 
-class ImgsToVideoObs(NoOPObserver):
-    @extended_kwprop
-    def __init__(self,
-                 post_process = xargspartial(
-                     combine_imgs_to_video,
-                     ["action_value_img_fmt", "agent_vis_img_fmt", "out_vid_file"]),
-                 agent_vis_img_fmt = prop(lambda s : str(Path(s.log_file_dir)
-                                                         / "agent_grid_world_%d_%d.png")),
-                 action_value_img_fmt = prop(lambda s : str(Path(s.log_file_dir)
-                                                            / "action_value_%d_%d.png")),
-
-                 out_vid_file = prop(lambda s : str(Path(s.log_file_dir) / "out.webm")),
-                 # Needs: log_file_dir
-                 ):
-        self.post_process = post_process
-
-    def on_play_end(self):
-        self.post_process()
-
 AgentVisMultiObserver = functools.partial(
     MultiObserver,
     observer_keys = """logging_observer metrics_observers
@@ -88,7 +69,7 @@ AgentVisMultiObserver = functools.partial(
     agent_vis_observer = xargs(
         AgentVisObserver,
         "log_file_path log_file_dir maze_file_path".split()),
-    imgs_to_vid_observers = xargs(ImgsToVideoObs, ["log_file_dir"])
+    imgs_to_vid_observers = xargs(ImgsToVideoObs, ["log_file_dir", "nepisodes"])
 )
 
 @extended_kwprop
@@ -130,7 +111,7 @@ ql_grid_world_play = functools.partial(
     observer            = xargs(AgentVisMultiObserver,
                                 """prob logger_factory log_file_path
                                 logging_encdec log_file_dir
-                                maze_file_path visualizer_observer""".split()),
+                                maze_file_path visualizer_observer nepisodes""".split()),
     visualizer_observer = xargs(QLearningLogger,
                                 "logger image_file_fmt log_file_reader".split()),
     log_file_dir        = prop(lambda s: s.log_file_conf.log_file_dir),
