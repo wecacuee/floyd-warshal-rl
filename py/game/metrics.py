@@ -39,10 +39,6 @@ class LatencyObserver:
             self.times_to_goal_hit.append(time_to_hit)
         self.start_step = steps + 1
 
-    def on_new_step_with_pose_steps(self, obs=None, act=None, rew=None,
-                                    pose=None, steps=None, episode_n=None,**kw):
-        if self.prob and self.prob.hit_goal(): self.on_goal_hit(steps)
-
     def on_play_end(self):
         self.on_new_episode(episode_n=len(self.times_to_goal_hit)+1)
         print(self.times_to_goal_hit_all_episodes)

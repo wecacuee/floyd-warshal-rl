@@ -21,7 +21,7 @@ class QLearningDiscrete(Alg):
                  observation_space,
                  reward_range,
                  rng,
-                 egreedy_epsilon       = 0.05,
+                 egreedy_epsilon       = 0.00,
                  action_value_momentum = 0.1, # Low momentum changes more frequently
                  discount              = 0.99, # step cost 
     ):
