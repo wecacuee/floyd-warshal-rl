@@ -17,12 +17,18 @@ class FloydWarshallAlgDiscrete(object):
     def __init__(self,
                  qlearning = xargs(
                      QLearningDiscrete,
-                     "action_space observation_space rng".split())):
+                     "action_space observation_space rng".split()), 
+    ):
         self.qlearning            = qlearning
-        self.per_edge_cost        = self.qlearning.init_value * (1-self.qlearning.discount)
-        # Need some big number but too big that arithmetic does not work
-        self.path_cost_init       = self.qlearning.init_value * 100
         self.reset()
+
+    @property
+    def per_edge_cost(self):
+        return self.qlearning.reward_range[0] * (1-self.qlearning.discount)
+
+    @property
+    def path_cost_init(self):
+        return self.qlearning.reward_range[1]
 
     def episode_reset(self, episode_n):
         self.qlearning.episode_reset(episode_n)
@@ -146,7 +152,7 @@ class FloydWarshallVisualizer(QLearningVis):
                 draw.rectangle(ax, center - cellsize/2, center + cellsize*3/2,
                                (0, 0, 0))
             draw.putText(ax, f"{path_cost_mat[i, j]:.3}",
-                         center, fontScale=2)
+                         center, fontScale=4)
 
     def visualize_all(self, ax, action_value, policy, path_cost,
                       net_value, hash_state, grid_shape, goal_pose,

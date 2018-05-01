@@ -276,17 +276,17 @@ class AgentInGridWorld(Problem):
                  observation_space,
                  start_pose_gen = random_start_pose_gen,
                  goal_pose_gen = random_goal_pose_gen,
-                 goal_reward = 10,
                  max_steps = 300,
                  wall_penality = 1.0,
                  no_render = False,
                  log_file_dir = "/tmp/",
+                 reward_range = (0, 10),
     ):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
         self.action_space      = action_space #Act2DSpace(seed)
-        self.goal_reward       = goal_reward
+        self.reward_range      = reward_range
         self.max_steps         = max_steps
         self._hit_wall_penality = wall_penality
         self._last_reward      = 0
@@ -299,6 +299,9 @@ class AgentInGridWorld(Problem):
         #    seed        = seed) 
         self.episode_reset(0)
 
+    @property
+    def goal_reward(self):
+        return self.reward_range[1]
 
     @classmethod
     @extended_kwprop

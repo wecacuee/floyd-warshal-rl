@@ -32,7 +32,7 @@ from game.play import (MultiObserver, play, LogFileReader, NoOPObserver)
 from game.logging import NPJSONEncDec, LogFileConf
 from prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
                                    DrawAgentGridWorldFromLogs, AgentVisObserver)
-from game.vis_imgs_to_video import combine_imgs_to_videos
+from game.vis_imgs_to_video import ImgsToVideoObs
 
 PROJECT_NAME = "floyd_warshall_rl"
 
@@ -59,7 +59,9 @@ def random_state_torch(seed):
     rng.gen = tch.random.manual_seed(seed)
     return rng
 
+
 random_state = np.random.RandomState
+
 
 AgentVisMultiObserver = functools.partial(
     MultiObserver,
@@ -69,8 +71,17 @@ AgentVisMultiObserver = functools.partial(
     agent_vis_observer = xargs(
         AgentVisObserver,
         "log_file_path log_file_dir maze_file_path".split()),
-    imgs_to_vid_observers = xargs(ImgsToVideoObs, ["log_file_dir", "nepisodes"])
+    imgs_to_vid_observers = xargs(ImgsToVideoObs, ["log_file_dir", "nepisodes"]),
+    # Needs: log_file_dir log_file_path maze_file_path nepisodes
 )
+
+
+AgentVisMultiObserverXargs = xargs(
+    AgentVisMultiObserver,
+    """prob logger_factory log_file_path
+    logging_encdec log_file_dir
+    maze_file_path visualizer_observer nepisodes""".split())
+                                   
 
 @extended_kwprop
 def grid_world_play(
@@ -108,10 +119,7 @@ ql_grid_world_play = functools.partial(
                                 "action_space observation_space rng".split()),
     action_space        = prop(lambda s : s.prob.action_space),
     observation_space   = prop(lambda s : s.prob.observation_space),
-    observer            = xargs(AgentVisMultiObserver,
-                                """prob logger_factory log_file_path
-                                logging_encdec log_file_dir
-                                maze_file_path visualizer_observer nepisodes""".split()),
+    observer            = AgentVisMultiObserverXargs,
     visualizer_observer = xargs(QLearningLogger,
                                 "logger image_file_fmt log_file_reader".split()),
     log_file_dir        = prop(lambda s: s.log_file_conf.log_file_dir),
@@ -122,27 +130,14 @@ ql_grid_world_play = functools.partial(
 
 fw_grid_world_play = functools.partial(
     grid_world_play,
-    confname            = "fw_grid_world_play",
-    alg                 = xargs(FloydWarshallAlgDiscrete,
-                                "action_space observation_space rng".split()),
-    action_space        = prop(lambda s : s.prob.action_space),
-    observation_space   = prop(lambda s : s.prob.observation_space),
-    def_observer        = xargs(AgentVisMultiObserver,
-                                """prob logger_factory log_file_path
-                                logging_encdec log_file_dir
-                                maze_file_path""".split()),
-    observer            = xargs(AgentVisMultiObserver,
-                                """prob logger_factory log_file_path
-                                logging_encdec log_file_dir
-                                maze_file_path visualizer_observer""".split()),
-    logger              = prop(lambda s: s.logger_factory("FloydWarshallLogger")),
-    visualizer_observer = xargs(FloydWarshallLogger,
-                                "logger image_file_fmt log_file_reader".split()),
-    log_file_reader     = xargs(LogFileReader, ["log_file_path"], enc = NPJSONEncDec()),
+    **dict(ql_grid_world_play.keywords,
+           confname            = "fw_grid_world_play",
+           alg                 = xargs(FloydWarshallAlgDiscrete,
+                                       "action_space observation_space rng".split()),
+           logger              = prop(lambda s: s.logger_factory("FloydWarshallLogger")),
+           visualizer_observer = xargs(FloydWarshallLogger,
+                                       "logger image_file_fmt log_file_reader".split()))
 )
-
-def multiplay(**plays):
-    return { k : v() for k, v in plays.items() } 
 
 
 fw_post_process_run = functools.partial(
@@ -158,15 +153,12 @@ fw_post_process_run = functools.partial(
     # log_file_path
 )
 
+
 ql_post_process_run = functools.partial(
     ql_post_process_from_log_conf,
-    project_name            = PROJECT_NAME,
-    confname                = "QLPostProc",
-    log_file_conf           = xargmem(LogFileConf,
-                                      "project_name confname".split()),
-    log_file_dir            = prop(lambda s: s.log_file_conf.log_file_dir),
-    log_file_reader         = xargs(LogFileReader, ["log_file_path"], enc = NPJSONEncDec()),
-    action_value_tag        = "QLearningLogger:action_value",
+    **dict(fw_post_process_run.keywords,
+           confname                = "QLPostProc",
+           action_value_tag        = "QLearningLogger:action_value")
     # Needs:
     # log_file_path
 )

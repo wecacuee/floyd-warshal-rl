@@ -18,23 +18,42 @@ def get_end_number(patt):
         if os.path.exists(patt % i):
             return i
 
-def imgs_patt_to_video_cmd(left_patt, right_patt, out_vid_file):
+
+def repl_ext(f, ext):
+    return os.path.splitext(f)[0] + '.' + ext
+    
+
+def img_patt_to_video_cmd(left_patt, out_vid_file):
     cmd = """ffmpeg 
     -y
     -start_number {left_start_number}
     -r 30
     -i {left_patt}
-    -start_number {right_start_number}
-    -r 30
-    -i {right_patt}
+    -framerate 30
+    {out_vid_file}""".format(
+        left_start_number = get_start_number(left_patt),
+        left_patt = left_patt,
+        out_vid_file = out_vid_file,
+    ).split()
+    return cmd
+
+
+def run_cmd(cmd):
+    print("running: '{}'".format(" ".join(cmd)))
+    return subprocess.call(cmd)
+    
+
+def combine_left_right_vid(left_inp, right_inp, out_vid_file):
+    cmd = """ffmpeg 
+    -y
+    -i {left_inp}
+    -i {right_inp}
     -filter_complex [0:v]pad=iw*2:ih[int];[int][1:v]overlay=W/2:0[vid]
     -map [vid]
     -framerate 30
     {out_vid_file}""".format(
-        left_start_number = get_start_number(left_patt),
-        right_start_number = get_start_number(right_patt),
-        left_patt = left_patt,
-        right_patt = right_patt,
+        left_inp = left_inp,
+        right_inp = right_inp,
         out_vid_file = out_vid_file,
     ).split()
     return cmd
@@ -61,26 +80,28 @@ def rm_images(patt, pattern_iter):
         if os.path.exists(f):
             os.remove(f)
 
-def combine_imgs_to_video(action_value_img_fmt,
-                          agent_vis_img_fmt,
-                          out_vid_file):
-    cmd = imgs_patt_to_video_cmd(
-        left_patt = action_value_img_fmt,
-        right_patt = agent_vis_img_fmt,
-        out_vid_file = out_vid_file)
-    print("running: '{}'".format(" ".join(cmd)))
-    subprocess.call(cmd)
-    rm_images(action_value_img_fmt, range(1000))
-    rm_images(agent_vis_img_fmt, range(1000))
+
+@extended_kwprop
+def combine_imgs_to_video(patt,
+                          vidfile = prop(lambda s: repl_ext(s.patt % 0, 'webm'))):
+    run_cmd(img_patt_to_video_cmd(patt, vidfile))
+    rm_images(patt, range(1000))
+    return vidfile
+
 
 def combine_imgs_to_videos(action_value_img_fmt,
                            agent_vis_img_fmt,
                            out_vid_file,
                            nepisodes):
     for e in range(nepisodes):
-        combine_imgs_to_video(action_value_img_fmt % e,
-                               agent_vis_img_fmt % e,
-                               out_vid_file % e)
+        acv, agv, ovf = (action_value_img_fmt % e,
+                         agent_vis_img_fmt % e,
+                         out_vid_file % e)
+        right_vid = combine_imgs_to_video(agv)
+        run_cmd(combine_left_right_vid(
+            left_inp = combine_imgs_to_video(acv),
+            right_inp = combine_imgs_to_video(agv),
+            out_vid_file = ovf))
 
 
 class ImgsToVideoObs(NoOPObserver):
@@ -96,7 +117,7 @@ class ImgsToVideoObs(NoOPObserver):
                                                             / "action_value_%d_%%d.png")),
 
                  out_vid_file = prop(lambda s : str(Path(s.log_file_dir) / "out_%d.webm")),
-                 # Needs: log_file_dir
+                 # Needs: log_file_dir, nepisodes
                  ):
         self.post_process = post_process
 

@@ -5,6 +5,7 @@ from contextlib import closing
 from functools import lru_cache
 import numpy as np
 import operator
+from collections import OrderedDict
 
 from cog.memoize import MEMOIZE_METHOD
 from cog.confutils import extended_kwprop, KWProp as prop, xargs
@@ -214,8 +215,9 @@ class MultiObserver(object):
                                            """logging_observer log_file_reader
                                            prob""".split()),
                  observer_keys     = "logging_observer metrics_observers".split(),
-                 observers         = prop(lambda s : { k : getattr(s, k)
-                                          for k in s.observer_keys }),
+                 observers         = prop(lambda s : OrderedDict([
+                     (k , getattr(s, k))
+                     for k in s.observer_keys ])),
     ):
         self.observers = observers
         for o in self.observers.values():

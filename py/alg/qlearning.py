@@ -19,18 +19,20 @@ class QLearningDiscrete(Alg):
     def __init__(self,
                  action_space,
                  observation_space,
+                 reward_range,
                  rng,
                  egreedy_epsilon       = 0.05,
                  action_value_momentum = 0.1, # Low momentum changes more frequently
-                 init_value            = 1.0,
-                 discount              = 0.99,
+                 discount              = 0.99, # step cost 
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
-        self.rng                = rng
+        self.reward_range         = reward_range
+        self.rng                  = rng
         self.egreedy_epsilon      = egreedy_epsilon
         self.action_value_momentum= action_value_momentum
-        self.init_value           = init_value
+        assert reward_range[0] > 0, "Reward range"
+        self.init_value           = discount * reward_range[0]
         self.discount             = discount
         self.reset()
 
@@ -191,7 +193,7 @@ class QLearningVis(NoOPObserver):
             if i % 2 == 0 and j % 2 == 0:
                 draw.rectangle(ax, center - c25, center + c75, (0, 0, 0))
             draw.putText(ax, f"{action_value_mat[i, j]:.3}",
-                         center, fontScale=2)
+                         center, fontScale=4)
 
     def _policy_to_mat(self, policy_func):
         return mat
