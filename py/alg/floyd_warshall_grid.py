@@ -17,18 +17,18 @@ class FloydWarshallAlgDiscrete(object):
     def __init__(self,
                  qlearning = xargs(
                      QLearningDiscrete,
-                     "action_space observation_space rng".split()), 
+                     "action_space observation_space reward_range rng".split()), 
     ):
         self.qlearning            = qlearning
         self.reset()
 
     @property
     def per_edge_cost(self):
-        return self.qlearning.reward_range[0] * (1-self.qlearning.discount)
+        return 10 * self.qlearning.reward_range[1] * (1-self.qlearning.discount)
 
     @property
     def path_cost_init(self):
-        return self.qlearning.reward_range[1]
+        return 10 * self.qlearning.reward_range[1]
 
     def episode_reset(self, episode_n):
         self.qlearning.episode_reset(episode_n)

@@ -4,7 +4,7 @@ from functools import reduce
 from cog.confutils import extended_kwprop, KWProp as prop, xargs
 
 def mean(l):
-    return sum(l) / len(l)
+    return sum(l) / max(len(l), 1)
 
 
 def latency_from_time_list(time_list, n=1):
@@ -16,7 +16,7 @@ def compute_latency(times_to_goal_hit_all_episodes):
     valid_times = filter(lambda t: len(t) >= 2, times_to_goal_hit_all_episodes)
     latencies_all_episode = list(map(latency_from_time_list, valid_times))
     return (mean(latencies_all_episode),
-            min(latencies_all_episode), max(latencies_all_episode))
+            min(latencies_all_episode, default=0), max(latencies_all_episode, default=0))
 
 
 class LatencyObserver:
@@ -105,8 +105,8 @@ class DistineffObs:
         alldistineff = sum(map(lambda l: l[1:],
                                self.distineff_all_episodes), [])
         mean_distineff = mean(alldistineff)
-        min_distineff = min(alldistineff)
-        max_distineff = max(alldistineff)
+        min_distineff = min(alldistineff, default=0)
+        max_distineff = max(alldistineff, default=0)
         print(f"""mean distineff = {mean_distineff} +-
                   ({mean_distineff - min_distineff},
                    {max_distineff - mean_distineff})""")

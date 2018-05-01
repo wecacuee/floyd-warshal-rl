@@ -280,7 +280,7 @@ class AgentInGridWorld(Problem):
                  wall_penality = 1.0,
                  no_render = False,
                  log_file_dir = "/tmp/",
-                 reward_range = (0, 10),
+                 reward_range = (1, 10),
     ):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen

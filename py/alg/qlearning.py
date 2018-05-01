@@ -31,7 +31,7 @@ class QLearningDiscrete(Alg):
         self.rng                  = rng
         self.egreedy_epsilon      = egreedy_epsilon
         self.action_value_momentum= action_value_momentum
-        assert reward_range[0] > 0, "Reward range"
+        assert reward_range[0] >= 0, "Reward range"
         self.init_value           = discount * reward_range[0]
         self.discount             = discount
         self.reset()
