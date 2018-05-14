@@ -70,9 +70,9 @@ AgentVisMultiObserver = functools.partial(
                        imgs_to_vid_observers""".split(),
     agent_vis_observer = xargs(
         AgentVisObserver,
-        "log_file_path log_file_dir maze_file_path".split()),
+        "log_file_path log_file_dir windy_grid_world".split()),
     imgs_to_vid_observers = xargs(ImgsToVideoObs, ["log_file_dir", "nepisodes"]),
-    # Needs: log_file_dir log_file_path maze_file_path nepisodes
+    # Needs: log_file_dir log_file_path windy_grid_world nepisodes
 )
 
 
@@ -80,8 +80,8 @@ AgentVisMultiObserverXargs = xargs(
     AgentVisMultiObserver,
     """prob logger_factory log_file_path
     logging_encdec log_file_dir
-    maze_file_path visualizer_observer nepisodes""".split())
-                                   
+    windy_grid_world visualizer_observer nepisodes""".split())
+
 
 @extended_kwprop
 def grid_world_play(
@@ -89,14 +89,16 @@ def grid_world_play(
         observer       = None,
         nepisodes      = 3,
         seed           = 0,
+        max_steps      = 1000,
         log_file_conf  = xargmem(LogFileConf,
                                "project_name confname".split()),
         rng            = xargs(random_state, ["seed"]),
         log_file_path  = prop(lambda s: s.log_file_conf.log_file),
         logger_factory = prop(lambda s: s.log_file_conf.logger_factory),
         logging_encdec = prop(lambda s: s.log_file_conf.logging_encdec),
-        prob           = xargmem(AgentInGridWorld.from_maze_file_path,
-                                  "rng maze_file_path".split()),
+        shape          = (9,9),
+        prob           = xargmem(AgentInGridWorld.from_random_maze,
+                                  "rng shape max_steps".split()),
         project_name   = PROJECT_NAME,
         maze_file_path = prop(lambda s:
                               s.maze_file_path_t.format(self=s)),
@@ -120,6 +122,7 @@ ql_grid_world_play = functools.partial(
     action_space        = prop(lambda s : s.prob.action_space),
     observation_space   = prop(lambda s : s.prob.observation_space),
     reward_range        = prop(lambda s : s.prob.reward_range),
+    windy_grid_world    = prop(lambda s : s.prob.grid_world),
     observer            = AgentVisMultiObserverXargs,
     visualizer_observer = xargs(QLearningLogger,
                                 "logger image_file_fmt log_file_reader".split()),
