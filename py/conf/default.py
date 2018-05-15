@@ -36,30 +36,6 @@ from game.vis_imgs_to_video import ImgsToVideoObs
 
 PROJECT_NAME = "floyd_warshall_rl"
 
-class TorchRng:
-    @staticmethod
-    def rand(size = 1):
-        return tch.rand(size)
-
-    @staticmethod
-    def randn():
-        return tch.randn()
-
-    @staticmethod
-    def uniform(size = 1):
-        return tch.FloatTensor((size,)).uniform_()
-
-    def randint(self, low, high = None, size = 1):
-        if high is None:
-            low, high = 0, low
-        return tch.LongTensor((size,)).random_(low, high, generator = self.gen)
-
-def random_state_torch(seed):
-    rng = TorchRng()
-    rng.gen = tch.random.manual_seed(seed)
-    return rng
-
-
 random_state = np.random.RandomState
 
 
@@ -81,6 +57,11 @@ AgentVisMultiObserverXargs = xargs(
     """prob logger_factory log_file_path
     logging_encdec log_file_dir
     windy_grid_world visualizer_observer nepisodes""".split())
+
+NoVisMultiObserverXargs = xargs(MultiObserver,
+                                """log_file_dir log_file_path prob
+                                logger_factory logging_encdec windy_grid_world
+                                visualizer_observer nepisodes""".split())
 
 
 @extended_kwprop
@@ -123,7 +104,8 @@ ql_grid_world_play = functools.partial(
     observation_space   = prop(lambda s : s.prob.observation_space),
     reward_range        = prop(lambda s : s.prob.reward_range),
     windy_grid_world    = prop(lambda s : s.prob.grid_world),
-    observer            = AgentVisMultiObserverXargs,
+    observer            = AgentVisMultiObserver, # if visualize
+    #observer            = NoVisMultiObserverXargs, # if no visualize
     visualizer_observer = xargs(QLearningLogger,
                                 "logger image_file_fmt log_file_reader".split()),
     log_file_dir        = prop(lambda s: s.log_file_conf.log_file_dir),
