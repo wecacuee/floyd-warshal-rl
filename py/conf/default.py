@@ -104,7 +104,7 @@ ql_grid_world_play = functools.partial(
     observation_space   = prop(lambda s : s.prob.observation_space),
     reward_range        = prop(lambda s : s.prob.reward_range),
     windy_grid_world    = prop(lambda s : s.prob.grid_world),
-    observer            = AgentVisMultiObserver, # if visualize
+    observer            = AgentVisMultiObserverXargs, # if visualize
     #observer            = NoVisMultiObserverXargs, # if no visualize
     visualizer_observer = xargs(QLearningLogger,
                                 "logger image_file_fmt log_file_reader".split()),
