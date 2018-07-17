@@ -42,6 +42,8 @@ def defaultkeyfunc(method, args, kwargs,
                     kwargskey  = lambda kwargs: tuple(sorted(kwargs.items()))):
     return funckey(method), argskey(args), kwargskey(kwargs)
 
+def emptykeyfunc(method, args, kwargs):
+    return ()
 
 def method_memoizer(method     = None,
                     memory_key = "_memoize_cache",

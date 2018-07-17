@@ -76,6 +76,7 @@ class DistineffObs:
                 tuple(self.goal_pose))
             distineff = distance_traveled / shortest_distance
             if distineff < 1.0:
+                print("Distineff should not be less than one. Debug why?")
                 import pdb; pdb.set_trace()
             self.distineff_per_episode.append(distineff)
 

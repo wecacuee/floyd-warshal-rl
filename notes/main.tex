@@ -3,6 +3,7 @@
 \pdfpagewidth=8.5in
 \pdfpageheight=11in
 \usepackage{times}
+\usepackage{amsfonts}
 \usepackage[utf8]{inputenc}
 \usepackage[small]{caption}
 \usepackage{natbib}
@@ -14,7 +15,7 @@
 \renewcommand{\topfraction}{0.8}%
 \renewcommand{\floatpagefraction}{.8}%
 \input{phd-proposal-preamble}
-\title{A differentiable Floyd Warshall algorithm}
+\title{Thinking, fast and slow}
 
 \newif\iffinal
 \finalfalse
@@ -61,11 +62,18 @@ West Lafayette, IN\\
 \begin{document}
 \maketitle
 \begin{abstract}
-  If Value iteration is a generalization of Dijkstra's algorithm.
-  The what is the generalization of Floyd-Warshall algorithm.
+  What does it mean to think fast and slow?
+  Thinking fast is the behaviorist model. A feed forward in the neural
+  network without any recurrence.
+  Thinking slow is the symbolic manipulation model.
+  A probabilistic graphical model performing inference or performing
+  long term planning on a graph whose local connectivity is known.
 \end{abstract}
 
+\input{thinking-fast-slow}
 \input{diff-floyd-warshall}
+\input{hier-FW}
+\input{manifold-learning-repr}
 
 {\small
 \IfFileExists{/z/home/dhiman/wrk/group-bib/shared.bib}{

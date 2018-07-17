@@ -17,6 +17,7 @@ import inspect
 from itertools import chain
 import json
 import functools
+import sys
 
 from cog.memoize import method_memoizer
 
@@ -34,6 +35,11 @@ def nondefault_argnames(func):
             (p.default is inspect.Parameter.empty
              and p.kind in (inspect.Parameter.POSITIONAL_ONLY,
                             inspect.Parameter.POSITIONAL_OR_KEYWORD))]
+
+def accepts_arbitrary_kw(func):
+    params = inspect.signature(func).parameters
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD
+               for p in params.values())
 
 def apply_conf(func, conf, args=()):
     args_from_conf = { k : getattr(conf, k) for k in args }
@@ -166,6 +172,10 @@ class KWAsAttr:
         return { k : self._wrap_child(v) for k, v in kwd.items() }
 
     @property
+    def fget(self):
+        return functools.partial(self.__wrapped__.fget, **self.partial)
+
+    @property
     def partial(self):
         self._partial = (
             self._partial or self._wrap_kwdefaults(
@@ -188,7 +198,7 @@ class KWAsAttr:
             k.startswith("__") and k.endswith("__")):
             object.__setattr__(self, k, v)
         else:
-            self.partial[k] = v
+            self._partial[k] = v
 
     def __repr__(self):
         if self._partial:
@@ -217,7 +227,11 @@ def extended_kwprop(func):
         namedargs = dict(zip(argnames, args))
         kw.update(namedargs)
         kwprops_m = PropDict(dict(attrs, **kw))
-        return apply_conf(func, kwprops_m, chain(argnames, attrs.keys()))
+        if accepts_arbitrary_kw(func):
+            apply_args = chain(kw.keys(), attrs.keys())
+        else:
+            apply_args = chain(argnames, attrs.keys())
+        return apply_conf(func, kwprops_m, apply_args)
 
     return wrapper
 
@@ -227,8 +241,8 @@ def kwasattr_to_propdict(kwasattr):
 def xargs_(func, expect_args=(), *args, **kwargs):
     pfunc = functools.partial(func, *args, **kwargs)
     @functools.wraps(pfunc)
-    def wrapper(conf):
-        return apply_conf(pfunc, conf, expect_args)
+    def wrapper(conf, **kw):
+        return apply_conf(functools.partial(pfunc, **kw), conf, expect_args)
 
     return wrapper
 
@@ -237,6 +251,12 @@ def xargs(func, expect_args=(), *args, **kwargs):
 
 def xargmem(func, expect_args=(), *args, **kwargs):
     return KWProp(method_memoizer(xargs_(func, expect_args, *args, **kwargs)))
+
+def xargsonce(func, expect_args=(), *args, **kwargs):
+    return KWProp(
+        method_memoizer(
+            xargs_(func, expect_args, *args, **kwargs),
+            keyfunc=lambda *a: ()))
 
 def xargspartial(func, expect_args=(), *args, **kwargs):
     return KWProp(xargs_(functools.partial(functools.partial, func),

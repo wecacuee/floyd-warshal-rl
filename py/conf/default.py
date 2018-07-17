@@ -13,7 +13,7 @@ import functools
 import numpy as np
 
 from cog.confutils import (extended_kwprop, KWProp as prop, xargs,
-                           xargmem, xargspartial,
+                           xargmem, xargsonce, xargspartial,
                            parse_args_update_kwasattr, KWAsAttr)
 
 from cog.memoize import LambdaMethodMemoizer, MEMOIZE_METHOD
@@ -78,7 +78,7 @@ def grid_world_play(
         logger_factory = prop(lambda s: s.log_file_conf.logger_factory),
         logging_encdec = prop(lambda s: s.log_file_conf.logging_encdec),
         shape          = (9,9),
-        prob           = xargmem(AgentInGridWorld.from_random_maze,
+        prob           = xargsonce(AgentInGridWorld.from_random_maze,
                                   "rng shape max_steps".split()),
         project_name   = PROJECT_NAME,
         maze_file_path = prop(lambda s:

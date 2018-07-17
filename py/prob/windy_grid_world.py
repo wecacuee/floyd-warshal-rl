@@ -14,6 +14,7 @@ from game.play import (Space, Problem, NoOPObserver,
                        post_process_generic, LogFileReader)
 from game.logging import NPJSONEncDec
 import logging
+from .generate_mazes import gen_maze
 
 def logger():
     return logging.getLogger(__name__)
@@ -59,6 +60,10 @@ def maze_from_string(maze_string,
                 ).reshape(nrows, ncols)
             - ord(firstchar))
 
+def random_maze_from_shape(shape):
+    maze = gen_maze(shape[0], shape[1])
+    # make walls as 1 and free space as 0s
+    return 1 - maze
 
 class Act2DSpace(Space):
     def __init__(self,
@@ -68,7 +73,7 @@ class Act2DSpace(Space):
         self.rng = rng
         self.NAMES = NAMES
         self.VECTORS = VECTORS
-        
+
     def sample(self):
         act = self.rng.randint(self.size)
         return act
@@ -147,7 +152,7 @@ class WindyGridWorld(object):
     ):
 
         return cls(rng = rng, maze = maze, **kwargs)
-                         
+
     @classmethod
     @extended_kwprop
     def from_maze_file_path(cls,
@@ -156,6 +161,18 @@ class WindyGridWorld(object):
                             maze = prop(lambda s: maze_from_filepath(s.maze_file_path)),
                             rng  = prop(lambda s: np.random.RandomState(s.seed)),
                             **kwargs
+    ):
+        return cls(rng = rng, maze = maze, **kwargs)
+
+
+    @classmethod
+    @extended_kwprop
+    def from_random_maze(cls,
+                         shape,
+                         seed = 0,
+                         maze = prop(lambda s: random_maze_from_shape(s.shape)),
+                         rng  = prop(lambda s: np.random.RandomState(s.seed)),
+                         **kwargs
     ):
         return cls(rng = rng, maze = maze, **kwargs)
 
@@ -260,7 +277,7 @@ def render_agent_grid_world(canvas, grid_world, agent_pose, goal_pose,
                             cellsize,
                             render_goal = render_goal,
                             render_agent = render_agent):
-    grid_size = cellsize 
+    grid_size = cellsize
     grid_world.render(canvas, grid_size)
     # Render goal
     render_goal(canvas, goal_pose, grid_size)
@@ -296,7 +313,7 @@ class AgentInGridWorld(Problem):
         #Loc2DSpace(
         #    lower_bound = np.array([0, 0]),
         #    upper_bound = np.array(grid_world.shape),
-        #    seed        = seed) 
+        #    seed        = seed)
         self.episode_reset(0)
 
     @property
@@ -317,6 +334,24 @@ class AgentInGridWorld(Problem):
                             grid_world        = xargs(WindyGridWorld.from_maze_file_path,
                                                "rng maze_file_path".split()),
                             **kwargs):
+        return cls(grid_world = grid_world,
+                   action_space = action_space,
+                   observation_space = observation_space, **kwargs)
+
+    @classmethod
+    @extended_kwprop
+    def from_random_maze(cls,
+                         shape,
+                         seed              = 0,
+                         rng               = prop(lambda s: np.random.RandomState(s.seed)),
+                         action_space      = xargs(Act2DSpace, ["rng"]),
+                         observation_space = xargs(Loc2DSpace,
+                                                   "rng lower_bound upper_bound".split()),
+                         lower_bound       = np.array([0, 0]),
+                         upper_bound       = prop(lambda s : s.grid_world.shape),
+                         grid_world        = xargs(WindyGridWorld.from_random_maze,
+                                                   "rng shape".split()),
+                         **kwargs):
         return cls(grid_world = grid_world,
                    action_space = action_space,
                    observation_space = observation_space, **kwargs)
@@ -358,7 +393,7 @@ class AgentInGridWorld(Problem):
     def render(self, canvas, grid_size, wait_time=0):
         if self.no_render:
             return canvas
-            
+
         if canvas is None:
             canvas = draw.white_img(np.array(self.grid_world.shape) * 100)
         canvas = render_agent_grid_world(
@@ -473,7 +508,6 @@ class AgentVisObserver(NoOPObserver):
         logging.shutdown()
         self.post_process()
 
-            
 if __name__ == '__main__':
     agent = AgentInGridWorld(
         np.random.RandomState(0),
