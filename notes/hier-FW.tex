@@ -1,0 +1,39 @@
+\section{Hierarchical Floyd Warshall}
+
+Let the navigation problem be defined as finding a sequence of goals in an unexplored maze.
+The goal image is provided in terms of observations.
+When the agent reaches the goal, it is rewarded.
+
+Let the policy be a function of hierarchical states
+$\policy(\act | \state_1, \state_2, \state_{g1}, \state_{g2})$.
+The higher level policy only depends on high level state and high level goals and yields lower level policy.
+$\policy_2( \policy_1 | \state_2, \state_{g2} )$.
+
+How can CNNs model hierarchical functions?
+
+
+
+CNNs find repeated local patterns in data.
+A time dimensional CNN can also find local patterns in state space,
+which will hopefully capture repetition of certain aspect of the states.
+That does not guarantee hierarchy though.
+
+Sparsity and hierarchy are related and are hard to formalize?
+
+Define sparsity of state vector?
+
+\begin{definition}
+  A MDP $(\State, \Action, \Trans, \R)$ is said to be sparsely
+  connected if $\Trans$ has a block diagonal structure and the number
+  of non-zero entities is much less than zero entities.
+\end{definition}
+
+\begin{definition}
+  A MDP $(\State, \Action, \Trans, \R)$ is said to be hierarchical if
+  $\Trans$ and $\R$ have repeated patterns and the transition matrix
+  can be factorized into $\Trans = \Trans_1 \odot_k \Trans_2$, where
+  $\odot_k$ is the kronecker product.
+  In terms of functions $\Trans(\state_1, \state_2) = \Trans_1(\state_1)\Trans_2(\state_2)$.
+  Similarly the reward function should also be factorizable.
+  In terms of functions $\rew(\state_1, \state_2) = \rew_1(\state_1) + \rew_2(\state_2)$.
+\end{definition}

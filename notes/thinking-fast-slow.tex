@@ -1,0 +1,216 @@
+\section{Problem}
+Let us define the problem in terms of navigation.
+There is an exploration stage and a goal and an exploitation stage.
+The agent explores the environment and finds the goal.
+The next step is to use the environment connectivity to find the goal
+faster.
+
+Let the agent be traversing in the state space $\State$.
+At every discrete time-step $t$ the agent receives an observation
+$\meas_t \in \Obs$ that only depends on the current state
+$\state_t \in \State$.
+At every time-step the agent takes an action $\act_t \in \Action$
+and observes reward $\rew_t \in \R^+$ and the state of the agent
+and the environment changes to $\state_{t+1} \in \State$.
+The problem is defined to find the policy $\policy : \State
+\rightarrow \Action$ that 
+maximizes the discounted cumulative reward over time.
+%
+\begin{align}
+  \policy^* = \arg \max_{\policy} \E_\policy \left[ \sum_{k=t}^T \discount^{k-t} \rew_k \right].
+\end{align}%
+%
+\subsection{Inter-mediate functions}
+Let us introduce a few intermediate functions.
+Let value function $\Value(\state_t)$ be defined as the expected
+future reward when starting from state $\state_t$.
+%
+\begin{align}
+  \Value_\policy(x) = \E_\policy \left[ \sum_{k=t}^T \discount^{k-t} \rew_k \middle|  \state_t = x \right].
+\end{align}%
+%
+An action value function is defined as the value of current state action pair
+%
+\begin{align}
+  Q_\policy(\state, \act) = \E_\policy \left[ \sum_{k=t}^T \discount^{k-t}
+    \rew_k \middle| \state_t = \state, \act_t = \act \right].
+\end{align}%
+%
+The action value function can be thought of as one step rollout of the value function
+%
+\begin{align}
+  Q_\policy(\state, \act) &= \sum_{\rew_t} \rew_t P(\rew_t | \state, \act) +
+  \sum_{\state_{t+1}} P(\state_{t+1} | \state, \act)
+  \Value_\policy(\state_{t+1})
+  \\
+  &= \E_{\rew_t}[\rew_t | \state, \act]
+  + \E_{\state_{t+1}} [ \Value_\policy(\state_{t+1}) | \state, \act ]
+\end{align}%
+%
+Inversely, the value function is the expected Q-value decided by the
+probability of taking action $\act$ at the state $\state$.
+%
+\begin{align}
+  \Value_\policy(\state) = \E_{\act}[ Q_\policy(\state, \act) | \state ]
+\end{align}
+%
+Let us introduce path wise value function defined recursively as
+%
+\newcommand{\Floyd}{F}%
+\begin{align}
+  \Floyd_\policy(\state_i, \act_i, \state_j) = \begin{cases}
+    0 &\text{if } \state_i = \state_j
+    \\
+    \delta(\state_i, \act_i) &\text{if } P(\state_j | \state_i, \act_i) > 0
+    \\
+    \E_\policy[ \sum_{\state_k, \act_k, \state_l \in \text{path}(\policy, \state_i, \act_i, \state_j)}
+        \Floyd(\state_k, \act_k, \state_l) ] & \text{otherwise }.
+  \end{cases}
+\end{align}%
+
+In terms of other value functions the relationship between different value functions
+%
+\begin{align}
+  \Floyd_\policy(\state_i, \act_i, \state_j) &= \Value_\policy(\state_j) - Q_\policy(\state_i, \act_i)
+  \\
+  &=
+  \E_\policy\left[
+    \sum_{k=t}^{K} \rew_k \middle| \state_t = \state_i, \state_K = \state_j \right]
+\end{align}%
+%
+Consider the case when $P(\state_j | \state_i) > 0$, i.e. the states are neighbors.
+%
+\begin{align}
+  \Value(\state_i) = \E_{\rew_t, \act_t}[ \rew_t | \state_i ]
+  + \E_{\state_{t+1}, \act_t}[ \Value(\state_{t+1}) | \state_i]
+\end{align}
+
+
+\subsection{Thinking fast}
+Let us assume we want to go to a goal state $\state_g$.
+%
+\begin{align}
+    \policy(\state) = \arg \max_{\act} \Floyd(\state, \act, \state_g)
+\end{align}
+%
+
+\subsection{Checking if we are confident of our ``fast'' thinking}
+Roll-out the optimal policy to reach goal state $\state_g$.
+
+%
+\begin{align}
+    \act_1 &= \arg \max_{\act} \Floyd(\state_1, \act, \state_g)
+    \\
+    \act_2 &= \arg \max_{\act} \Floyd(\state_2, \act, \state_g)
+    \\
+    \vdots
+    \\
+    \act_K &= \arg \max_{\act} \Floyd(\state_K, \act, \state_g)
+\end{align}%
+%
+Can we get transition probability from Q-value or $\Value$ function.
+%
+\begin{align}
+  Q(s, a) &= \sum p(s_{t+1} | s, a)V(s_{t+1})
+  F(s, a, s_{t+1}) = V(s_{t+1}) - \sum_{s_j} p(s_j | s, a)V(s_j)
+\end{align}
+%
+$\Floyd(s, a, s_{t+1}) < \inf$ implies a connected path. A small value
+of $\Floyd(s, a, s_{t+1})$ cost implies local connectivity. A large
+value implies long range connectivity. Take top $k = |\Action|$  smallest values from
+$\Floyd$ to determine the connectivity. From the top k values you can
+compute the transition probabilities by forming k equations for k unknowns.
+
+%
+Let's say the rollout is possible using LSTM network. On the rollout
+you evaluate, Floyd error. If the error is above a threshold then you
+keep a keyframe otherwise you discard.
+
+In the state space collected so far compute the error
+\begin{align}
+  e_\Floyd(\state_0, \act_0, \state_g) = \sum_k | \Floyd(\state_0, \act_0, \state_g) - \Floyd(\state_0, \act_0, \state_k) - \Floyd(\state_k, \act_k, \state_g) |
+\end{align}
+
+\subsection{Possible contributions and ideas}
+\begin{itemize}
+\item Explicit memory and rollout for slow thinking.
+  \\
+  Maintain a graph/manifold over which Dijkstra/PPM/RRT can be
+  performed for shortest path planning.
+  \\
+  Rollout by LSTM.
+\item Hierarchical Floyd warshall for tractability.
+  \\
+  Make a hierarchical CNN over temporal state data to infer patterns
+  over temporal sequences to identify the location spaces they are in.
+\item Priortized neighborhood replay.
+  \\
+  Extension of using replay memory for not only where the TD error is
+  how but also the neighborhood of the state where TD error is high.
+\item Compare with Hindsight Experience Replay
+  \\
+  Very close to Floyd warshall learning.
+  But concatenating the goal with the state is wastefull.
+\end{itemize}
+
+\subsection{Multi goal Navigation problem}
+\begin{enumerate}
+\item Given a random maze.
+\item Agent spawns randomly.
+\item The agent is given a goal as an Image.
+\item The agent explores till it finds the first goal.
+\item As soon as it finds a goal then it gets a reward and gets another goal.
+\item Go to (4)
+\end{enumerate}
+
+\subsection{Explicit memory and Rollout}
+
+If I want to use soft Q-learning, then we need to estimate policy, Q
+and Value function. We also need to estimate covariance matrix and a
+mean for transition probabilities.
+Can we merge transition and covariance with FW value function. No.
+Because FW value function captures the expected reward as well.
+But then we can drop the Q function and just capture transition
+probability.
+
+Then the policy is simply
+\begin{align}
+  \policy(\act | \state) =
+  \sum_{\state_j}\Trans(\state_{j} | \state, \act)
+  \exp(\Value(\state_j))
+\end{align}
+
+The problem is large state space. For Gaussian transition probability,
+we need to assume it to be on action.
+How about computing transition probability from policy, Q value and Value function.
+But if we capture the FW function, then we should be able to it better?
+We still need the list of probable states:
+\begin{align}
+  \Floyd(\state_i, \act_i, \state_j) = \Value(\state_j) - Q(\state_i, \act_i)
+\end{align}
+
+\subsection{Floyd warshall modeling}
+\begin{enumerate}
+\item A neural network to estimate $Q(.)$, $\Value(.)$ and $\policy(.)$.
+\item The neural network will also have auxiliary signals like Depth
+  and navigation direction.
+\item The neural network will also predict the next state.
+\item The inputs to the neural network would be previous action and previous reward.
+\item The algorithm will keep states are replay memory. The replay
+  memory will be the topological mapping.
+\item An new image in the replay memory will be kept if the rollout
+  based prediction of reward and state is wrong.
+\item Local memory
+\end{enumerate}
+
+
+\subsection{Neural network}
+
+Let there be an encoder $\phi(I_{t:t-m})$ that encodes the image to an
+encoding to be fed into an LSTM.
+Let 
+
+
+\subsection{Implementation}
+
+$\phi = \text{CNN}$.

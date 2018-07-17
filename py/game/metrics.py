@@ -1,7 +1,15 @@
 import json
 import numpy as np
 from functools import reduce
+import logging
+
 from cog.confutils import extended_kwprop, KWProp as prop, xargs
+
+def LOG():
+    return logging.getLogger(__name__)
+
+def info(msg):
+    LOG().info(msg, extra=dict(tag="human", data={}))
 
 def mean(l):
     return sum(l) / max(len(l), 1)
@@ -41,10 +49,10 @@ class LatencyObserver:
 
     def on_play_end(self):
         self.on_new_episode(episode_n=len(self.times_to_goal_hit)+1)
-        print(self.times_to_goal_hit_all_episodes)
+        info(str(self.times_to_goal_hit_all_episodes))
         mean_latency, min_l, max_l = compute_latency(
             self.times_to_goal_hit_all_episodes)
-        print(f"latency : {mean_latency}; min latency {min_l}; max latency {max_l}")
+        info(f"latency : {mean_latency}; min latency {min_l}; max latency {max_l}")
 
 
 class DistineffObs:
@@ -76,7 +84,7 @@ class DistineffObs:
                 tuple(self.goal_pose))
             distineff = distance_traveled / shortest_distance
             if distineff < 1.0:
-                print("Distineff should not be less than one. Debug why?")
+                info("""Distineff should not be less than one. Find out why? Entering debug mode""")
                 import pdb; pdb.set_trace()
             self.distineff_per_episode.append(distineff)
 
@@ -104,9 +112,7 @@ class DistineffObs:
         mean_distineff = mean(alldistineff)
         min_distineff = min(alldistineff, default=0)
         max_distineff = max(alldistineff, default=0)
-        print(f"""mean distineff = {mean_distineff} +-
-                  ({mean_distineff - min_distineff},
-                   {max_distineff - mean_distineff})""")
+        info(f"""mean distineff = {mean_distineff}; +- ({mean_distineff - min_distineff}, {max_distineff - mean_distineff};)""")
 
 class ComputeMetricsFromLogReplay:
     @extended_kwprop
