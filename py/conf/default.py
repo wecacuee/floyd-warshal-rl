@@ -94,7 +94,6 @@ def grid_world_play(
         **kwargs):
     return play(alg, prob, observer, nepisodes, logger_factory)
 
-
 ql_grid_world_play = functools.partial(
     grid_world_play,
     confname            = "ql_grid_world_play",
@@ -138,6 +137,18 @@ fw_post_process_run = functools.partial(
     # Needs
     # log_file_path
 )
+
+@extended_kwprop
+def multi_grid_world_play(
+        seed           = 0,
+        shape    = (9,9),
+        max_steps= 1000,
+        rng      = xargs(random_state, ["seed"]),
+        prob     = xargsonce(AgentInGridWorld.from_random_maze,
+                         "rng shape max_steps".split()),
+        gw_plays = [ql_grid_world_play, fw_grid_world_play]):
+    return [p(prob = prob, seed = seed, shape = shape, max_steps = max_steps,
+              rng = rng) for p in gw_plays]
 
 
 ql_post_process_run = functools.partial(
