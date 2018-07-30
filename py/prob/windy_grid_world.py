@@ -98,6 +98,10 @@ class Loc2DSpace(Space):
         self.lower_bound = np.asarray(lower_bound)
         self.upper_bound = np.asarray(upper_bound)
 
+    @property
+    def size(self):
+        return (self.upper_bound - self.lower_bound)
+
     def sample(self):
         return np.array([
             self.rng.randint(self.lower_bound[0], self.upper_bound[0]),

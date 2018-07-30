@@ -300,7 +300,7 @@ def filter_by_tag_data(data_cmp_criteria = data_cmp_criteria,
         data, tag = data_tag
         if not isinstance(data, dict):
             return False
-            
+
         if "tag" in data:
             raise NotImplementedError("Data should not have tag")
         data["tag"] = tag

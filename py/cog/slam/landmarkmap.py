@@ -945,4 +945,4 @@ if __name__ == '__main__':
         lmmap, robblock, # Do not pass visualizer to
                          # disable visualization
                          lmv):
-        print r, theta, id, rs
+        print(r, theta, id, rs)

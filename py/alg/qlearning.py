@@ -95,11 +95,20 @@ class QLearningDiscrete(Alg):
         self.last_state_idx_act = None
 
     def update(self, obs, act, rew):
+        # Protocol defined by: game.play:play_episode()
+        # - act = alg.policy(obs)
+        # - obs_plus_1, rew_plus_1 = the prob.step(act)
+        # - the alg.update(obs, act, rew)
+        # or
+        # obs_m_1 --alg--> act --prob--> obs, rew # # # obs, rew = prob.step(action)
         if not self.observation_space.contains(obs):
-            raise ValueError(f"Bad observation {obs}")
+            raise ValueError("Bad observation {obs}".format(obs=obs))
 
         # Encoding state_hash from observation
         state_idx = self._state_idx_from_obs(obs, act, rew)
+        # Why is am1 ignored and act chosen?
+        # Ans: because:
+        # stm1, act -> obs, rew
         stm1, am1 = self.last_state_idx_act or (None, None)
         st = state_idx
         self.last_state_idx_act = state_idx, act

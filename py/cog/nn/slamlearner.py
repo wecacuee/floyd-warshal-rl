@@ -28,7 +28,7 @@ def make_lstm(vocab_size=256):
     l_in_process = lasagne.layers.DenseLayer(
         l_in, num_units=vocab_size, W = lasagne.init.Normal()
         , b=lasagne.init.Constant(0.1)
-        , nonlinearity=nonlinearity=lasagne.nonlinearities.rectify)
+        , nonlinearity=lasagne.nonlinearities.rectify)
     l_lstm = lasagne.layers.LSTMLayer(
         l_in_process, N_HIDDEN, grad_clipping=GRAD_CLIP,
         nonlinearity=lasagne.nonlinearities.tanh)

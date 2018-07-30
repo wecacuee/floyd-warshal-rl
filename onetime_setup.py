@@ -47,9 +47,15 @@ def pip_provided(conf, packages):
 def builddir(conf):
     return relpath(conf.builddir, rootdir=project_mid_dir(conf))
 
+def module_supported():
+    return Path("/etc/profile.d/modules.sh").exists()
+
 def module_provided(conf, packages):
     with relpath(Path("envsetup") / "moduleload.sh").open("w") as f:
-        f.write("""module load miniconda3 numpy/py3.6 cuda opencv/3.4.0 matplotlib ipython cudnn/8.0-v6.0 sw/pytorch/py3.6/0.2.0""")
+        f.write("/etc/profile.d/modules.sh")
+        f.write("\n")
+        f.write("""module load miniconda3/4.5.1 numpy/py3.6 cuda/8.0.61 cudnn/8.0-v6.0 opencv/3.4.0 matplotlib/py3.6/2.1.2 ipython/py3.6/6.2.1  pytorch/py3.6/0.2.0""")
+        f.write("\n")
 
 def touch(filepath):
     filepath.parent.mkdir(parents=True, exist_ok=True)

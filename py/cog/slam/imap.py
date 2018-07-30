@@ -175,4 +175,4 @@ if __name__ == '__main__':
         T = traj_iter.next()
         robblock.current_T = T
         robblock.current_vel = piecewise_trajectory.current_vel
-        print rs[0], rs[1], rew, color
+        print(rs[0], rs[1], rew, color)
