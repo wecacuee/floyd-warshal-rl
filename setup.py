@@ -94,7 +94,7 @@ def module_package_available(pkg):
 def module_provided(packages):
     with relpath(Path("envsetup") / "moduleload.sh").open("w") as f:
         f.write(
-            """module load miniconda3/4.5.1 cuda/8.0.61 cudnn/8.0-v6.0 opencv/3.4.0 """
+            """module load miniconda3/4.5.1 cuda/8.0.61 cudnn/8.0-v6.0 """
             + " ".join([module_map()[p] for p in packages
                         if module_package_available(p)]))
         f.write("\n")
@@ -119,33 +119,32 @@ def setup():
     if module_supported():
         module_provided(conf.install_requires)
 
-    with changed_environ(PYTHONUSERBASE=str(builddir(conf))):
-        setuptools.setup(
-            name=conf.project_name,
-            description='Floyd warshall RL',
-            author='Vikas Dhiman',
-            url='git@opticnerve.eecs.umich.edu:dhiman/floyd-warshall-rl.git',
-            author_email='dhiman@umich.edu',
-            version='0.0.0',
-            license='MIT',
-            classifiers=(
-                'Development Status :: 3 - Alpha',
-                "Programming Language :: Python :: 3",
-                "License :: OSI Approved :: MIT License",
-                "Operating System :: OS Independent",
-            ),
-            packages=setuptools.find_packages("py"),
-            package_dir={"" : "py"},
-            install_requires=setup_install_requires(conf.install_requires),
-            dependency_links=[
-                "http://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl"
+    setuptools.setup(
+        name=conf.project_name,
+        description='Floyd warshall RL',
+        author='Vikas Dhiman',
+        url='git@opticnerve.eecs.umich.edu:dhiman/floyd-warshall-rl.git',
+        author_email='dhiman@umich.edu',
+        version='0.0.0',
+        license='MIT',
+        classifiers=(
+            'Development Status :: 3 - Alpha',
+            "Programming Language :: Python :: 3",
+            "License :: OSI Approved :: MIT License",
+            "Operating System :: OS Independent",
+        ),
+        packages=setuptools.find_packages("py"),
+        package_dir={"" : "py"},
+        install_requires=setup_install_requires(conf.install_requires),
+        dependency_links=[
+            "http://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl"
+        ],
+        python_requires='~=3.6',
+        entry_points={
+            'console_scripts': [
+                'floyd_warshall_rl=conf.default:main',
             ],
-            python_requires='~=3.6',
-            entry_points={
-                'console_scripts': [
-                    'floyd_warshall_rl=conf.default:main',
-                ],
-            },
-        )
+        },
+    )
 
 setup()

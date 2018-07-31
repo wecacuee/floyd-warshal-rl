@@ -6,3 +6,4 @@ PYPATH=$THISDIR/py
 if [[ "$PYTHONPATH" != *"$PYPATH"* ]]; then
     export PYTHONPATH=$PYPATH:$PYTHONPATH
 fi
+PYTHONUSERBASE=$MID_DIR/floyd_warshall_rl/build/ pip install --user --upgrade .
