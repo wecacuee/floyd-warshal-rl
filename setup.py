@@ -9,6 +9,8 @@ from argparse import Namespace
 
 import setuptools
 import sys
+import logging
+LOG = logging.getLogger(__name__)
 
 if sys.version_info.major != 3:
     print('This Python is only compatible with Python 3, but you are running '
@@ -77,16 +79,16 @@ def module_package_available(pkg):
     try:
         module_name = module_map()[pkg]
     except KeyError:
-        print("{pkg} module name not known".format(pkg=pkg))
+        LOG.info("module: {pkg} name not known".format(pkg=pkg))
         return False
     ret = len(subprocess.check_output(
         ["bash", "-c", "module avail {pkg}".format(pkg=module_name)],
         stderr=subprocess.STDOUT
     ).strip())
     if not ret:
-        print("{pkg} not available".format(pkg=pkg))
+        LOG.info("module:{pkg} not available".format(pkg=pkg))
     else:
-        print("{pkg} available".format(pkg=pkg))
+        LOG.info("module:{pkg} available".format(pkg=pkg))
     return ret
 
 def module_provided(packages):
