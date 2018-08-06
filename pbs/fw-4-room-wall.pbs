@@ -5,15 +5,18 @@
 #PBS -S /bin/bash            # Shell to use
 #PBS -m a                  # Mail to <user>@umich.edu on abort, begin and end
 #PBS -M dhiman@umich.edu     # Email id to alert
-#PBS -o /z/home/dhiman/mid/floyd_warshall_rl/pbs_$PBS_JOBID.out
+#PBS -o /z/home/dhiman/mid/floyd_warshall_rl/pbs/$PBS_JOBID.out
 #
 # #PBS -q fluxg              # Not required for blindspot but for flux
 # #PBS -A jjcorso_fluxg      # Not required for blindspot but for flux
 
 echo "starting pbs script"
-MIDDIR=/z/home/dhiman/mid/floyd_warshall_rl/
-cd $MIDDIR/src/
-git clone $MIDDIR/git/
+MID_DIR=/z/home/dhiman/mid/floyd_warshall_rl/
+for d in src pbs build; do mkdir -p $MID_DIR/$d; done
+cd $MID_DIR/src/
+git clone $MID_DIR/git/ floyd_warshall_rl
+cd floyd_warshall_rl
+git pull
 source setup.sh
 fw-4-run
 echo "end of pbs script"
