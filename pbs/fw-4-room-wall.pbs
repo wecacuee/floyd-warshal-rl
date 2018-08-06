@@ -17,6 +17,6 @@ cd $MID_DIR/src/
 git clone $MID_DIR/git/ floyd_warshall_rl
 cd floyd_warshall_rl
 git pull
-source setup.sh
+. setup.sh
 fwrl-4-room-gw
 echo "end of pbs script"
