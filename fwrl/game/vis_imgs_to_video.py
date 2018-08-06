@@ -3,8 +3,8 @@ import os
 import sys
 from pathlib import Path
 
-from cog.confutils import (extended_kwprop, KWProp as prop, xargspartial)
-from game.play import (NoOPObserver)
+from umcog.confutils import (extended_kwprop, KWProp as prop, xargspartial)
+from .play import (NoOPObserver)
 
 def get_start_number(patt):
     print("Looking for {}".format(patt))

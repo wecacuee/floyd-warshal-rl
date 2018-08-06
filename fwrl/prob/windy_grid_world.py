@@ -4,15 +4,16 @@ from pathlib import Path
 import numpy as np
 import functools
 import os
+import pkg_resources
 
-from cog import draw
-from cog.memoize import MEMOIZE_METHOD
-from cog.confutils import (extended_kwprop, KWProp as prop, xargs, xargspartial, xargmem)
+from umcog import draw
+from umcog.memoize import MEMOIZE_METHOD
+from umcog.confutils import (extended_kwprop, KWProp as prop, xargs, xargspartial, xargmem)
 
-from game.play import (Space, Problem, NoOPObserver,
+from ..game.play import (Space, Problem, NoOPObserver,
                        post_process_data_iter,
                        post_process_generic, LogFileReader)
-from game.logging import NPJSONEncDec
+from ..game.logging import NPJSONEncDec
 import logging
 from .generate_mazes import gen_maze
 
@@ -25,6 +26,12 @@ def maze_from_filepath(fpath):
 
 def maze_from_file(f):
     return maze_from_string("".join(f.readlines()))
+
+def maze_from_pkg_rsrc(frsrc):
+    return maze_from_string(pkg_resources.resource_string(__name__, frsrc).decode('utf-8'))
+
+def four_room_grid_world(filep="./data/4-room-grid-world.txt"):
+    return maze_from_pkg_rsrc(filep)
 
 def maze_from_string(maze_string,
                      intable = ". +^<>V",
@@ -159,6 +166,17 @@ class WindyGridWorld(object):
 
     @classmethod
     @extended_kwprop
+    def from_maze_name(cls,
+                       maze_name = "4-room-grid-world.txt",
+                       seed = 0,
+                       maze = prop(lambda s: maze_from_pkg_rsrc("data/" + s.maze_name)),
+                       rng  = prop(lambda s: np.random.RandomState(s.seed)),
+                       **kwargs
+    ):
+        return cls(rng = rng, maze = maze, **kwargs)
+
+    @classmethod
+    @extended_kwprop
     def from_maze_file_path(cls,
                             maze_file_path = None,
                             seed = 0,
@@ -233,7 +251,7 @@ class WindyGridWorld(object):
                 draw.arrowedLine(
                     canvas, pt1, pt2,
                     draw.color_from_rgb((0,0,0)), thickness=5, tipLength=10)
-                
+
         return canvas
 
     def random_pos(self):
@@ -323,6 +341,43 @@ class AgentInGridWorld(Problem):
     @property
     def goal_reward(self):
         return self.reward_range[1]
+
+    @classmethod
+    @extended_kwprop
+    def from_maze(cls,
+                  maze              = None,
+                  seed              = 0,
+                  rng               = prop(lambda s: np.random.RandomState(s.seed)),
+                  action_space      = xargs(Act2DSpace, ["rng"]),
+                  observation_space = xargs(Loc2DSpace,
+                                            "rng lower_bound upper_bound".split()),
+                  lower_bound       = np.array([0, 0]),
+                  upper_bound       = prop(lambda s : s.grid_world.shape),
+                  grid_world        = xargs(WindyGridWorld,
+                                            "rng maze".split()),
+                  **kwargs):
+        return cls(grid_world = grid_world,
+                   action_space = action_space,
+                   observation_space = observation_space, **kwargs)
+
+    @classmethod
+    @extended_kwprop
+    def from_maze_name(cls,
+                       maze_name         = None,
+                       seed              = 0,
+                       rng               = prop(lambda s: np.random.RandomState(s.seed)),
+                       action_space      = xargs(Act2DSpace, ["rng"]),
+                       observation_space = xargs(Loc2DSpace,
+                                                 "rng lower_bound upper_bound".split()),
+                       lower_bound       = np.array([0, 0]),
+                       upper_bound       = prop(lambda s : s.grid_world.shape),
+                       grid_world        = xargs(WindyGridWorld.from_maze_name,
+                                                 "rng maze_name".split()),
+                       **kwargs):
+        return cls(grid_world = grid_world,
+                   action_space = action_space,
+                   observation_space = observation_space, **kwargs)
+
 
     @classmethod
     @extended_kwprop

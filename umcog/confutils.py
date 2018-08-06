@@ -19,7 +19,7 @@ import json
 import functools
 import sys
 
-from cog.memoize import method_memoizer
+from .memoize import method_memoizer
 
 def empty_to_none(v):
     return None if v is inspect._empty else v

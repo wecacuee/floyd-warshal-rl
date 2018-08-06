@@ -7,8 +7,8 @@ import numpy as np
 import operator
 from collections import OrderedDict
 
-from cog.memoize import MEMOIZE_METHOD
-from cog.confutils import extended_kwprop, KWProp as prop, xargs
+from umcog.memoize import MEMOIZE_METHOD
+from umcog.confutils import extended_kwprop, KWProp as prop, xargs
 from .logging import LogFileConf
 from .metrics import ComputeMetricsFromLogReplay
 

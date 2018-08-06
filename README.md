@@ -60,3 +60,25 @@
 ** Agent setup
 *** Interface
 
+
+* Updated plan
+  1. Write a LaTeX version of FWRL
+     Propose an algorithm that competes with TDM, UVFA with HER. Probably need
+     implementation and comparison with both. Run it on simplest to implement
+     games.
+  2. List and then chose a multi-goal platform that is easy to implement especially in grid world.
+  3. Make an updated plan
+  4. Need a working version of DQN or UVFA before FWRL can be tried
+ 
+* List of multi-goal testing environments
+  1. HER: Mujoco pushing, sliding and pick and place, Fetch
+  2. TDM: 7-DOF reacher, pusher, half-cheetah, Ant, Sawyer robot
+  3. UVFA: Lava world (two rooms 7x7), Ms Pacman
+  4. HAC: Mujoco, Pendulum, UR5 reacher, cartpole swingup
+ 
+* Problem
+  1. HER is a bummer. What is the point of UVFA if you are going to remember all
+     the past transitions.
+  2. Advantages of HER: remembers the past
+     Cons: uses too much of memory.
+

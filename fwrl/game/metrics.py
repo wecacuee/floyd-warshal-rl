@@ -3,7 +3,7 @@ import numpy as np
 from functools import reduce
 import logging
 
-from cog.confutils import extended_kwprop, KWProp as prop, xargs
+from umcog.confutils import extended_kwprop, KWProp as prop, xargs
 
 def LOG():
     return logging.getLogger(__name__)

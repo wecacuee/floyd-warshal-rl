@@ -1,13 +1,13 @@
-from game.play import Space, Alg, NoOPObserver
+from ..game.play import Space, Alg, NoOPObserver
 import numpy as np
 import os
 import functools
-import cog.draw as draw
+import umcog.draw as draw
 import logging
 from .qlearning import (QLearningDiscrete, QLearningVis,
                         post_process_from_log_conf as ql_post_process_from_log_conf,
                         post_process_data_iter, post_process_generic)
-from cog.confutils import xargs, xargspartial, xargmem, KWProp as prop, extended_kwprop
+from umcog.confutils import xargs, xargspartial, xargmem, KWProp as prop, extended_kwprop
 
 def logger():
     return logging.getLogger(__name__)

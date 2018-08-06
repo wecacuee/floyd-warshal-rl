@@ -7,10 +7,10 @@ import logging
 import operator
 import functools
 
-from cog.misc import NumpyEncoder
-from cog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwprop
-import cog.draw as draw
-from game.play import Space, Alg, NoOPObserver, post_process_data_iter
+from umcog.misc import NumpyEncoder
+from umcog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwprop
+import umcog.draw as draw
+from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
 
 def logger():
     return logging.getLogger(__name__)

@@ -1,8 +1,8 @@
 from pathlib import Path
-from cog.confutils import Conf, MultiConfGen, dict_update_recursive
-from alg.qlearning import post_process as qlearning_post_process
-from alg.floyd_warshall_grid import post_process as fw_post_process
-from conf.default import CommonPlayConf
+from umcog.confutils import Conf, MultiConfGen, dict_update_recursive
+from ..alg.qlearning import post_process as qlearning_post_process
+from ..alg.floyd_warshall_grid import post_process as fw_post_process
+from .default import CommonPlayConf
 
 class QLearningPostProcess(CommonPlayConf):
     def defaults(self):

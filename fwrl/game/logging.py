@@ -6,10 +6,10 @@ import json
 import logging
 import logging.config
 
-from cog.misc import DictEncoder, NumpyEncoder, ChainedEncoders
-from cog.confutils import extended_kwprop, KWProp as prop, xargs
-from cog.memoize import MEMOIZE_METHOD
-from cog.misc import ensuredirs, git_revision
+from umcog.misc import DictEncoder, NumpyEncoder, ChainedEncoders
+from umcog.confutils import extended_kwprop, KWProp as prop, xargs
+from umcog.memoize import MEMOIZE_METHOD
+from umcog.misc import ensuredirs, git_revision
 
 
 class NPJSONEncDec(object):

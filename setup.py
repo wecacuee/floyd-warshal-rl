@@ -31,6 +31,9 @@ def CONF():
                          "ipython>=6.2.1",
                          "pytorch>=0.4.1",
                          "torchvision",
+                         "gym",
+                         "gym[atari]",
+                         "gym[mujoco]",
                      ])
 
 def relpath(fpath, rootdir=Path(__file__).parent):
@@ -133,8 +136,7 @@ def setup():
             "License :: OSI Approved :: MIT License",
             "Operating System :: OS Independent",
         ),
-        packages=setuptools.find_packages("py"),
-        package_dir={"" : "py"},
+        packages=setuptools.find_packages(),
         install_requires=setup_install_requires(conf.install_requires),
         dependency_links=[
             "http://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl"
@@ -142,7 +144,7 @@ def setup():
         python_requires='~=3.6',
         entry_points={
             'console_scripts': [
-                'floyd_warshall_rl=conf.default:main',
+                'floyd_warshall_rl=fwrl.conf.default:main',
             ],
         },
     )

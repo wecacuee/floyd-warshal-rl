@@ -12,27 +12,27 @@ import functools
 #import torch as tch
 import numpy as np
 
-from cog.confutils import (extended_kwprop, KWProp as prop, xargs,
+from umcog.confutils import (extended_kwprop, KWProp as prop, xargs,
                            xargmem, xargsonce, xargspartial,
                            parse_args_update_kwasattr, KWAsAttr)
 
-from cog.memoize import LambdaMethodMemoizer, MEMOIZE_METHOD
+from umcog.memoize import LambdaMethodMemoizer, MEMOIZE_METHOD
 
-from alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
+from ..alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
                                      FloydWarshallLogger)
-from alg.qlearning import QLearningDiscrete, QLearningLogger
-from alg.qlearning import (post_process_from_log_conf as
+from ..alg.qlearning import QLearningDiscrete, QLearningLogger
+from ..alg.qlearning import (post_process_from_log_conf as
                            ql_post_process_from_log_conf,
                            post_process_generic, post_process_data_iter)
 
-from alg.floyd_warshall_grid import (post_process_from_log_conf as
+from ..alg.floyd_warshall_grid import (post_process_from_log_conf as
                                      fw_post_process_from_log_conf)
 
-from game.play import (MultiObserver, play, LogFileReader, NoOPObserver)
-from game.logging import NPJSONEncDec, LogFileConf
-from prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
+from ..game.play import (MultiObserver, play, LogFileReader, NoOPObserver)
+from ..game.logging import NPJSONEncDec, LogFileConf
+from ..prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
                                    DrawAgentGridWorldFromLogs, AgentVisObserver)
-from game.vis_imgs_to_video import ImgsToVideoObs
+from ..game.vis_imgs_to_video import ImgsToVideoObs
 
 PROJECT_NAME = "floyd_warshall_rl"
 
@@ -68,9 +68,9 @@ NoVisMultiObserverXargs = xargs(MultiObserver,
 def grid_world_play(
         alg            = None,
         observer       = None,
-        nepisodes      = 3,
+        nepisodes      = 100,
         seed           = 0,
-        max_steps      = 1000,
+        max_steps      = 400,
         log_file_conf  = xargmem(LogFileConf,
                                "project_name confname".split()),
         rng            = xargs(random_state, ["seed"]),
