@@ -1,4 +1,5 @@
 # stdlib
+# -*- coding: utf-8 -*-
 from pathlib import Path
 import os
 from queue import PriorityQueue
@@ -22,7 +23,7 @@ from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
 
 
 # if gpu is to be used
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = t.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def logger():
     return logging.getLogger(__name__)
@@ -44,15 +45,11 @@ class QNet(nn.Module):
         x = self.bn2(self.conv2(self.bn1(self.conv1(x))))
         return self.head(x.view(x.size(0), -1))
 
-class QLearningNet:
-    def __init__(self, qnet):
-        self.qnet = qnet
-    def __call__(self, state, act=None):
-        #return self.init_value * t.ones((state_size, self.action_space.size))
+    def __call__(self, state_batch, act_batch=None):
         # Create a parameteric function that takes state and action and returns
         # the Q-value
-        act_values = self.qnet(state)
-        return act_values if act is None else act_values[act]
+        act_values = super(QNet, self).__call__(state_batch)
+        return act_values if act is None else act_values.gather(1, act_batch)
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
@@ -84,31 +81,26 @@ class QLearningNetAgent:
                  observation_space,
                  reward_range,
                  rng,
-                 egreedy_epsilon       = 0.00,
-                 action_value_momentum = 0.1, # Low momentum changes more frequently
+                 egreedy_epsilon       = 0.05,
                  discount              = 0.99, # step cost
                  hidden_state_size     = 10,
-                 target_update_m       = 0.6,
-                 qnet                  = QLearningNet,
+                 qnet                  = QNet,
                  batch_size            = 16,
                  batch_update_prob     = 0.1,
-                 gamma                 = 0.99,
+                 goal_reward           = 10,
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
         self.reward_range         = reward_range
         self.rng                  = rng
         self.egreedy_epsilon      = egreedy_epsilon
-        self.action_value_momentum= action_value_momentum
         assert reward_range[0] >= 0, "Reward range"
         self.init_value           = discount * reward_range[0]
         self.discount             = discount
         self.hidden_state_size    = hidden_state_size
-        self.target_update_m      = target_update_m
         self.qnet                 = qnet
         self.batch_size           = batch_size
         self.batch_update_prob    = batch_update_prob
-        self.gamma                = gamma
         self.reset()
 
     def episode_reset(self, episode_n):
@@ -139,10 +131,10 @@ class QLearningNetAgent:
     def policy(self, obs, usetarget=False):
         state = self._state_from_obs(obs)
         Q = self.action_value_target if usetarget else self.action_value_online
-        return np.argmax(Q(state))
+        return t.argmax(Q(state))
 
     def _hit_goal(self, rew):
-        return rew >= 9
+        return rew >= self.goal_reward
 
     def on_hit_goal(self, obs, act, rew):
         self.last_state_idx_act = None
@@ -158,12 +150,12 @@ class QLearningNetAgent:
             raise ValueError("Bad observation {obs}".format(obs=obs))
 
         # Encoding state_hash from observation
-        st = self._state_from_obs(obs)
+        st = self._state_from_obs(obs) # does nothing
 
-        stm1, am1 = self.last_state_idx_act or (None, None)
-        self.last_state_idx_act = st, act
-        if stm1 is None:
+        if self.last_state_idx_act is None:
+            self.last_state_idx_act = st, act
             return
+        stm1, am1 = self.last_state_idx_act
 
         if self._hit_goal(rew):
             self.on_hit_goal(obs, act, rew)
@@ -172,15 +164,17 @@ class QLearningNetAgent:
             self.batch_update()
 
     def batch_update(self):
+        # 1. L = rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a)) - Q(sₜ, aₜ)
+        # 2. θₜ₊₁ = θₜ - α ∇L
         # Abbreviate the variables
+        # α
         qm = self.action_value_momentum
+        # Q(s, a)
         Q = self.action_value_online
-        Q_t = self.action_value_target
+        # Q'(s, a)
+        Q_target = self.action_value_target
+        # γ
         d = self.discount
-
-        # Update step from online observed reward
-        #Q(stm1, act) = (1-qm) * (rew + d * np.max(Q(st, :))) + qm * Q(stm1, act)
-        #which is equivalent to loss.update()
 
         transitions = self.memory.sample(self.batch_size)
         # Transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
@@ -188,29 +182,40 @@ class QLearningNetAgent:
         batch = Transition(*zip(*transitions))
 
         # Compute a mask of non-final states and concatenate the batch elements
+        # 1-m
         non_final_mask = t.tensor(
             tuple(map(lambda s: s is not None, batch.next_state)),
             device=device, dtype=torch.uint8)
+        # sₜ₊₁
         non_final_next_states = t.cat([s for s in batch.next_state
                                        if s is not None])
+        # sₜ
         state_batch = t.cat(batch.state)
+        # aₜ
         action_batch = t.cat(batch.action)
+        # rₜ
         reward_batch = t.cat(batch.reward)
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+        # Q(sₜ, aₜ)
+        # Compute Q(s_t, aₜ) - the model computes Q(s_t), then we select the
         # columns of actions taken
-        state_action_values = self.action_value_online(state_batch).gather(
-            1, action_batch)
+        state_action_values = Q(state_batch, action_batch)
 
-        # Compute V(s_{t+1}) for all next states.
+        # next_state_best_actions = argmaxₐ Q(sₜ₊₁, a)
+        next_state_best_actions = Q(non_final_next_states).argmax(dim=-1)
+        # next_state_values = Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a))
         next_state_values = t.zeros(self.batch_size, device=device)
-        next_state_values[non_final_mask] = self.action_value_target(
-            non_final_next_states).max(1)[0].detach()
+        next_state_values[non_final_mask] = Q_target(
+            non_final_next_states, next_state_best_actions).detach()
+        # Note: detach() de-attaches the Tensor from the graph, hence avoid
+        # gradient back propagation.
 
         # Compute the expected Q values
-        expected_state_action_values = (next_state_values * self.gamma) + reward_batch
+        # rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a))
+        expected_state_action_values = (next_state_values * d) + reward_batch
 
         # Compute Huber loss
+        # loss = rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a)) - Q(sₜ, aₜ)
         loss = F.smooth_l1_loss(
             state_action_values,
             expected_state_action_values.unsqueeze(1))
@@ -218,12 +223,14 @@ class QLearningNetAgent:
         # Optimize the model
         # Reset the optimizer
         self.optimizer.zero_grad()
+        # Compute ∇ L
         loss.backward()
+        # trim the gradients
+        # ∇ L <- max(min(∇L, 1)), -1)
         for param in policy_net.parameters():
             param.grad.data.clamp_(-1, 1)
+        # 2. θₜ₊₁ = θₜ - α max(min(∇L, 1)), -1)
         self.optimizer.step()
-        # WE are not updating a single transition at a time but a batch at a time.
-        #loss = (rew + d * Q_t(st, t.argmax(Q(st)))) - Q(stm1, act)
 
     def close(self):
         pass

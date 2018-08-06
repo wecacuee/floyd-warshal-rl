@@ -1,9 +1,12 @@
-from ..game.play import Space, Alg, NoOPObserver
-import numpy as np
 import os
 import functools
-import umcog.draw as draw
 import logging
+from collections import namedtuple
+
+import numpy as np
+
+import umcog.draw as draw
+from ..game.play import Space, Alg, NoOPObserver
 from .qlearning import (QLearningDiscrete, QLearningVis,
                         post_process_from_log_conf as ql_post_process_from_log_conf,
                         post_process_data_iter, post_process_generic)
@@ -114,7 +117,7 @@ class FloydWarshallAlgDiscrete(object):
             return getattr(self.qlearning, attr)
         else:
             raise AttributeError(f"No attribute {attr}")
-        
+
 class FloydWarshallVisualizer(QLearningVis):
     def _path_cost_to_mat(self, path_cost, hash_state, goal_state_idx, grid_shape):
         big_mat = np.zeros(np.array(grid_shape) * 2)
@@ -317,3 +320,135 @@ class FloydWarshallLogger(NoOPObserver):
         logging.shutdown()
         self.post_process()
 
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward'))
+
+class ReplayMemory(object):
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.memory = []
+        self.position = 0
+
+    def push(self, *args):
+        """Saves a transition."""
+        if len(self.memory) < self.capacity:
+            # increase the size of memory by one
+            self.memory.append(None)
+        self.memory[self.position] = Transition(*args)
+        self.position = (self.position + 1) % self.capacity
+
+    def sample(self, batch_size):
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self):
+        return len(self.memory)
+
+
+
+
+class FloydWarshallAlgDiscrete(object):
+    @extended_kwprop
+    def __init__(self,
+                 max_steps   = None,
+                 goal_reward = 10,
+                 init_fw     = -np.finfo('f8').min,
+                 step_cost   = prop(lambda s: s.goal_reward / 10*s.max_steps ),
+                 replay_memory = ReplayMemory,
+                 key_frames  = [],
+    ):
+        assert max_steps is not None, "max_steps is required"
+        self.replay_memory = qlearning
+        self.reset()
+
+    @property
+    def per_edge_cost(self):
+        return 10 * self.qlearning.reward_range[1] * (1-self.qlearning.discount)
+
+    @property
+    def path_cost_init(self):
+        return 10 * self.qlearning.reward_range[1]
+
+    def episode_reset(self, episode_n):
+        self.qlearning.episode_reset(episode_n)
+
+    def reset(self):
+        self.qlearning.reset()
+        self.path_cost     = self._default_path_cost(0)
+
+    def _default_path_cost(self, new_state_size):
+        shape = (new_state_size, self.action_space.size, new_state_size)
+        path_cost = self.path_cost_init * np.ones(shape)
+        return path_cost
+
+    def _resize_path_cost(self, new_state_size):
+        new_path_cost = self._default_path_cost(new_state_size)
+        if self.path_cost.size:
+            new_path_cost[
+                tuple(map(lambda s : slice(None, s),
+                          self.path_cost.shape))] = self.path_cost
+        return new_path_cost
+
+    def _state_idx_from_obs(self, obs, act, rew):
+        state_idx = self.qlearning._state_idx_from_obs(obs, act, rew)
+        if state_idx >= self.path_cost.shape[0]:
+            self.path_cost = self._resize_path_cost(state_idx + 1)
+        return state_idx
+
+    def update(self, obs, act, rew):
+        stm1, am1 = self.last_state_idx_act or (None, None)
+        st = self._state_idx_from_obs(obs, act, rew)
+        self.qlearning.update(obs, act, rew)
+        if stm1 is None:
+            return
+
+        # Abbreviate the variables
+        F = self.path_cost
+        Q = self.qlearning.action_value
+
+        # Make a conservative estimate of differential
+        F[stm1, act, st] = max(np.max(Q[st, :]) - Q[stm1, act],
+                               self.per_edge_cost)
+        F[:, :, st] = np.minimum(F[:, :, st], F[:, :, stm1] + F[stm1, act, st])
+
+        # # TODO: Disabled for small state spaces. Re-enable for larger ones
+        # # Update the top m states
+        # if not self.top_m_states.full():
+        #     self.top_m_states.put((self.action_value[state_idx], state_idx))
+
+        # top_value, top_state_idx = self.top_m_states.get()
+        # if self.action_value[state_idx] > top_value:
+        #     self.top_m_states.put((self.action_value[state_idx], state_idx))
+        # else:
+        #     self.top_m_states.put((top_value, top_state_idx))
+
+        # Update step from actual Floyd Warshall algorithm
+        # This is an expensive step depending up on the number of states
+        # Linear in the number of states
+
+        #for (si, sj) in self.state_pairs_iter():
+        # O(n^2) step to update all path_costs and action_values
+        self.path_cost = np.minimum(
+            F,
+            F[:, :, st:st+1] + np.min(F[st:st+1, :, :], axis=1, keepdims=True))
+        assert np.all(self.path_cost >= 0), "The Floyd cost should be positive at all times"
+
+    def net_value(self, state_idx):
+        Q = self.qlearning.action_value
+        V = np.max(Q, axis=-1)
+        state_action_values = np.maximum(
+            Q[state_idx, :],
+            np.max(V[None, :] - self.path_cost[state_idx, :, :] , axis=-1))
+        return state_action_values
+
+    def policy(self, obs):
+        state = self._state_from_obs(obs)
+        state_idx = self.hash_state[tuple(state)]
+        return np.argmax(self.net_value(state_idx))
+
+    def __getattr__(self, attr):
+        if attr in """action_space done action_value hash_state
+                      grid_shape init_value last_state_idx_act egreedy
+                      _state_from_obs""".split():
+            return getattr(self.qlearning, attr)
+        else:
+            raise AttributeError(f"No attribute {attr}")

@@ -45,6 +45,18 @@
   min latency 1.135483870967742;
   max latency 18.433734939759034
 
+Latest results:
+/z/home/dhiman/mid/floyd_warshall_rl/qsub_86207.blindspot.out
+/z/home/dhiman/mid/floyd_warshall_rl/201808_4493581_ql-4-room-grid-world/06-154235.log
+QLearning
+latency : 9.247249953793283; min latency 0.0037313432835820895; max latency 294.0
+mean distineff = 8.484575787460404; +- (7.484575787460404, 40.0154242125396;)
+
+Floyd-Warshall
+/z/home/dhiman/mid/floyd_warshall_rl/201808_4493581_fw-4-room-grid-world/06-155055.log
+latency : 17.604684042326305; min latency 0.13358778625954199; max latency 48.2
+mean distineff = 1.1067439386686548; +- (0.10674393866865484, 7.607541775617059;)
+
 ** Experimental setup
 
 *** Problem setup

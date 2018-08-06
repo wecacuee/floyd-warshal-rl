@@ -567,7 +567,7 @@ class AgentVisObserver(NoOPObserver):
         logging.shutdown()
         self.post_process()
 
-if __name__ == '__main__':
+def demo_agent():
     agent = AgentInGridWorld(
         np.random.RandomState(0),
         grid_world     = WindyGridWorld(0, WindyGridWorld.default_maze()),
@@ -592,3 +592,6 @@ if __name__ == '__main__':
             grid_size=grid_size)
         draw.imshow("c", cnvs)
         k = direc_[draw.waitKey(-1)]
+
+if __name__ == '__main__':
+    demo_agent()
