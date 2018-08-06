@@ -1,0 +1,19 @@
+#PBS -N fwrl-four-room-wall          # Any name to identify your job
+#PBS -j oe                   # Join error and output files for convinience
+#PBS -l walltime=6:00:00     # Keep walltime big enough to finish the job
+#PBS -l nodes=1:ppn=1 # nodes requested: Processor per node: gpus requested
+#PBS -S /bin/bash            # Shell to use
+#PBS -m a                  # Mail to <user>@umich.edu on abort, begin and end
+#PBS -M dhiman@umich.edu     # Email id to alert
+#PBS -o /z/home/dhiman/mid/floyd_warshall_rl/pbs_$PBS_JOBID.out
+#
+# #PBS -q fluxg              # Not required for blindspot but for flux
+# #PBS -A jjcorso_fluxg      # Not required for blindspot but for flux
+
+echo "starting pbs script"
+MIDDIR=/z/home/dhiman/mid/floyd_warshall_rl/
+cd $MIDDIR/src/
+git clone $MIDDIR/git/
+source setup.sh
+fw-4-run
+echo "end of pbs script"
