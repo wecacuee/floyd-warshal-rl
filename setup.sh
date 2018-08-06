@@ -1,4 +1,7 @@
 . /etc/profile.d/modules.sh
+echo "shell is:"
+echo $0
+echo "--------"
 THISDIR=$(dirname $(readlink -m "${BASH_SOURCE[0]}"))
 export MID_DIR=/z/home/dhiman/mid/
 . $THISDIR/envsetup/*.sh
