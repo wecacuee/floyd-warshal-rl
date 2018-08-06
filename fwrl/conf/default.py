@@ -70,7 +70,7 @@ def grid_world_play(
         observer       = None,
         nepisodes      = 100,
         seed           = 0,
-        max_steps      = 400,
+        max_steps      = 300,
         log_file_conf  = xargmem(LogFileConf,
                                "project_name confname".split()),
         rng            = xargs(random_state, ["seed"]),

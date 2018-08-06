@@ -128,7 +128,7 @@ def setup():
         author='Vikas Dhiman',
         url='git@opticnerve.eecs.umich.edu:dhiman/floyd-warshall-rl.git',
         author_email='dhiman@umich.edu',
-        version='0.0.0',
+        version='0.1.0',
         license='MIT',
         classifiers=(
             'Development Status :: 3 - Alpha',
@@ -145,8 +145,14 @@ def setup():
         entry_points={
             'console_scripts': [
                 'floyd_warshall_rl=fwrl.conf.default:main',
+                'fwrl-4-room-gw=fwrl.conf.four_room_grid_world:main',
             ],
         },
+        include_package_data = True,
+        package_data={
+            # If any package contains *.txt or *.rst files, include them:
+            '': ['*.txt'],
+        }
     )
 
 setup()
