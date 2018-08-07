@@ -24,6 +24,7 @@ from umcog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwpro
 import umcog.draw as draw
 from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
 
+LOG = logging.getLogger(__name__)
 
 # if gpu is to be used
 @lru_cache()
@@ -68,15 +69,16 @@ class QLinearNet(nn.Module):
         self.head = nn.Linear(H, D_out)
 
     def forward(self, x):
-        x = t.as_tensor(x).to(device=device(), dtype=t.float32, non_blocking=True)
-        if x.ndimension() < 2:
-            x.unsqueeze_(dim=0)
         x = F.relu(self.lin1(x))
         return self.head(x.view(x.size(0), -1))
 
     def __call__(self, state_batch, act_batch=None):
         # Create a parameteric function that takes state and action and returns
         # the Q-value
+        state_batch = t.as_tensor(state_batch).to(
+            device=device(), dtype=t.float32)
+        if state_batch.ndimension() < 2:
+            state_batch.unsqueeze_(dim=0)
         act_values = super(QLinearNet, self).__call__(state_batch)
         return (act_values
                 if act_batch is None
@@ -121,7 +123,9 @@ class QLearningNetAgent:
                  qnet                  = QLinearNet,
                  batch_size            = 16,
                  batch_update_prob     = 0.1,
+                 target_update_prob    = 0.1,
                  goal_reward           = 10,
+                 learning_rate         = 1e-7,
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
@@ -134,16 +138,20 @@ class QLearningNetAgent:
         self.qnet                 = qnet
         self.batch_size           = batch_size
         self.batch_update_prob    = batch_update_prob
+        self.target_update_prob   = target_update_prob
         self.goal_reward          = goal_reward
+        self._action_value_online = self._default_action_value()
+        self._action_value_online.to(device = device())
+        self._action_value_target = self._default_action_value().to(device = device())
+        self._action_value_online.to(device = device())
+        self._action_value_target.load_state_dict(self._action_value_online.state_dict())
+        self._optimizer = optim.RMSprop(self._action_value_online.parameters(),
+                                        lr=learning_rate)
         self.reset()
 
     def episode_reset(self, episode_n):
         # Reset parameters
         #self.action_value[:]= self.init_value
-        self._action_value_online = self._default_action_value()
-        self._action_value_target = self._default_action_value()
-        self._action_value_target.load_state_dict(self._action_value_online.state_dict())
-        self._optimizer = optim.RMSprop(self._action_value_online.parameters())
         self._last_state_idx_act = None
         self._memory = ReplayMemory(10000, self.rng)
 
@@ -233,9 +241,9 @@ class QLearningNetAgent:
         # sₜ
         state_batch = t.cat(batch.state).reshape(-1, batch.state[0].shape[0])
         # aₜ
-        action_batch = t.tensor(batch.action)
+        action_batch = t.tensor(batch.action, device=device())
         # rₜ
-        reward_batch = t.tensor(batch.reward)
+        reward_batch = t.tensor(batch.reward, device=device())
 
         # Q(sₜ, aₜ)
         # Compute Q(s_t, aₜ) - the model computes Q(s_t), then we select the
@@ -247,7 +255,8 @@ class QLearningNetAgent:
         # next_state_values = Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a))
         next_state_values = t.zeros(self.batch_size, device=device())
         next_state_values[non_final_mask] = Q_target(
-            non_final_next_states, next_state_best_actions).detach().squeeze()
+            #non_final_next_states, next_state_best_actions).detach().squeeze()
+            non_final_next_states).max(1)[0].detach().squeeze()
         # Note: detach() de-attaches the Tensor from the graph, hence avoid
         # gradient back propagation.
 
@@ -272,6 +281,10 @@ class QLearningNetAgent:
             param.grad.data.clamp_(-1, 1)
         # 2. θₜ₊₁ = θₜ - α max(min(∇L, 1)), -1)
         self._optimizer.step()
+
+        if self.rng.rand() < self.target_update_prob:
+            self._action_value_target.load_state_dict(self._action_value_online.state_dict())
+        print("\nBatch update loss: {}".format(loss))
 
     def close(self):
         pass

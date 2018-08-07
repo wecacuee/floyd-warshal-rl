@@ -31,9 +31,9 @@ def CONF():
                          "ipython>=6.2.1",
                          "pytorch>=0.4.1",
                          "torchvision",
-                         "gym",
                          "gym[atari]",
-                         "gym[mujoco]",
+                         "atari-py>=0.1.1",
+                         "PyOpenGL",
                      ])
 
 def relpath(fpath, rootdir=Path(__file__).parent):
@@ -146,6 +146,7 @@ def setup():
             'console_scripts': [
                 'floyd_warshall_rl=fwrl.conf.default:main',
                 'fwrl-4-room-gw=fwrl.conf.four_room_grid_world:main',
+                'fwrl-qlnet-cartpole=fwrl.conf.qlnet_cartpole:demo',
             ],
         },
         include_package_data = True,

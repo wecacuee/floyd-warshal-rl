@@ -1,5 +1,8 @@
 
+from collections import namedtuple
 from ..game.play import (Problem)
+
+EpisodeData = namedtuple('EpisodeData', "obs reward done info".split())
 
 class GymProblem:
     def __init__(self, gym):
@@ -8,29 +11,30 @@ class GymProblem:
         self.observation_space = gym.observation_space
         self.reward_range = gym.reward_range
         self._episode_n = 0
-        self._reward = None
-        self._done = False
+        self._episode_data = EpisodeData(None, 0, False, dict())
 
     def reward(self):
-        return self._reward
+        return self._episode_data.reward
 
     def observation(self):
-        return self._obs
+        return self._episode_data.obs
 
     def done(self):
-        return self._done
+        return self._episode_data.done
 
     def reset(self):
-        self._obs = self._gym.reset()
-        return self._obs
+        obs = self._gym.reset()
+        self._episode_data = EpisodeData(obs, 0, False, dict())
+        return obs
 
     def step(self, a):
         x = self._gym.step(a)
-        self._obs, self._reward, self._done, info = x
-        return self._obs, self._reward
+        self._episode_data = EpisodeData(*x)
+        return self._episode_data.obs, self._episode_data.reward
 
     def episode_reset(self, episode_n):
         self._episode_n = episode_n
+        self._episode_data = EpisodeData(None, 0, False, dict())
         return self.reset()
 
     def __getattr__(self, a):
