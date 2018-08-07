@@ -6,7 +6,10 @@ from queue import PriorityQueue
 import logging
 import operator
 import functools
+from functools import reduce, lru_cache
 from collections import namedtuple
+
+import numpy as np
 
 # installed
 import torch as t
@@ -23,15 +26,17 @@ from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
 
 
 # if gpu is to be used
-device = t.device("cuda" if torch.cuda.is_available() else "cpu")
+@lru_cache()
+def device():
+    return t.device("cuda" if t.cuda.is_available() else "cpu")
 
 def logger():
     return logging.getLogger(__name__)
 
 
-class QNet(nn.Module):
+class QConvNet(nn.Module):
     def __init__(self, D_in, D_out, H):
-        super(QNet, self).__init__()
+        super(QConvNet, self).__init__()
         self.D_in = D_in
         self.D_out= D_out
         self.H = H
@@ -39,40 +44,69 @@ class QNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(H)
         self.conv2 = nn.Conv2d(H, 2*H, kernel_size=3, stride=2)
         self.bn2 = nn.BatchNorm2d(2*H)
-        self.head = nn.Linear(D_in.cumprod(), D_out)
+        self.head = nn.Linear(prod(D_in), D_out)
 
     def forward(self, x):
+        x = t.as_tensor(x).to(device())
         x = self.bn2(self.conv2(self.bn1(self.conv1(x))))
         return self.head(x.view(x.size(0), -1))
 
     def __call__(self, state_batch, act_batch=None):
         # Create a parameteric function that takes state and action and returns
         # the Q-value
-        act_values = super(QNet, self).__call__(state_batch)
-        return act_values if act is None else act_values.gather(1, act_batch)
+        act_values = super(QConvNet, self).__call__(state_batch)
+        return act_values if act_batch is None else act_values.gather(1, act_batch)
+
+
+class QLinearNet(nn.Module):
+    def __init__(self, D_in, D_out, H):
+        super(QLinearNet, self).__init__()
+        self.D_in = D_in
+        self.D_out= D_out
+        self.H = H
+        self.lin1 = nn.Linear(prod(D_in), H)
+        self.head = nn.Linear(H, D_out)
+
+    def forward(self, x):
+        x = t.as_tensor(x).to(device=device(), dtype=t.float32, non_blocking=True)
+        if x.ndimension() < 2:
+            x.unsqueeze_(dim=0)
+        x = F.relu(self.lin1(x))
+        return self.head(x.view(x.size(0), -1))
+
+    def __call__(self, state_batch, act_batch=None):
+        # Create a parameteric function that takes state and action and returns
+        # the Q-value
+        act_values = super(QLinearNet, self).__call__(state_batch)
+        return (act_values
+                if act_batch is None
+                else act_values.gather(1, act_batch.reshape(-1, 1)))
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 
 class ReplayMemory(object):
-    def __init__(self, capacity):
+    def __init__(self, capacity, rng):
         self.capacity = capacity
-        self.memory = []
+        self.memory = np.empty(capacity, dtype=np.object)
         self.position = 0
+        self.rng = rng
 
     def push(self, *args):
         """Saves a transition."""
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
         self.memory[self.position] = Transition(*args)
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
+        return self.rng.choice(self.memory[:self.position], batch_size).tolist()
 
     def __len__(self):
         return len(self.memory)
+
+
+def prod(seq):
+    return reduce(operator.mul, seq, 1)
 
 
 class QLearningNetAgent:
@@ -84,7 +118,7 @@ class QLearningNetAgent:
                  egreedy_epsilon       = 0.05,
                  discount              = 0.99, # step cost
                  hidden_state_size     = 10,
-                 qnet                  = QNet,
+                 qnet                  = QLinearNet,
                  batch_size            = 16,
                  batch_update_prob     = 0.1,
                  goal_reward           = 10,
@@ -94,27 +128,29 @@ class QLearningNetAgent:
         self.reward_range         = reward_range
         self.rng                  = rng
         self.egreedy_epsilon      = egreedy_epsilon
-        assert reward_range[0] >= 0, "Reward range"
         self.init_value           = discount * reward_range[0]
         self.discount             = discount
         self.hidden_state_size    = hidden_state_size
         self.qnet                 = qnet
         self.batch_size           = batch_size
         self.batch_update_prob    = batch_update_prob
+        self.goal_reward          = goal_reward
         self.reset()
 
     def episode_reset(self, episode_n):
         # Reset parameters
         #self.action_value[:]= self.init_value
-        self.action_value_online = self._default_action_value()
-        self.action_value_target = self._default_action_value()
-        self.action_value_target.load_state_dict(self.action_value_online.state_dict())
-        self.optimizer = optim.RMSprop(self.action_value_online.parameters())
-        self.memory = ReplayMemory(10000)
+        self._action_value_online = self._default_action_value()
+        self._action_value_target = self._default_action_value()
+        self._action_value_target.load_state_dict(self._action_value_online.state_dict())
+        self._optimizer = optim.RMSprop(self._action_value_online.parameters())
+        self._last_state_idx_act = None
+        self._memory = ReplayMemory(10000, self.rng)
 
 
     def _default_action_value(self):
-        return self.qnet(self.observation_space.size, self.action_space.size,
+        return self.qnet(self.observation_space.shape,
+                         self.action_space.n,
                          self.hidden_state_size)
 
     def reset(self):
@@ -130,14 +166,14 @@ class QLearningNetAgent:
 
     def policy(self, obs, usetarget=False):
         state = self._state_from_obs(obs)
-        Q = self.action_value_target if usetarget else self.action_value_online
-        return t.argmax(Q(state))
+        Q = self._action_value_target if usetarget else self._action_value_online
+        return t.argmax(Q(state)).tolist()
 
     def _hit_goal(self, rew):
         return rew >= self.goal_reward
 
     def on_hit_goal(self, obs, act, rew):
-        self.last_state_idx_act = None
+        self._last_state_idx_act = None
 
     def update(self, obs, act, rew):
         # Protocol defined by: game.play:play_episode()
@@ -152,31 +188,34 @@ class QLearningNetAgent:
         # Encoding state_hash from observation
         st = self._state_from_obs(obs) # does nothing
 
-        if self.last_state_idx_act is None:
-            self.last_state_idx_act = st, act
+        if self._last_state_idx_act is None:
+            self._last_state_idx_act = st, act
             return
-        stm1, am1 = self.last_state_idx_act
+        stm1, am1 = self._last_state_idx_act
 
         if self._hit_goal(rew):
             self.on_hit_goal(obs, act, rew)
-        self.memory.add(stm1, act, st, act)
-        if random.rand() < self.batch_update_prob:
+
+        stm1 = t.as_tensor(stm1)
+        act = act
+        st = t.as_tensor(st)
+        rew = rew
+        self._memory.push(stm1, act, st, rew)
+        if self.rng.rand() < self.batch_update_prob:
             self.batch_update()
 
     def batch_update(self):
         # 1. L = rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a)) - Q(sₜ, aₜ)
         # 2. θₜ₊₁ = θₜ - α ∇L
         # Abbreviate the variables
-        # α
-        qm = self.action_value_momentum
         # Q(s, a)
-        Q = self.action_value_online
+        Q = self._action_value_online
         # Q'(s, a)
-        Q_target = self.action_value_target
+        Q_target = self._action_value_target
         # γ
         d = self.discount
 
-        transitions = self.memory.sample(self.batch_size)
+        transitions = self._memory.sample(self.batch_size)
         # Transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
         # detailed explanation).
         batch = Transition(*zip(*transitions))
@@ -185,16 +224,18 @@ class QLearningNetAgent:
         # 1-m
         non_final_mask = t.tensor(
             tuple(map(lambda s: s is not None, batch.next_state)),
-            device=device, dtype=torch.uint8)
+            device=device(), dtype=t.uint8)
         # sₜ₊₁
-        non_final_next_states = t.cat([s for s in batch.next_state
-                                       if s is not None])
+        non_none = [s
+                    for s in batch.next_state
+                    if s is not None]
+        non_final_next_states = t.cat(non_none).reshape(-1, non_none[0].shape[0])
         # sₜ
-        state_batch = t.cat(batch.state)
+        state_batch = t.cat(batch.state).reshape(-1, batch.state[0].shape[0])
         # aₜ
-        action_batch = t.cat(batch.action)
+        action_batch = t.tensor(batch.action)
         # rₜ
-        reward_batch = t.cat(batch.reward)
+        reward_batch = t.tensor(batch.reward)
 
         # Q(sₜ, aₜ)
         # Compute Q(s_t, aₜ) - the model computes Q(s_t), then we select the
@@ -204,9 +245,9 @@ class QLearningNetAgent:
         # next_state_best_actions = argmaxₐ Q(sₜ₊₁, a)
         next_state_best_actions = Q(non_final_next_states).argmax(dim=-1)
         # next_state_values = Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a))
-        next_state_values = t.zeros(self.batch_size, device=device)
+        next_state_values = t.zeros(self.batch_size, device=device())
         next_state_values[non_final_mask] = Q_target(
-            non_final_next_states, next_state_best_actions).detach()
+            non_final_next_states, next_state_best_actions).detach().squeeze()
         # Note: detach() de-attaches the Tensor from the graph, hence avoid
         # gradient back propagation.
 
@@ -221,16 +262,16 @@ class QLearningNetAgent:
             expected_state_action_values.unsqueeze(1))
 
         # Optimize the model
-        # Reset the optimizer
-        self.optimizer.zero_grad()
+        # Reset the _optimizer
+        self._optimizer.zero_grad()
         # Compute ∇ L
         loss.backward()
         # trim the gradients
         # ∇ L <- max(min(∇L, 1)), -1)
-        for param in policy_net.parameters():
+        for param in Q.parameters():
             param.grad.data.clamp_(-1, 1)
         # 2. θₜ₊₁ = θₜ - α max(min(∇L, 1)), -1)
-        self.optimizer.step()
+        self._optimizer.step()
 
     def close(self):
         pass

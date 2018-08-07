@@ -258,7 +258,8 @@ def play(alg,
          nepisodes,
          logger_factory):
     logger = logger_factory(__name__)
-    logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
+    if len(logging.root.handlers) >= 2 and hasattr(logging.root.handlers[1], "baseFilename"):
+        logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
     observer.set_prob(prob)
     observer.set_alg(alg)
     observer.on_play_start()
