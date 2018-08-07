@@ -281,8 +281,6 @@ def play_episode(alg, prob, observer, episode_n):
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        if hasattr(prob, "render") and np.random.rand() < 0.1:
-            prob.render()
         # prob.render(None, 100, wait_time=0)
     observer.on_episode_end(episode_n)
     print("n = {}".format(episode_n))
