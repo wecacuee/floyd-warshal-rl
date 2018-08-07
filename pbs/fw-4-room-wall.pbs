@@ -11,9 +11,10 @@
 # #PBS -A jjcorso_fluxg      # Not required for blindspot but for flux
 
 echo "starting pbs script"
+VERSION=0.1.0
 MID_DIR=/z/home/dhiman/mid/floyd_warshall_rl/
-for d in src pbs build; do mkdir -p $MID_DIR/$d; done
-cd $MID_DIR/src/
+for d in src-$VERSION pbs build; do mkdir -p $MID_DIR/$d; done
+cd $MID_DIR/src-$VERSION/
 git clone $MID_DIR/git/ floyd_warshall_rl
 cd floyd_warshall_rl
 git pull

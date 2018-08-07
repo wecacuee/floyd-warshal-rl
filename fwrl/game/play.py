@@ -276,14 +276,22 @@ def play_episode(alg, prob, observer, episode_n):
     obs = prob.observation()
     rew = prob.reward()
     action = prob.action_space.sample()
+    step_n = 0
     while not (prob.done() or alg.done()):
         observer.on_new_step(obs=obs, rew=rew, action=action)
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        # prob.render(None, 100, wait_time=0)
+        #prob.render(None, 100, wait_time=0)
+        print("({}, {}, {}, {})".format(step_n, obs, action, rew))
+        step_n += 1
+
+    # Update rewards the "done" step
+    observer.on_new_step(obs=None, rew=rew, action=action)
+    alg.update(None, action, rew)
+
+    # Record end of episode
     observer.on_episode_end(episode_n)
-    print("n = {}".format(episode_n))
 
 def condition_by_type_map():
     return { str : operator.eq,

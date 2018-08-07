@@ -51,6 +51,18 @@ AgentVisMultiObserver = functools.partial(
     # Needs: log_file_dir log_file_path windy_grid_world nepisodes
 )
 
+AgentVisMultiObserverNoAlgVis = functools.partial(
+    AgentVisMultiObserver,
+    observer_keys = """logging_observer metrics_observers
+                       agent_vis_observer
+                       imgs_to_vid_observers""".split())
+
+AgentVisMultiObserverNoAlgVisXargs = xargs(
+    AgentVisMultiObserverNoAlgVis,
+    """prob logger_factory log_file_path
+    logging_encdec log_file_dir
+    windy_grid_world nepisodes""".split())
+
 
 AgentVisMultiObserverXargs = xargs(
     AgentVisMultiObserver,
@@ -70,7 +82,7 @@ def grid_world_play(
         observer       = None,
         nepisodes      = 100,
         seed           = 0,
-        max_steps      = 300,
+        max_steps      = 500,
         log_file_conf  = xargmem(LogFileConf,
                                "project_name confname".split()),
         rng            = xargs(random_state, ["seed"]),
