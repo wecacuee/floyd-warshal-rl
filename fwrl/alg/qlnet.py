@@ -125,7 +125,7 @@ class QLearningNetAgent:
                  batch_update_prob     = 0.1,
                  target_update_prob    = 0.1,
                  goal_reward           = 10,
-                 learning_rate         = 1e-7,
+                 learning_rate         = 1e-3,
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
@@ -190,6 +190,11 @@ class QLearningNetAgent:
         # - the alg.update(obs, act, rew)
         # or
         # obs_m_1 --alg--> act --prob--> obs, rew # # # obs, rew = prob.step(action)
+        if obs is None:
+            stm1, am1 = self._last_state_idx_act
+            self._memory.push(stm1, act, None, rew)
+            return
+
         if not self.observation_space.contains(obs):
             raise ValueError("Bad observation {obs}".format(obs=obs))
 
@@ -248,6 +253,8 @@ class QLearningNetAgent:
         # Q(sₜ, aₜ)
         # Compute Q(s_t, aₜ) - the model computes Q(s_t), then we select the
         # columns of actions taken
+        # print("a : {}".format(action_batch))
+        # print("Q(s, :) {}".format(Q(state_batch)))
         state_action_values = Q(state_batch, action_batch)
 
         # next_state_best_actions = argmaxₐ Q(sₜ₊₁, a)
@@ -262,7 +269,10 @@ class QLearningNetAgent:
 
         # Compute the expected Q values
         # rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a))
+        #print("max_a Q_target(s', a): {}".format(next_state_values))
         expected_state_action_values = (next_state_values * d) + reward_batch
+        #print("r+max_a Q_target(s, a): {}".format(expected_state_action_values))
+        #print("Q(s, a): {}".format(state_action_values))
 
         # Compute Huber loss
         # loss = rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a)) - Q(sₜ, aₜ)
@@ -281,6 +291,7 @@ class QLearningNetAgent:
             param.grad.data.clamp_(-1, 1)
         # 2. θₜ₊₁ = θₜ - α max(min(∇L, 1)), -1)
         self._optimizer.step()
+        #print("Q_(t+1)(s, a): {}".format(Q(state_batch, action_batch)))
 
         if self.rng.rand() < self.target_update_prob:
             self._action_value_target.load_state_dict(self._action_value_online.state_dict())

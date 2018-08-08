@@ -31,7 +31,7 @@ class Space(object):
 
     def from_jsonable(self, sample_n):
         return sample_n
-        
+
 
 class Problem(object):
     action_space = Space()
@@ -282,13 +282,13 @@ def play_episode(alg, prob, observer, episode_n):
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        #prob.render(None, 100, wait_time=0)
-        print("({}, {}, {}, {})".format(step_n, obs, action, rew))
+        prob.render(None, 100, wait_time=0)
         step_n += 1
 
     # Update rewards the "done" step
     observer.on_new_step(obs=None, rew=rew, action=action)
     alg.update(None, action, rew)
+    print("++++++++++++ steps: {} +++++++++++".format(step_n))
 
     # Record end of episode
     observer.on_episode_end(episode_n)

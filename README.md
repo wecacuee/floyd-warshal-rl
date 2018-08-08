@@ -33,7 +33,7 @@
 *** DONE Randomize the goal on new episode
   py/prob/windy_grid_world.py
 *** TODO Evalute in comparison to Q-learning with fresh explorer and finder, Q-learning with goal state.
-*** DONE Implement latency 1: > 1
+*** Implement latency 1: > 1
   in terms of latency and distance inefficiency.
   Floyd rewards: 773.0 = sum([35.0, 33.0, 145.0, 11.0, 91.0, 123.0, 54.0, 237.0, 44.0])
   Latency: 10.53
@@ -56,6 +56,17 @@ Floyd-Warshall
 /z/home/dhiman/mid/floyd_warshall_rl/201808_4493581_fw-4-room-grid-world/06-155055.log
 latency : 17.604684042326305; min latency 0.13358778625954199; max latency 48.2
 mean distineff = 1.1067439386686548; +- (0.10674393866865484, 7.607541775617059;)
+
+Latest results:
+sftp://lens.eecs.umich.edu:2222/z/home/dhiman/mid/floyd_warshall_rl/201807_1e2ac0f_fw_grid_world_play
+23 01:33:35 game.metrics    latency : 5.730895496953011; min latency 0.16086956521739132; max latency 10.686493184634449     human    2       {}
+23 01:33:35 game.metrics    mean distineff = 1.0513843243829977; +- (0.05138432438299767, 2.9486156756170026;)  human   2    {}
+
+sftp://lens.eecs.umich.edu:2222/z/home/dhiman/mid/floyd_warshall_rl/201807_50ce457_ql_grid_world_play
+30 10:09:24 game.metrics    latency : 1.8926652129883779; min latency 0.1939655172413793; max latency 3.803854875283447 human2
+        {}
+30 10:09:24 game.metrics    mean distineff = 1.6819494929376055; +- (0.6819494929376055, 11.068050507062395;)   human   2    {}
+
 
 ** Experimental setup
 

@@ -32,6 +32,9 @@ class GymProblem:
         self._episode_data = EpisodeData(*x)
         return self._episode_data.obs, self._episode_data.reward
 
+    def render(self, *a, **kw):
+        self._gym.render()
+
     def episode_reset(self, episode_n):
         self._episode_n = episode_n
         self._episode_data = EpisodeData(None, 0, False, dict())

@@ -1,4 +1,4 @@
-from ..game.play import play, NoOPObserver
+from ..game.play import play, NoOPObserver, play_episode
 from ..prob.gym import GymProblem
 from ..alg.qlnet import QLearningNetAgent
 import gym
@@ -12,5 +12,7 @@ def demo():
                               action_space = cartpole.action_space,
                               reward_range = cartpole.reward_range,
                               rng = np.random.RandomState(seed = 0))
-    play(qlnet, cartpole, NoOPObserver(), 1000000, lambda x: logging.getLogger(__name__))
+
+    return cartpole, qlnet
+    #play(qlnet, cartpole, NoOPObserver(), 1000000, lambda x: logging.getLogger(__name__))
 
