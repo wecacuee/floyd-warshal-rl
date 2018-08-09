@@ -45,27 +45,8 @@
   min latency 1.135483870967742;
   max latency 18.433734939759034
 
-Latest results:
-/z/home/dhiman/mid/floyd_warshall_rl/qsub_86207.blindspot.out
-/z/home/dhiman/mid/floyd_warshall_rl/201808_4493581_ql-4-room-grid-world/06-154235.log
-QLearning
-latency : 9.247249953793283; min latency 0.0037313432835820895; max latency 294.0
-mean distineff = 8.484575787460404; +- (7.484575787460404, 40.0154242125396;)
 
-Floyd-Warshall
-/z/home/dhiman/mid/floyd_warshall_rl/201808_4493581_fw-4-room-grid-world/06-155055.log
-latency : 17.604684042326305; min latency 0.13358778625954199; max latency 48.2
-mean distineff = 1.1067439386686548; +- (0.10674393866865484, 7.607541775617059;)
 
-Latest results:
-sftp://lens.eecs.umich.edu:2222/z/home/dhiman/mid/floyd_warshall_rl/201807_1e2ac0f_fw_grid_world_play
-23 01:33:35 game.metrics    latency : 5.730895496953011; min latency 0.16086956521739132; max latency 10.686493184634449     human    2       {}
-23 01:33:35 game.metrics    mean distineff = 1.0513843243829977; +- (0.05138432438299767, 2.9486156756170026;)  human   2    {}
-
-sftp://lens.eecs.umich.edu:2222/z/home/dhiman/mid/floyd_warshall_rl/201807_50ce457_ql_grid_world_play
-30 10:09:24 game.metrics    latency : 1.8926652129883779; min latency 0.1939655172413793; max latency 3.803854875283447 human2
-        {}
-30 10:09:24 game.metrics    mean distineff = 1.6819494929376055; +- (0.6819494929376055, 11.068050507062395;)   human   2    {}
 
 
 ** Experimental setup
@@ -85,13 +66,9 @@ sftp://lens.eecs.umich.edu:2222/z/home/dhiman/mid/floyd_warshall_rl/201807_50ce4
 
 
 ** Updated plan
-   1. Write a LaTeX version of FWRL
-      Propose an algorithm that competes with TDM, UVFA with HER. Probably need
-      implementation and comparison with both. Run it on simplest to implement
-      games.
-   2. List and then chose a multi-goal platform that is easy to implement especially in grid world.
-   3. Make an updated plan
-   4. Need a working version of DQN or UVFA before FWRL can be tried
+   1. Algorithms: Simplified floyd warshall, Model-based, HER, May be TDM
+   2. Environments: Lava world, Mujoco goal based continuous environments
+   3. Make simplified FW work on 4-room grid world.
  
 ** List of multi-goal testing environments
    1. HER: Mujoco pushing, sliding and pick and place, Fetch
@@ -105,3 +82,34 @@ sftp://lens.eecs.umich.edu:2222/z/home/dhiman/mid/floyd_warshall_rl/201807_50ce4
    2. Advantages of HER: remembers the past
       Cons: uses too much of memory.
 
+
+** Latest results logs
+/z/home/dhiman/mid/floyd_warshall_rl/qsub_86207.blindspot.out
+/z/home/dhiman/mid/floyd_warshall_rl/201808_4493581_ql-4-room-grid-world/06-154235.log
+QLearning
+latency : 9.247249953793283; min latency 0.0037313432835820895; max latency 294.0
+mean distineff = 8.484575787460404; +- (7.484575787460404, 40.0154242125396;)
+
+Floyd-Warshall
+/z/home/dhiman/mid/floyd_warshall_rl/201808_4493581_fw-4-room-grid-world/06-155055.log
+latency : 17.604684042326305; min latency 0.13358778625954199; max latency 48.2
+mean distineff = 1.1067439386686548; +- (0.10674393866865484, 7.607541775617059;)
+
+Latest results:
+/z/home/dhiman/mid/floyd_warshall_rl/201807_1e2ac0f_fw_grid_world_play
+23 01:33:35 game.metrics    latency : 5.730895496953011; min latency 0.16086956521739132; max latency 10.686493184634449     human    2       {}
+23 01:33:35 game.metrics    mean distineff = 1.0513843243829977; +- (0.05138432438299767, 2.9486156756170026;)  human   2    {}
+
+/z/home/dhiman/mid/floyd_warshall_rl/201807_50ce457_ql_grid_world_play
+30 10:09:24 game.metrics    latency : 1.8926652129883779; min latency 0.1939655172413793; max latency 3.803854875283447 human2
+        {}
+30 10:09:24 game.metrics    mean distineff = 1.6819494929376055; +- (0.6819494929376055, 11.068050507062395;)   human   2    {}
+
+Aug 9:
+dhiman@lens:.../mid/floyd_warshall_rl$ tail -2 201808_7a324cf_fw-4-room-grid-world/08-021509.log 
+08 03:33:50 fwrl.game.metrics latency : 17.604684042326305; min latency 0.13358778625954199; max latency 48.2   human   2    {}
+08 03:33:50 fwrl.game.metrics mean distineff = 1.1067439386686548; +- (0.10674393866865484, 7.607541775617059;) human   2    {}
+dhiman@lens:.../mid/floyd_warshall_rl$ tail -2 201808_7a324cf_ql-4-room-grid-world/07-131330.log 
+07 13:22:53 fwrl.game.metrics latency : 9.247249953793283; min latency 0.0037313432835820895; max latency 294.0 human   2    {}
+07 13:22:53 fwrl.game.metrics mean distineff = 8.484575787460404; +- (7.484575787460404, 40.0154242125396;)     human   2    {}
+dhiman@lens:.

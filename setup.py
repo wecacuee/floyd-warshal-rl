@@ -31,6 +31,7 @@ def CONF():
                          "ipython>=6.2.1",
                          "pytorch>=0.4.1",
                          "torchvision",
+                         "gym[mujoco]",
                          "gym[atari]",
                          "atari-py>=0.1.1",
                          "PyOpenGL",

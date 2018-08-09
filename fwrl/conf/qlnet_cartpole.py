@@ -7,7 +7,7 @@ import numpy as np
 import torch as t
 
 def demo():
-    cartpole = GymProblem(gym.make("CartPole-v0"))
+    cartpole = GymProblem(gym.make("CartPole-v0").unwrapped)
     qlnet = QLearningNetAgent(observation_space = cartpole.observation_space,
                               action_space = cartpole.action_space,
                               reward_range = cartpole.reward_range,

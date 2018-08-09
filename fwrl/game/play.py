@@ -269,7 +269,7 @@ def play(alg,
     observer.on_play_end()
     return observer
 
-def play_episode(alg, prob, observer, episode_n):
+def play_episode(alg, prob, observer, episode_n, render=False):
     prob.episode_reset(episode_n)
     alg.episode_reset(episode_n)
     observer.on_new_episode(episode_n)
@@ -282,11 +282,11 @@ def play_episode(alg, prob, observer, episode_n):
         alg.update(obs, action, rew)
         action = alg.egreedy(alg.policy(obs))
         obs, rew = prob.step(action)
-        prob.render(None, 100, wait_time=0)
+        if render: prob.render(None, 100, wait_time=0)
         step_n += 1
 
     # Update rewards the "done" step
-    observer.on_new_step(obs=None, rew=rew, action=action)
+    observer.on_new_step(obs=obs, rew=rew, action=action)
     alg.update(None, action, rew)
     print("++++++++++++ steps: {} +++++++++++".format(step_n))
 

@@ -233,6 +233,7 @@ def extended_kwprop(func):
             apply_args = chain(argnames, attrs.keys())
         return apply_conf(func, kwprops_m, apply_args)
 
+    wrapper.keywards = attrs
     return wrapper
 
 def kwasattr_to_propdict(kwasattr):
