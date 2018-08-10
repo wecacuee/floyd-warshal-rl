@@ -58,4 +58,5 @@ class TestGridWorld(TestCase):
 
     def test_valid_random_pos(self):
         rpos = self.lgw.valid_random_pos()
-        self.assertTrue(rpos in ([self.lgw.CELL_FREE] + self.lgw.CELL_WIND_NEWS))
+        rcell = self.lgw.cell_code(rpos)
+        self.assertTrue(rcell in ([self.lgw.CELL_FREE] + self.lgw.CELL_WIND_NEWS))
