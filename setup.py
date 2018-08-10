@@ -156,7 +156,7 @@ def setup():
         include_package_data = True,
         package_data={
             # If any package contains *.txt or *.rst files, include them:
-            '': ['*.txt'],
+            '': ['*.txt', '*.png'],
         },
     )
 
