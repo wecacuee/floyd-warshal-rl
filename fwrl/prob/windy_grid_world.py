@@ -144,7 +144,7 @@ class FreeSpaceHandler:
              cell_code, potential_cell_code):
         return potential_next_pose, potential_reward, potential_done
 
-    def render(self, canvas, bottom_left, grid_size, pose, cell_code,
+    def render(self, canvas, pose, grid_size, cell_code,
                color = draw.color_from_rgb((255,255,255)), thickness = -1):
         render_block(canvas, pose, grid_size, color = color)
 
@@ -174,12 +174,13 @@ class WindHandler:
              cell_code, potential_cell_code):
         return self._step(potential_next_pose, cell_code), potential_reward, potential_done
 
-    def render(self, canvas, bottom_left, grid_size, pose, cell_code,
+    def render(self, canvas, pose, grid_size, cell_code,
                wind_color = draw.color_from_rgb((0,0,0)),
                thickness = 5,
                tipLength = 10):
         render_block(canvas, pose, grid_size, color = draw.color_from_rgb((255, 255, 255)))
-        center = bottom_left + 0.5 * grid_size
+        pose_top_left = pose * grid_size
+        center = pose_top_left + 0.5 * grid_size
         wind_dir = self._wind_vectors(cell_code)
         pt1 = center - wind_dir * grid_size / 8
         pt2 = center + wind_dir * grid_size / 8
@@ -204,9 +205,9 @@ class GoalHandler:
         potential_done      = False
         return potential_next_pose, potential_reward, potential_done
 
-    def render(self, canvas, bottom_left, grid_size, goal_pose, cell_code):
+    def render(self, canvas, pose, grid_size, cell_code):
         # Render goal
-        render_goal(canvas, goal_pose, grid_size)
+        render_goal(canvas, pose, grid_size)
 
 
 class WallHandler:
@@ -223,7 +224,7 @@ class WallHandler:
         potential_reward    += self.wall_reward
         return potential_next_pose, potential_reward, potential_done
 
-    def render(self, canvas, bottom_left, grid_size, pose, cell_code,
+    def render(self, canvas, pose, grid_size, cell_code,
                color=draw.color_from_rgb((0,0,0)),
                thickness = -1):
         render_block(canvas, pose, grid_size, color)
@@ -243,7 +244,7 @@ class LavaHandler:
         potential_done      = True
         return potential_next_pose, potential_reward, potential_done
 
-    def render(self, canvas, bottom_left, grid_size, pose, cell_code,
+    def render(self, canvas, pose, grid_size, cell_code,
                color=draw.color_from_rgb((255,0,0)),
                thickness = -1):
         render_block(canvas, pose, grid_size, color)
@@ -283,10 +284,10 @@ class WindyGridWorld:
         self.maze = maze
         self.CELL_FREE = CELL_FREE
         self.OUTSIDE_GRID_CODE = OUTSIDE_GRID_CODE
-        self.CELL_WIND_NEWS = CELL_WIND_NEWS,
-        self.WALL_CELL_CODE = WALL_CELL_CODE,
-        self.GOAL_CELL_CODE = GOAL_CELL_CODE,
-        self.LAVA_CELL_CODE = LAVA_CELL_CODE,
+        self.CELL_WIND_NEWS = CELL_WIND_NEWS
+        self.WALL_CELL_CODE = WALL_CELL_CODE
+        self.GOAL_CELL_CODE = GOAL_CELL_CODE
+        self.LAVA_CELL_CODE = LAVA_CELL_CODE
         self.handlers = handlers
 
     @classmethod
@@ -362,6 +363,8 @@ class WindyGridWorld:
                 potential_next_pose, potential_reward, potential_done = h.step(
                     pose, potential_next_pose, potential_reward, potential_done,
                     cell_code, potential_cell_code)
+            if potential_next_pose.tolist() is None:
+                break
         return potential_next_pose, potential_reward, potential_done
 
     def render(self, canvas, grid_size, mode=None):
@@ -376,7 +379,7 @@ class WindyGridWorld:
             cell_code = self.cell_code(pose)
             for h in self.handlers:
                 if h.handles(cell_code, cell_code):
-                    h.render(canvas, bottom_left, grid_size, pose, cell_code)
+                    h.render(canvas, pose, grid_size, cell_code)
 
         if mode == 'human':
             draw.imshow(self.__class__.__name__, canvas)
@@ -387,9 +390,10 @@ class WindyGridWorld:
         y = self.rng.randint(0, self.shape[0])
         return np.array((x,y))
 
-    def valid_random_pos(self):
+    def valid_random_pos(self,
+                         valid_codes = lambda gw: [gw.CELL_FREE] + gw.CELL_WIND_NEWS):
         pos = self.random_pos()
-        while self.iswall(pos):
+        while self.cell_code(pos) not in valid_codes(self):
             pos = self.random_pos()
 
         return pos
@@ -431,12 +435,12 @@ def render_goal(ax, pose, cellsize, color=draw.color_from_rgb((0, 255, 0))):
 
 def render_agent_grid_world(canvas, grid_world, agent_pose,
                             cellsize,
-                            render_goal = render_goal,
                             render_agent = render_agent):
     grid_size = cellsize
     grid_world.render(canvas, grid_size)
     # Render agent
-    render_agent(canvas, agent_pose, grid_size)
+    if agent_pose.tolist() is not None:
+        render_agent(canvas, agent_pose, grid_size)
     return canvas
 
 class AgentInGridWorld(Problem):
@@ -556,11 +560,15 @@ class AgentInGridWorld(Problem):
 
         gw_pose, gw_rew, gw_done = self.grid_world_goal.step(
             self.pose, self.pose + self.action_space.tovector(act))
-        if gw_done:
+        if gw_pose.tolist() is None or gw_done:
             self._respawn()
+        else:
+            self.pose = gw_pose
+
         self._last_reward = gw_rew
         self.steps += 1
-        return self.pose, self._last_reward, self.done()
+        self._done = gw_done or self.steps >= self.max_steps
+        return self.pose, self._last_reward, self._done
 
     def _respawn(self):
         self.pose          = self.start_pose_gen(self, self.goal_pose)
@@ -571,12 +579,12 @@ class AgentInGridWorld(Problem):
     def observation(self):
         return self.pose
 
-    def render(self, canvas, grid_size, wait_time=0, mode='human'):
+    def render(self, canvas, grid_size, wait_time=-1, mode=None):
         if self.no_render:
             return canvas
 
         if canvas is None:
-            canvas = draw.white_img(np.array(self.grid_world_goal.shape) * 100)
+            canvas = draw.white_img(np.array(self.grid_world_goal.shape) * grid_size)
         canvas = render_agent_grid_world(
             canvas, self.grid_world_goal, self.pose, grid_size)
         if wait_time != 0 and mode == 'human':
@@ -603,7 +611,6 @@ class AgentInGridWorld(Problem):
         self._done         = False
 
     def done(self):
-        self._done = self.steps >= self.max_steps
         return self._done
 
     @MEMOIZE_METHOD
