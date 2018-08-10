@@ -35,6 +35,8 @@ namedWindow
 destroyWindow
 destroyAllWindows
 matshow
+to_ndarray
+from_ndarray
 """.split()
 for n in IMPORT_NAMES:
     globals()[n] = getattr(backend, n, not_implemented)

@@ -66,9 +66,18 @@
 
 
 ** Updated plan
-   1. Algorithms: Simplified floyd warshall, Model-based, HER, May be TDM
-   2. Environments: Lava world, Mujoco goal based continuous environments
-   3. Make simplified FW work on 4-room grid world.
+   1. Algorithms:
+      - Simplified floyd warshall (11 Aug)
+        + Make simplified FW work on 4-room grid world.
+      - Make DQN work on your own terms (12 Aug)
+      - Model-based: predict next state (13 Aug)
+      - HER : Hindsight Experience Replay with non-end as goals as well as keyframes as goals.
+      - (15 Aug)
+   2. Environments:
+      - Lava world : 10 Aug
+      - Mujoco goal based continuous environments : Test DQN on Mujoco (13 Aug)
+   3. Writeup:
+      Write about simplified FW on 4-room grid world and lava world. (12 Aug)
  
 ** List of multi-goal testing environments
    1. HER: Mujoco pushing, sliding and pick and place, Fetch

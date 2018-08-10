@@ -10,9 +10,9 @@ import numpy as np
 import numpy.random as nprnd
 from numpy.linalg import norm as vnorm
 
-from cog.geom.polygons import convex_polygon_contains
+from ..geom.polygons import convex_polygon_contains
 
-from cog.mpl2cv2 import MPLAsCV, is_cv2_matplotlib
+from ..mpl2cv2 import MPLAsCV, is_cv2_matplotlib
 import matplotlib.cm as cmap
 
 cv2 = MPLAsCV()

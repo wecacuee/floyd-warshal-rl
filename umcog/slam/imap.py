@@ -1,6 +1,6 @@
 import numpy as np
-import landmarkmap as lmap
-from landmarkmap import (Polygon, MultiPolygonMapBlock, StaticTraj
+from . import landmarkmap as lmap
+from .landmarkmap import (Polygon, MultiPolygonMapBlock, StaticTraj
                          , RectangleMapBlock, RobotViewMapBlock
                          , PieceWiseLinearTraj, InteractiveTrajectory
                          , Trajectory, Rectangle, MapBlock, Landmarks)

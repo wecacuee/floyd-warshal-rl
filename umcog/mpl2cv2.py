@@ -187,6 +187,7 @@ class MPLAsCV(object):
         from matplotlib.backends.backend_agg import FigureCanvasAgg
         canvas = FigureCanvasAgg(ax.get_figure())
         w, h = canvas.get_width_height()
+        canvas.draw()
         return np.frombuffer(canvas.tostring_argb(), dtype='u1').reshape(w, h, 4)
 
     def __del__(self):

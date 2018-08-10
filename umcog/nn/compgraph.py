@@ -139,14 +139,13 @@ dslvocab.append(LSTMCell.__name__)
 
 ##### Tensor flow dependent code (Driver code) #############################
 
-import tensorflow as tf
 
 def conv2d(x,
            output_dim,
            kernel_size,
            stride,
-           initializer=tf.contrib.layers.xavier_initializer(),
-           activation_fn=tf.nn.relu,
+           initializer=lambda : tf.contrib.layers.xavier_initializer(),
+           activation_fn=lambda x: tf.nn.relu(x),
            data_format='NHWC',
            padding='VALID',
            name='conv2d'):
@@ -157,6 +156,7 @@ def conv2d(x,
   You better provide a meaning full name, otherwise you may end up
   unintentional sharing of weights
   """
+  import tensorflow as tf
   with tf.variable_scope(name):
     if data_format == 'NCHW':
       stride = [1, 1, stride[0], stride[1]]
@@ -328,8 +328,9 @@ def make_FC2_ops(input_, output_size, hidden_layer):
         , output_size, activation_fn=activation_fn, name="l2")[0]
     return fc2
 
-class FC2GRUCell(tf.nn.rnn_cell.RNNCell):
+class FC2GRUCell():
     def __init__(self, output_size, hidden_layer, **kwargs):
+        self.inherit_from = tf.nn.rnn_cell.RNNCell
         self._gru_cell = tf.nn.rnn_cell.GRUCell(**kwargs)
         self._output_size = output_size
         self._hidden_layer = hidden_layer
