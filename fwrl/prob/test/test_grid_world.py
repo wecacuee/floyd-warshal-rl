@@ -1,4 +1,5 @@
 
+from doctest import DocTestSuite
 from unittest import TestCase
 from pkg_resources import resource_stream
 
@@ -8,6 +9,11 @@ from PIL import Image
 from umcog import draw
 
 from ..windy_grid_world import WindyGridWorld
+from .. import windy_grid_world
+
+def load_tests(loader, tests, ignore):
+    tests.addTests(DocTestSuite(windy_grid_world))
+    return tests
 
 class TestGridWorld(TestCase):
     def setUp(self):

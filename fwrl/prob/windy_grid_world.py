@@ -39,8 +39,7 @@ def maze_from_string(maze_string,
                      outtable = "001234567",
                      firstchar = "0",
                      defaultchar = "0",
-                     breakline = "\n",
-                     encoding = "ascii"):
+                     breakline = "\n"):
     r"""
     free space: .         -> 0
     wall      : +         -> 1
@@ -61,6 +60,7 @@ def maze_from_string(maze_string,
            [0, 2, 5, 2, 0],
            [0, 0, 1, 0, 0]], dtype=uint8)
     """
+    encoding = "ascii"
     maze_string = maze_string.translate(str.maketrans(intable, outtable))
     maze_bytes = maze_string.encode(encoding)
     maze_lines = list(filter(len, maze_string.split(breakline))) # keep only non-empty lines
@@ -72,6 +72,32 @@ def maze_from_string(maze_string,
     return (np.frombuffer(''.join(maze_lines).encode(encoding), dtype='u1'
                 ).reshape(nrows, ncols)
             - ord(firstchar))
+
+def maze_to_string(maze,
+                   intable = "001234567",
+                   outtable = ". +^<>VGL",
+                   firstchar = "0",
+                   defaultchar = "0",
+                   breakline = "\n",
+                   encoding = "utf-8"):
+    r"""
+    >>> maze = np.array(
+    ...              [[0, 0, 1, 0, 0],
+    ...               [0, 0, 2, 0, 0],
+    ...               [0, 2, 2, 2, 0],
+    ...               [0, 2, 2, 2, 0],
+    ...               [0, 0, 1, 0, 0]], dtype='u1')
+    >>> maze_to_string(maze)
+    '  +  \n  ^  \n ^^^ \n ^^^ \n  +  \n'
+    """
+    # Add new lines
+    maze_nl = np.hstack((maze + ord(firstchar),
+                         ord(breakline) * np.ones((maze.shape[0], 1), dtype='u1')))
+    # Convert to string
+    maze_str = maze_nl.tostring().decode("utf-8")
+    # Translate to visually meaningful characters
+    maze_str_tl = maze_str.translate(str.maketrans(intable, outtable))
+    return maze_str_tl
 
 
 def random_maze_from_shape(shape):
