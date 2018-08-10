@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from pathlib import Path
 import numpy as np
 import functools
+from functools import partial
 import os
 import pkg_resources
 import copy
@@ -316,6 +317,7 @@ class WindyGridWorld:
         self.LAVA_CELL_CODE = LAVA_CELL_CODE
         self.handlers = handlers
 
+    # TODO: make these function as partials on the constructor
     @classmethod
     @extended_kwprop
     def from_maze_string(cls,
@@ -433,6 +435,7 @@ class WindyGridWorld:
         c.maze = copy.copy(self.maze)
         return c
 
+
 def random_goal_pose_gen(prob):
     return prob.grid_world.valid_random_pos()
 
@@ -442,6 +445,7 @@ def random_start_pose_gen(prob, goal_pose):
     while np.all(start_pose == goal_pose):
         start_pose = prob.grid_world.valid_random_pos()
     return start_pose
+
 
 def render_block(ax, pose, cellsize, color):
     pose_top_left = pose * cellsize
@@ -459,6 +463,7 @@ def render_agent(ax, pose, cellsize, color=draw.color_from_rgb((0, 0, 255))):
 def render_goal(ax, pose, cellsize, color=draw.color_from_rgb((0, 255, 0))):
     return render_block(ax, pose, cellsize, color)
 
+
 def render_agent_grid_world(canvas, grid_world, agent_pose,
                             cellsize,
                             render_agent = render_agent):
@@ -468,6 +473,35 @@ def render_agent_grid_world(canvas, grid_world, agent_pose,
     if agent_pose.tolist() is not None:
         render_agent(canvas, agent_pose, grid_size)
     return canvas
+
+
+def canvas_gen(shape):
+    return draw.white_img(shape)
+
+
+def agent_renderer(self, canvas, canvas_gen = canvas_gen, grid_size = 50,
+                   wait_time = -1, mode='log'):
+    canvas = self._canvas = (
+        self._canvas
+        if self._canvas is not None else
+        draw.white_img(np.array(self.grid_world_goal.shape) * grid_size))
+    canvas = render_agent_grid_world(
+        canvas, self.grid_world_goal, self.pose, grid_size)
+    if wait_time != 0 and mode == 'human':
+        draw.imshow(self.__class__.__name__, canvas)
+    if self.log_file_dir is not None and mode == 'log':
+        draw.imwrite(
+            str(
+                Path(self.log_file_dir) / "{name}_{episode_n}_{step}.pdf".format(
+                    name = self.__class__.__name__,
+                    episode_n = self.episode_n,
+                    step=self.steps)),
+            canvas)
+    return canvas
+
+class AgentRenderer:
+    default = agent_renderer
+    human = partial(agent_renderer, wait_time = 10, mode = 'human')
 
 class AgentInGridWorld(Problem):
     def __init__(self,
@@ -481,6 +515,7 @@ class AgentInGridWorld(Problem):
                  no_render = False,
                  log_file_dir = "/tmp/",
                  reward_range = (1, 10),
+                 renderer = AgentRenderer.default
     ):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
@@ -493,6 +528,8 @@ class AgentInGridWorld(Problem):
         self.no_render         = no_render
         self.log_file_dir      = log_file_dir
         self.observation_space = observation_space # Obs2DSpace
+        self._canvas           = None
+        self.renderer  = agent_renderer
         #Loc2DSpace(
         #    lower_bound = np.array([0, 0]),
         #    upper_bound = np.array(grid_world.shape),
@@ -605,25 +642,8 @@ class AgentInGridWorld(Problem):
     def observation(self):
         return self.pose
 
-    def render(self, canvas, grid_size, wait_time=-1, mode=None):
-        if self.no_render:
-            return canvas
-
-        if canvas is None:
-            canvas = draw.white_img(np.array(self.grid_world_goal.shape) * grid_size)
-        canvas = render_agent_grid_world(
-            canvas, self.grid_world_goal, self.pose, grid_size)
-        if wait_time != 0 and mode == 'human':
-            draw.imshow(self.__class__.__name__, canvas)
-        if self.log_file_dir is not None and mode == 'log':
-            draw.imwrite(
-                str(
-                    Path(self.log_file_dir) / "{name}_{episode_n}_{step}.pdf".format(
-                        name = self.__class__.__name__,
-                        episode_n = self.episode_n,
-                        step=self.steps)),
-                canvas)
-        return canvas
+    def render(self, canvas = None, **kw):
+        return self.renderer(self, canvas = canvas, **kw)
 
     def episode_reset(self, episode_n):
         self.steps         = 0

@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 import logging
 import json
 from contextlib import closing
-from functools import lru_cache
+from functools import lru_cache, partial, wraps
 import numpy as np
 import operator
 from collections import OrderedDict
@@ -259,27 +259,35 @@ def default_logger_factory(name):
     return logging.getLogger(name)
 
 
-def noop_renderer(prob):
-    pass
+def call_sometimes(func, call_prob = 1.0, rng = np.random.RandomState()):
+    @wraps(func)
+    def wrapper(*a, **kw):
+        if rng.rand() < call_prob:
+            return func(*a, **kw)
+    return wrapper
 
 
-class ProbRender:
-    def __init__(self, grid_size = 50, wait_time = 10, mode='human'):
-        self.cnvs = None
-        self.grid_size = grid_size
-        self.wait_time = wait_time
-        self.mode = mode
-
-    def __call__(self, prob):
-        self.cnvs = prob.render(self.cnvs, self.grid_size, self.wait_time, self.mode)
-
+class Renderer:
+    noop = lambda prob: 0
+    gym = lambda prob: prob.render()
+    human = lambda prob: prob.render(mode = 'human')
+    sometimes = call_sometimes(lambda prob: prob.render(mode = 'human'),
+                               call_prob = 0.1)
+    log = lambda prob: prob.render(mode = 'log')
 
 def play(alg,
          prob,
          observer = NOOP_OBSERVER,
          nepisodes = 1,
          logger_factory = default_logger_factory,
-         renderer = noop_renderer):
+         renderer = Renderer.noop):
+    """
+    renderer: Options are:
+      - Renderer.noop
+      - Renderer.gym
+      - Renderer.human
+      - Renderer.sometimes
+    """
     logger = logger_factory(__name__)
     if len(logging.root.handlers) >= 2 and hasattr(logging.root.handlers[1], "baseFilename"):
         logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
@@ -292,7 +300,7 @@ def play(alg,
     observer.on_play_end()
     return observer
 
-def play_episode(alg, prob, observer, episode_n, renderer = noop_renderer):
+def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop):
     prob.episode_reset(episode_n)
     alg.episode_reset(episode_n)
     observer.on_new_episode(episode_n)
