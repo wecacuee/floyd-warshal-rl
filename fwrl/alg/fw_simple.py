@@ -7,14 +7,22 @@ from umcog.confutils import extended_kwprop
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
+def sample_strategy_sample(replay_memory, batch_size):
+    self = replay_memory
+    return self.rng.choice(self.memory[:self.position], batch_size).tolist()
+
+def sample_strategy_tail(replay_memory, batch_size):
+    self = replay_memory
+    start_idx = max(self.position - batch_size, 0)
+    return self.memory[start_idx:self.position].tolist()
 
 class ReplayMemory(object):
-    def __init__(self, capacity, rng):
+    def __init__(self, capacity, rng, sample_strategy = sample_strategy_tail):
         self.capacity = capacity
         self.rng    = rng
         self.memory = np.empty(capacity, dtype=np.object)
         self.position = 0
-        self.rng = rng
+        self._sample_strategy = sample_strategy
 
     def push(self, *args):
         """Saves a transition."""
@@ -22,11 +30,19 @@ class ReplayMemory(object):
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
-        return self.rng.choice(self.memory[:self.position], batch_size).tolist()
+        return self._sample_strategy(self, batch_size)
 
     def __len__(self):
         return len(self.memory)
 
+
+def rand_argmax(arr, rng):
+    """
+    Chose the a random arg among maxes
+    """
+    val = np.max(arr, keepdims=True)
+    idx = np.arange(arr.shape[0])[arr == val]
+    return rng.choice(idx)
 
 class FWTabularSimple(object):
     @extended_kwprop
@@ -39,9 +55,9 @@ class FWTabularSimple(object):
                  goal_reward = 10,
                  replay_memory = ReplayMemory,
                  key_frames  = [],
-                 batch_update_prob = 0.1,
+                 batch_update_prob = 1.0,
                  egreedy_prob = 0.1,
-                 batch_size = 16,
+                 batch_size = 1,
     ):
         assert max_steps is not None, "max_steps is required"
         assert reward_range is not None, "need reward_range"
@@ -52,9 +68,10 @@ class FWTabularSimple(object):
         self.rng           = rng
         self.goal_reward   = goal_reward
         self.replay_memory = replay_memory
+        self.key_frames    = key_frames
         self.batch_update_prob = batch_update_prob
         self.egreedy_prob  = egreedy_prob
-        self.batch_size    = batch_size
+        self.batch_size    = 4
         self.reset()
 
     @property
@@ -63,7 +80,7 @@ class FWTabularSimple(object):
 
     @property
     def fw_value_init(self, safety_factor = 10):
-        return safety_factor * self.goal_reward
+        return self.goal_reward / safety_factor
 
     def episode_reset(self, episode_n):
         self._last_state_idx_act = None
@@ -80,9 +97,12 @@ class FWTabularSimple(object):
     def _encode_obs(self, obs):
         obs_hashable = tuple(obs.tolist())
         if obs_hashable not in self._hash_state:
-            self.max_state_idx += 1
             self._hash_state[obs_hashable] = self.max_state_idx
-        return self._hash_state[obs_hashable]
+            self.max_state_idx += 1
+        st = self._hash_state[obs_hashable]
+        print("obs = {} -> st = {}".format(obs_hashable, st))
+        return st
+
 
     def _default_fw_value(self, new_state_size):
         shape = (new_state_size, self.action_space.size, new_state_size)
@@ -106,8 +126,9 @@ class FWTabularSimple(object):
 
     def batch_update(self):
         # Abbreviate the variables
+        print("Updating FW")
         F = self.fw_value
-        transitions = self._memory.sample(self.batch_size)
+        transitions = self._memory.tail(self.batch_size)
         batch = Transition(*zip(*transitions))
         non_final_states = [s for s in batch.next_state if s is not None]
         non_final_mask = np.array([s is not None for s in batch.next_state])
@@ -117,7 +138,15 @@ class FWTabularSimple(object):
         action_batch = np.array(batch.action, dtype='i1')[non_final_mask]
         # rₜ
         reward_batch = np.array(batch.reward)[non_final_mask]
-        F[state_batch, action_batch, next_state_batch] = reward_batch
+
+        # v0.1.0
+        #F[state_batch, action_batch, next_state_batch] = reward_batch
+        # If reward batch is independent of goal state then we should update all FW
+        # v0.2.0
+        print("updating batch : {}, {}".format(state_batch, action_batch))
+        print("before update:{}".format(F[state_batch, action_batch, :]))
+        F[state_batch, action_batch, :] = reward_batch[:, np.newaxis]
+        print("after update:{}".format(F[state_batch, action_batch, :]))
 
 
     def _hit_goal(self, obs, rew):
@@ -148,22 +177,30 @@ class FWTabularSimple(object):
         if self._last_state_idx_act is None:
             self._last_state_idx_act = st, act
             return
-        stm1, am1 = self._last_state_idx_act
+        else:
+            stm1, am1 = self._last_state_idx_act
+            self._last_state_idx_act = st, act
 
         self._memory.push(stm1, act, st, rew - self.per_edge_cost)
         if self.rng.rand() < self.batch_update_prob:
             self.batch_update()
 
     def random_state(self):
-        return self.rng.randint(self.max_state_idx + 1)
+        return self.rng.randint(self.max_state_idx)
 
     def goal_state(self):
-        return (self.random_state() if self._goal_state is
-                None else self._goal_state)
+        return (self.random_state()
+                if self._goal_state is None
+                else self._goal_state)
 
     def policy(self, obs):
         state_idx = self._state_idx_from_obs(obs)
-        return np.argmax(self.fw_value[state_idx, :, self.goal_state()])
+        gs = self.goal_state()
+        fw = self.fw_value[state_idx, :, gs]
+        act = rand_argmax(fw, rng = self.rng)
+        print("On state = {}, goal_state = {}, fw = {}".format(state_idx, self.goal_state(), fw))
+        print("Taking action {}".format(act))
+        return act
 
     def egreedy(self, act):
         return self.action_space.sample() if self.rng.rand() < self.egreedy_prob else act

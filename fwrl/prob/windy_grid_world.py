@@ -283,7 +283,7 @@ class WindyGridWorld:
                  CELL_FREE = 0,
                  OUTSIDE_GRID_CODE = 1,
                  wind_strength = 0.5,
-                 wall_reward = -0.05,
+                 wall_reward = 0,
                  goal_reward = 10,
                  lava_reward = -10,
                  CELL_WIND_NEWS = [2, 3, 4, 5],
@@ -594,13 +594,13 @@ class AgentInGridWorld(Problem):
         self._last_reward = gw_rew
         self.steps += 1
         self._done = gw_done or self.steps >= self.max_steps
-        return self.pose, self._last_reward, self._done
+        return self.pose, self._last_reward
 
     def _respawn(self):
         self.pose          = self.start_pose_gen(self, self.goal_pose)
 
     def reward(self):
-        return (self.goal_reward if self.hit_goal() else self._last_reward)
+        return self._last_reward
 
     def observation(self):
         return self.pose

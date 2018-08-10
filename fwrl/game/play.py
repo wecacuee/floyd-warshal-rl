@@ -237,10 +237,11 @@ class MultiObserver(object):
             def wrapper(*args, **kwargs):
                 for k, a in childattr:
                     a(*args, **kwargs)
-                    
+
             return wrapper
         else:
             super().__getattr__(attr)
+
 
 class LogFileWriter(object):
     def __init__(self, logger):
@@ -250,13 +251,35 @@ class LogFileWriter(object):
     def write_data(self, dct, tag):
         self._logger.debug("", extra=dict(tag=tag, data=dct))
 
-# Sample refrees
-#@extended_kwprop
+
+NOOP_OBSERVER = NoOPObserver()
+
+
+def default_logger_factory(name):
+    return logging.getLogger(name)
+
+
+def noop_renderer(prob):
+    pass
+
+
+class ProbRender:
+    def __init__(self, grid_size = 50, wait_time = 10, mode='human'):
+        self.cnvs = None
+        self.grid_size = grid_size
+        self.wait_time = wait_time
+        self.mode = mode
+
+    def __call__(self, prob):
+        self.cnvs = prob.render(self.cnvs, self.grid_size, self.wait_time, self.mode)
+
+
 def play(alg,
          prob,
-         observer,
-         nepisodes,
-         logger_factory):
+         observer = NOOP_OBSERVER,
+         nepisodes = 1,
+         logger_factory = default_logger_factory,
+         renderer = noop_renderer):
     logger = logger_factory(__name__)
     if len(logging.root.handlers) >= 2 and hasattr(logging.root.handlers[1], "baseFilename"):
         logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
@@ -264,45 +287,52 @@ def play(alg,
     observer.set_alg(alg)
     observer.on_play_start()
     for n in range(nepisodes):
-        play_episode(alg, prob, observer, n)
+        play_episode(alg, prob, observer, n, renderer = renderer)
 
     observer.on_play_end()
     return observer
 
-def play_episode(alg, prob, observer, episode_n, render=False):
+def play_episode(alg, prob, observer, episode_n, renderer = noop_renderer):
     prob.episode_reset(episode_n)
     alg.episode_reset(episode_n)
     observer.on_new_episode(episode_n)
     obs = prob.observation()
     rew = prob.reward()
-    action = prob.action_space.sample()
+    act = prob.action_space.sample()
     step_n = 0
     while not (prob.done() or alg.done()):
-        observer.on_new_step(obs=obs, rew=rew, action=action)
-        alg.update(obs, action, rew)
-        action = alg.egreedy(alg.policy(obs))
-        obs, rew = prob.step(action)
-        if render: prob.render(None, 100, wait_time=0)
+        observer.on_new_step(obs=obs, rew=rew, action=act)
+        alg.update(obs, act, rew)
+        act = alg.egreedy(alg.policy(obs))
+        print("taking act {}".format(act))
+        obs, rew = prob.step(act)
+        print("Got obs={}, reward={}".format(obs, rew))
+        renderer(prob)
+
         step_n += 1
 
     # Update rewards the "done" step
-    observer.on_new_step(obs=obs, rew=rew, action=action)
-    alg.update(None, action, rew)
+    observer.on_new_step(obs=obs, rew=rew, action=act)
+    alg.update(None, act, rew)
     print("++++++++++++ steps: {} +++++++++++".format(step_n))
 
     # Record end of episode
     observer.on_episode_end(episode_n)
 
+
 def condition_by_type_map():
     return { str : operator.eq,
              list : operator.contains }
 
+
 def comparison_op(criteria_val, data_val):
     return condition_by_type_map()[type(criteria_val)](criteria_val, data_val)
+
 
 def data_cmp_criteria(data, criteria,
                       cmp_op = comparison_op):
     return all(cmp_op(v, data.get(k, None)) for k, v in criteria.items())
+
 
 def filter_by_tag_data(data_cmp_criteria = data_cmp_criteria,
                        **criteria):
@@ -320,9 +350,11 @@ def filter_by_tag_data(data_cmp_criteria = data_cmp_criteria,
             return False
     return func
 
+
 def post_process_data_iter(log_file_reader = None, filter_criteria = dict()):
     return filter(filter_by_tag_data(**filter_criteria) ,
                   log_file_reader.read_data())
+
 
 def post_process_generic(data_iter, process_data_tag):
     return [process_data_tag(data=data, tag=tag)
