@@ -153,42 +153,55 @@ class FWTabularSimple(object):
         #F[state_batch, action_batch, next_state_batch] = reward_batch
         # If reward batch is independent of goal state then we should update all FW
         # v0.2.0
-        F[state_batch, action_batch, 1:] = reward_batch[:, np.newaxis]
+        #F[state_batch, action_batch, 1:] = reward_batch[:, np.newaxis]
+
+        # v0.4.0
+        # Not all destinations are reachable
+        F[state_batch, action_batch, next_state_batch + 1] = reward_batch
+
         # v0.3.0
         # This infty_goal_state is a proxy for all the states that have not been
         # explored yet.
         # This basically works like Q(s, a)
-        F[state_batch, action_batch, self.infty_goal_state()] = np.maximum(
-            F[state_batch, action_batch, self.infty_goal_state()],
+        # F[state_batch, action_batch, self.infty_goal_state()] = np.maximum(
+        #     reward_batch + self.discount * np.max(
+        #         F[next_state_batch, :, self.infty_goal_state()]))
+        # v0.4.1: no maximum, because reality of pessimism has to be accepted
+        F[state_batch, action_batch, self.infty_goal_state()] = (
             reward_batch + self.discount * np.max(
                 F[next_state_batch, :, self.infty_goal_state()]))
-        # transitive update
 
+        # transitive update
         # Align the state_batch dimension
-        upto_state_batch = F[:, :, np.newaxis, state_batch].transpose((3, 0, 1, 2))
+        upto_state_batch = F[:, :, state_batch + 1]
+
         # Assume best action via state_batch
         best_case_from_state_batch = np.max(
             F[state_batch, :, :],
             # action axis
-            axis=1, keepdims=True)
-        best_case_from_state_batch = best_case_from_state_batch[:, np.newaxis, :, :]
+            axis=1)
+
+        # Max over the state_batch dimension
+        # (chose the most rewarding intermediate stage)
+        # F[i, l, j] = max_k F[i, l, k] + max_m F[k, m, j]
+        # F[i, l, j] = max_k F[i, l, k] + F_max[k, j]
+        # F[i, l, j] = max_k F[i, l, k, 1] + F_max[1, 1, k, j]
+        best_via_state = np.max(
+            upto_state_batch[..., np.newaxis] + self.discount * best_case_from_state_batch,
+            # state_batch axis
+                axis=2
+        )
+
         # Some problem with optimistic exploration keeps adding up and exceeds
         # the goal rewards.
         # Probably duplicates above step
-        F[:, :, :] = np.maximum(
+        np.maximum(
             # maximum of current F vs going via state_batch
-            F[:, :, :],
-            # Max over the state_batch dimension
-            # (chose the most rewarding intermediate stage)
-            np.max(
-                upto_state_batch + self.discount * best_case_from_state_batch,
-                # state_batch axis
-                axis=0
-            )
+            F,
+            best_via_state,
+            out=F
         )
         # Diagonal elements should always be zero
-        F[state_batch, :, state_batch] = 0
-        F[next_state_batch, :, next_state_batch] = 0
         assert np.max(F) <= self.goal_reward
 
 

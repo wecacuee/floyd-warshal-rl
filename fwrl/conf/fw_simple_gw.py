@@ -39,12 +39,13 @@ def fw_simple_gw_play(
         observation_space   = prop(lambda s : s.prob.observation_space),
         reward_range        = prop(lambda s : s.prob.reward_range),
         windy_grid_world    = prop(lambda s : s.prob.grid_world),
-        observer            = AgentVisMultiObserverNoAlgVisXargs, # if visualize
-        #observer            = NoVisMultiObserverXargs, # if no visualize
+        #observer            = AgentVisMultiObserverNoAlgVisXargs, # if visualize
+        observer            = NoVisMultiObserverXargs, # if no visualize
         visualizer_observer = NoOPObserver,
         logger              = prop(lambda s: s.logger_factory("FWTabularSimpleLogger")),
         log_file_reader     = xargs(LogFileReader, ["log_file_path"],
                                     enc = NPJSONEncDec())):
-    return play(alg, prob, observer, nepisodes, logger_factory)
+    return alg, prob, observer, nepisodes, logger_factory
+    #return play(alg, prob, observer, nepisodes, logger_factory)
 
 main = fw_simple_gw_play

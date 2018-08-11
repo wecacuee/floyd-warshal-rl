@@ -480,7 +480,7 @@ def canvas_gen(shape):
 
 
 def agent_renderer(self, canvas, canvas_gen = canvas_gen, grid_size = 50,
-                   wait_time = -1, mode='log'):
+                   wait_time = 10, mode='log'):
     canvas = self._canvas = (
         self._canvas
         if self._canvas is not None else
@@ -501,7 +501,7 @@ def agent_renderer(self, canvas, canvas_gen = canvas_gen, grid_size = 50,
 
 class AgentRenderer:
     default = agent_renderer
-    human = partial(agent_renderer, wait_time = 10, mode = 'human')
+    human = partial(agent_renderer, mode = 'human')
 
 class AgentInGridWorld(Problem):
     def __init__(self,
