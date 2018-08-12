@@ -115,13 +115,24 @@ Latest results:
 30 10:09:24 game.metrics    mean distineff = 1.6819494929376055; +- (0.6819494929376055, 11.068050507062395;)   human   2    {}
 
 Aug 9:
-dhiman@lens:.../mid/floyd_warshall_rl$ tail -2 201808_7a324cf_fw-4-room-grid-world/08-021509.log 
-08 03:33:50 fwrl.game.metrics latency : 17.604684042326305; min latency 0.13358778625954199; max latency 48.2   human   2    {}
-08 03:33:50 fwrl.game.metrics mean distineff = 1.1067439386686548; +- (0.10674393866865484, 7.607541775617059;) human   2    {}
 dhiman@lens:.../mid/floyd_warshall_rl$ tail -2 201808_7a324cf_ql-4-room-grid-world/07-131330.log 
 07 13:22:53 fwrl.game.metrics latency : 9.247249953793283; min latency 0.0037313432835820895; max latency 294.0 human   2    {}
 07 13:22:53 fwrl.game.metrics mean distineff = 8.484575787460404; +- (7.484575787460404, 40.0154242125396;)     human   2    {}
+dhiman@lens:.../mid/floyd_warshall_rl$ tail -2 201808_7a324cf_fw-4-room-grid-world/08-021509.log 
+08 03:33:50 fwrl.game.metrics latency : 17.604684042326305; min latency 0.13358778625954199; max latency 48.2   human   2    {}
+08 03:33:50 fwrl.game.metrics mean distineff = 1.1067439386686548; +- (0.10674393866865484, 7.607541775617059;) human   2    {}
 dhiman@lens:.
+
+Aug 12:
+dhiman@lens:~/wrk/floyd-warshall-rl$ tail -2 /z/home/dhiman/mid/floyd_warshall_rl/201808_b77f1bb_ql-4-room-grid-world/12-140554.log
+12 14:21:32 fwrl.game.metrics latency : 5.422566651204752; min latency 0.05363984674329502; max latency 49.0    human   2    {}
+12 14:21:32 fwrl.game.metrics mean distineff = 9.641941793146612; +- (8.641941793146612, 67.35805820685339;)    human   2    {}
+dhiman@lens:~/wrk/floyd-warshall-rl$ tail -2 /z/home/dhiman/mid/floyd_warshall_rl/201808_b77f1bb_fw-4-room-grid-world/12-142132.log
+12 14:35:41 fwrl.game.metrics latency : 39.247887970615245; min latency 0.5; max latency 139.0  human   2       {}
+12 14:35:41 fwrl.game.metrics mean distineff = 1.1000429830217062; +- (0.10004298302170622, 2.3444014614227386;)        human2
+        {}
+
+
 
 # Observations
 1. Q(s,a) = F(s, a, \infty) is an exploration specific build up. Encourages
