@@ -8,10 +8,12 @@ from .default import ql_grid_world_play, fw_grid_world_play, NoVisMultiObserverX
 
 _ql_grid_world_play = functools.partial(
     ql_grid_world_play,
+    observer            = NoVisMultiObserverXargs, # if no visualize
     confname = "ql-4-room-grid-world")
 
 _fw_grid_world_play = functools.partial(
     fw_grid_world_play,
+    observer            = NoVisMultiObserverXargs, # if no visualize
     confname = "fw-4-room-grid-world")
 
 @extended_kwprop

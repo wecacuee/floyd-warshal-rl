@@ -122,3 +122,12 @@ dhiman@lens:.../mid/floyd_warshall_rl$ tail -2 201808_7a324cf_ql-4-room-grid-wor
 07 13:22:53 fwrl.game.metrics latency : 9.247249953793283; min latency 0.0037313432835820895; max latency 294.0 human   2    {}
 07 13:22:53 fwrl.game.metrics mean distineff = 8.484575787460404; +- (7.484575787460404, 40.0154242125396;)     human   2    {}
 dhiman@lens:.
+
+# Observations
+1. Q(s,a) = F(s, a, \infty) is an exploration specific build up. Encourages
+   exploration of unexplored areas, might not be useful for large state spaces.
+   But still gives an estimate of the distance from the nearest exploration
+   border.
+   This is like distance transform from the exploration border.
+2. Discount factor makes reward shift specific.
+3. F(i, l, j) = max_a Q(s, a) - Q(s, a)

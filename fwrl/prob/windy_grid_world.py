@@ -149,6 +149,8 @@ class Loc2DSpace(Space):
             self.rng.randint(self.lower_bound[1], self.upper_bound[1])])
 
     def contains(self, x):
+        if x.tolist() is None:
+            return True
         ndim = self.lower_bound.ndim
         if x.shape[-ndim:] != self.lower_bound.shape:
             return False
@@ -664,8 +666,12 @@ class AgentInGridWorld(Problem):
         nbrs = set()
         for _ in range(samples):
             for a in self.action_space.values():
-                valid_pose, _ = self.imagine_step(np.asarray(pos), a)
-                if np.any(valid_pose != np.asarray(pos)):
+                posarr = np.asarray(pos)
+                avect = self.action_space.tovector(a)
+                valid_pose, _, _ = self.grid_world_goal.step(
+                    posarr, posarr + avect)
+                if (np.any(valid_pose != np.asarray(pos))
+                    and valid_pose.tolist() is not None):
                     nbrs.add(tuple(valid_pose.tolist()))
         return nbrs
 

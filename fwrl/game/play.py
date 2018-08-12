@@ -145,7 +145,7 @@ class LoggingObserver(NoOPObserver):
                   dict(episode_n=self.last_episode_n, steps=current_step))
 
     def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps, **kw):
-        if self.prob.hit_goal(): self.on_goal_hit(self.prob.steps)
+        if rew >= self.prob.goal_reward: self.on_goal_hit(self.prob.steps)
         if steps % self.log_interval == 0:
             self.info(self.new_step_tag,
                       dict(episode_n = int(self.last_episode_n),
@@ -312,17 +312,14 @@ def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop):
         observer.on_new_step(obs=obs, rew=rew, action=act)
         alg.update(obs, act, rew)
         act = alg.egreedy(alg.policy(obs))
-        print("taking act {}".format(act))
         obs, rew = prob.step(act)
-        print("Got obs={}, reward={}".format(obs, rew))
         renderer(prob)
 
         step_n += 1
 
     # Update rewards the "done" step
     observer.on_new_step(obs=obs, rew=rew, action=act)
-    alg.update(None, act, rew)
-    print("++++++++++++ steps: {} +++++++++++".format(step_n))
+    alg.update(obs, act, rew)
 
     # Record end of episode
     observer.on_episode_end(episode_n)

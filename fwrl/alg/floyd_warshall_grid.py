@@ -73,6 +73,8 @@ class FloydWarshallAlgDiscrete(object):
         # Make a conservative estimate of differential
         F[stm1, act, st] = max(np.max(Q[st, :]) - Q[stm1, act],
                                self.per_edge_cost)
+        # We have found a new way to reach state st
+        old_F_to_st = F[:, :, st].copy()
         F[:, :, st] = np.minimum(F[:, :, st], F[:, :, stm1] + F[stm1, act, st])
 
         # # TODO: Disabled for small state spaces. Re-enable for larger ones
@@ -92,9 +94,13 @@ class FloydWarshallAlgDiscrete(object):
 
         #for (si, sj) in self.state_pairs_iter():
         # O(n^2) step to update all path_costs and action_values
-        self.path_cost = np.minimum(
-            F,
-            F[:, :, st:st+1] + np.min(F[st:st+1, :, :], axis=1, keepdims=True))
+        # If we have found a new path to st, only then we need to update any new paths
+        # to via st.
+        if np.any(old_F_to_st != F[:, :, st]):
+            np.minimum(
+                F,
+                F[:, :, st:st+1] + np.min(F[st:st+1, :, :], axis=1, keepdims=True),
+                out=F)
         assert np.all(self.path_cost >= 0), "The Floyd cost should be positive at all times"
 
     def net_value(self, state_idx):

@@ -171,13 +171,20 @@ class FWTabularSimple(object):
             reward_batch + self.discount * np.max(
                 F[next_state_batch, :, self.infty_goal_state()]))
 
+        # v0.5.0
+        # Need to update the new updated path upto_next_state
+        F[:, :, next_state_batch + 1] = np.maximum(
+            F[:, :, next_state_batch + 1],
+            F[:, :, state_batch + 1]
+            + F[state_batch, action_batch, next_state_batch + 1])
+
         # transitive update
         # Align the state_batch dimension
-        upto_state_batch = F[:, :, state_batch + 1]
+        upto_next_state = F[:, :, next_state_batch + 1]
 
         # Assume best action via state_batch
-        best_case_from_state_batch = np.max(
-            F[state_batch, :, :],
+        best_case_from_next_state = np.max(
+            F[next_state_batch, :, :],
             # action axis
             axis=1)
 
@@ -186,8 +193,8 @@ class FWTabularSimple(object):
         # F[i, l, j] = max_k F[i, l, k] + max_m F[k, m, j]
         # F[i, l, j] = max_k F[i, l, k] + F_max[k, j]
         # F[i, l, j] = max_k F[i, l, k, 1] + F_max[1, 1, k, j]
-        best_via_state = np.max(
-            upto_state_batch[..., np.newaxis] + self.discount * best_case_from_state_batch,
+        best_via_next_state = np.max(
+            upto_next_state[..., np.newaxis] + self.discount * best_case_from_next_state,
             # state_batch axis
                 axis=2
         )
@@ -198,7 +205,7 @@ class FWTabularSimple(object):
         np.maximum(
             # maximum of current F vs going via state_batch
             F,
-            best_via_state,
+            best_via_next_state,
             out=F
         )
         # Diagonal elements should always be zero
