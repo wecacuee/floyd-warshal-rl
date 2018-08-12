@@ -3,7 +3,7 @@ class Memoizer(object):
     def __init__(self, memoize_mem=None):
         self.memoize_mem = memoize_mem or dict()
 
-    def __call__(self, func 
+    def __call__(self, func
                  , keyfunc=lambda f, a, k: (f.__name__, a, tuple(sorted(k.items())))):
         """
         >>> memoize = Memoizer()

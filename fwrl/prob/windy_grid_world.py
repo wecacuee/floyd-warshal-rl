@@ -9,7 +9,7 @@ import pkg_resources
 import copy
 
 from umcog import draw
-from umcog.memoize import MEMOIZE_METHOD
+from umcog.memoize import MEMOIZE_METHOD, MethodMemoizer
 from umcog.confutils import (extended_kwprop, KWProp as prop, xargs, xargspartial, xargmem)
 
 from ..game.play import (Space, Problem, NoOPObserver,
@@ -278,6 +278,36 @@ class LavaHandler:
                thickness = -1):
         render_block(canvas, pose, grid_size, color)
 
+
+def np_tuple(arr):
+    return tuple(arr.tolist())
+
+
+def shortest_path(grid_world, start, end, action_space, visited=None):
+    assert start is not None and end is not None
+    if visited is None:
+        visited = set()
+    visited.add(np_tuple(start))
+
+    if np.all(start == end):
+        return 0, [np_tuple(end)]
+    else:
+        unvisited_nbrs = grid_world.neighbors(start, action_space) - visited
+        if not len(unvisited_nbrs):
+            return np.inf, []
+        else:
+            length, path = min(
+                [shortest_path(grid_world, np.asarray(nbr), end,
+                            action_space, visited | unvisited_nbrs)
+                    for nbr in unvisited_nbrs],
+                key = lambda a:a[0],
+                default = np.inf)
+            if np.isinf(length):
+                return length, []
+            else:
+                return length + 1, [np_tuple(start)] + path
+
+
 class WindyGridWorld:
     @extended_kwprop
     def __init__(self,
@@ -436,6 +466,29 @@ class WindyGridWorld:
         c = copy.copy(self)
         c.maze = copy.copy(self.maze)
         return c
+
+    @MethodMemoizer(a_key = lambda a: np_tuple(a[0]))
+    def neighbors(self, pos, action_space, samples=10):
+        """
+        pos: np.ndarray
+        action_space: should have methods
+            values()    : -> iterator of actions
+            tovector(a) : action -> np.ndarray (addable to pos)
+
+        Returns:
+        nbrs: set of pose tuples which are convertable to pos (ndarray) with np.asarray
+        """
+        nbrs = set()
+        # take actions 10 times, for deterministic actions 1 time is enough to
+        # cover all possibilties
+        for _ in range(samples):
+            for a in action_space.values():
+                avect = action_space.tovector(a)
+                valid_pose, _, _ = self.step(pos, pos + avect)
+                if (np.any(valid_pose != np.asarray(pos))
+                    and valid_pose.tolist() is not None):
+                    nbrs.add(np_tuple(valid_pose))
+        return nbrs
 
 
 def random_goal_pose_gen(prob):
@@ -661,36 +714,6 @@ class AgentInGridWorld(Problem):
     def done(self):
         return self._done
 
-    @MEMOIZE_METHOD
-    def valid_nbrs(self, pos, samples=10):
-        nbrs = set()
-        for _ in range(samples):
-            for a in self.action_space.values():
-                posarr = np.asarray(pos)
-                avect = self.action_space.tovector(a)
-                valid_pose, _, _ = self.grid_world_goal.step(
-                    posarr, posarr + avect)
-                if (np.any(valid_pose != np.asarray(pos))
-                    and valid_pose.tolist() is not None):
-                    nbrs.add(tuple(valid_pose.tolist()))
-        return nbrs
-
-    def shortest_path_length(self, start, end, visited=None):
-        assert start is not None and end is not None
-        if visited is None:
-            visited = set()
-        visited.add(tuple(start))
-
-        if np.all(start == end):
-            return 0
-        else:
-            unvisited_nbrs = self.valid_nbrs(start) - visited
-            length = min(
-                [self.shortest_path_length(nbr, end, visited | unvisited_nbrs)
-                 for nbr in unvisited_nbrs],
-                default = np.inf)
-            return length + 1#, [tuple(start)] + path
-
 
 class DrawAgentGridWorldFromLogs:
     def __init__(self):
@@ -751,6 +774,10 @@ class AgentVisObserver(NoOPObserver):
     def on_play_end(self):
         logging.shutdown()
         self.post_process()
+
+    def shortest_path_to_goal(self):
+        return shortest_path(self.grid_world, self.pose, self.goal_pose,
+                             self.action_space)
 
 def demo_agent():
     agent = AgentInGridWorld(
