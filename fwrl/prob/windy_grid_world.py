@@ -714,6 +714,11 @@ class AgentInGridWorld(Problem):
     def done(self):
         return self._done
 
+    def shortest_path(self, start = None, end = None):
+        start = np.asarray(start) if start is not None else self.pose
+        end = np.asarray(end) if end is not None else self.goal_pose
+        return shortest_path(self.grid_world, start, end, self.action_space)
+
 
 class DrawAgentGridWorldFromLogs:
     def __init__(self):
@@ -774,11 +779,6 @@ class AgentVisObserver(NoOPObserver):
     def on_play_end(self):
         logging.shutdown()
         self.post_process()
-
-    def shortest_path(self, start = None, end = None):
-        start = start or self.pose
-        end = end or self.goal_pose
-        return shortest_path(self.grid_world, start, end, self.action_space)
 
 def demo_agent():
     agent = AgentInGridWorld(

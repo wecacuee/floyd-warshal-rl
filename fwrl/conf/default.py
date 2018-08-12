@@ -80,7 +80,7 @@ NoVisMultiObserverXargs = xargs(MultiObserver,
 def grid_world_play(
         alg            = None,
         observer       = None,
-        nepisodes      = 100,
+        nepisodes      = 20,
         seed           = 0,
         max_steps      = 500,
         log_file_conf  = xargmem(LogFileConf,
