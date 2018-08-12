@@ -32,7 +32,7 @@ def maze_from_file(f):
 def maze_from_pkg_rsrc(frsrc):
     return maze_from_string(pkg_resources.resource_string(__name__, frsrc).decode('utf-8'))
 
-def four_room_grid_world(filep="./data/4-room-grid-world.txt"):
+def four_room_grid_world(filep="./data/4-room-grid-world"):
     return maze_from_pkg_rsrc(filep)
 
 def maze_from_string(maze_string,
@@ -370,7 +370,7 @@ class WindyGridWorld:
     @classmethod
     @extended_kwprop
     def from_maze_name(cls,
-                       maze_name = "4-room-grid-world.txt",
+                       maze_name = "4-room-grid-world",
                        seed = 0,
                        maze = prop(lambda s: maze_from_pkg_rsrc("data/" + s.maze_name)),
                        rng  = prop(lambda s: np.random.RandomState(s.seed)),

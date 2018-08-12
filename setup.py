@@ -150,7 +150,7 @@ def setup():
                 'floyd_warshall_rl=fwrl.conf.default:main',
                 'fwrl-4-room-gw=fwrl.conf.four_room_grid_world:main',
                 'fwrl-qlnet-cartpole=fwrl.conf.qlnet_cartpole:demo',
-                'fw-simple-gw-play=fwrl.conf.fw_simple_gw:main',
+                'fw-batch-gw-play=fwrl.conf.fw_batch_fw:main',
             ],
         },
         include_package_data = True,

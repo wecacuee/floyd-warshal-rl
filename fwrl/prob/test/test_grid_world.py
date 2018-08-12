@@ -21,7 +21,7 @@ class TestGridWorld(TestCase):
         self.wall_reward = -0.05
         self.lava_reward = -10
         self.lgw = WindyGridWorld.from_maze_name(
-            maze_name = "4-room-lava-world.txt",
+            maze_name = "4-room-lava-world",
             free_space_reward = self.free_space_reward,
             wall_reward = self.wall_reward,
             lava_reward = self.lava_reward)

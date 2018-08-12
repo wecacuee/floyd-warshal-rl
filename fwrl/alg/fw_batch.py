@@ -49,7 +49,7 @@ def rand_argmax(arr, rng):
     idx = np.arange(arr.shape[0])[arr == val]
     return rng.choice(idx)
 
-class FWTabularSimple(object):
+class FWTabularBatch(object):
     @extended_kwprop
     def __init__(self,
                  max_steps   = None,
