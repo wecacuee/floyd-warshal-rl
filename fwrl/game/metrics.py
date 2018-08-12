@@ -79,9 +79,9 @@ class DistineffObs:
         if len(self.pose_history):
             diffs = np.diff(np.array(self.pose_history), axis=0)
             distance_traveled = np.sum(np.abs(diffs))
-            shortest_distance = self.prob.shortest_path_length(
-                tuple(self.pose_history[0].tolist()),
-                tuple(self.goal_pose))
+            shortest_distance, _ = self.prob.shortest_path(
+                start = self.pose_history[0],
+                end = self.goal_pose)
             distineff = distance_traveled / shortest_distance
             if distineff < 1.0:
                 info("""[Error]: Distineff should not be less than one. Find out why? Entering debug mode""")

@@ -775,9 +775,10 @@ class AgentVisObserver(NoOPObserver):
         logging.shutdown()
         self.post_process()
 
-    def shortest_path_to_goal(self):
-        return shortest_path(self.grid_world, self.pose, self.goal_pose,
-                             self.action_space)
+    def shortest_path(self, start = None, end = None):
+        start = start or self.pose
+        end = end or self.goal_pose
+        return shortest_path(self.grid_world, start, end, self.action_space)
 
 def demo_agent():
     agent = AgentInGridWorld(
