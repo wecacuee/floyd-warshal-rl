@@ -130,7 +130,7 @@ def setup():
         author='Vikas Dhiman',
         url='git@opticnerve.eecs.umich.edu:dhiman/floyd-warshall-rl.git',
         author_email='dhiman@umich.edu',
-        version='0.1.0',
+        version='0.2.0',
         license='MIT',
         classifiers=(
             'Development Status :: 3 - Alpha',
@@ -147,10 +147,11 @@ def setup():
         python_requires='~=3.6',
         entry_points={
             'console_scripts': [
-                'floyd_warshall_rl=fwrl.conf.default:main',
-                'fwrl-4-room-gw=fwrl.conf.four_room_grid_world:main',
-                'fwrl-qlnet-cartpole=fwrl.conf.qlnet_cartpole:demo',
-                'fw-batch-gw-play=fwrl.conf.fw_batch_fw:main',
+                #'floyd_warshall_rl=fwrl.conf.default:main',
+                #'fwrl-4-room-gw=fwrl.conf.four_room_grid_world:main',
+                #'fwrl-qlnet-cartpole=fwrl.conf.qlnet_cartpole:demo',
+                #'fw-batch-gw-play=fwrl.conf.fw_batch_fw:main',
+                'fwrl-tab-algs-gw-play=fwrl.conf.tab_algs_grid_worlds:main',
             ],
         },
         include_package_data = True,

@@ -180,11 +180,12 @@ class FreeSpaceHandler:
 
 class WindHandler:
     def __init__(self,
+                 rng,
                  wind_strength,
                  CELL_WIND_NEWS,
                  WIND_NEWS_NAMES = "NORTH EAST WEST SOUTH".split(),
                  WIND_NEWS_VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])):
-        for k in "wind_strength CELL_WIND_NEWS WIND_NEWS_VECTORS WIND_NEWS_NAMES".split():
+        for k in "rng wind_strength CELL_WIND_NEWS WIND_NEWS_VECTORS WIND_NEWS_NAMES".split():
             setattr(self, k, locals()[k])
 
     def handles(self, cell_code, potential_cell_code):
@@ -315,7 +316,7 @@ class WindyGridWorld:
                  maze,
                  CELL_FREE = 0,
                  OUTSIDE_GRID_CODE = 1,
-                 wind_strength = 0.5,
+                 wind_strength = 0.25,
                  wall_reward = 0,
                  goal_reward = 10,
                  lava_reward = -10,
@@ -326,7 +327,7 @@ class WindyGridWorld:
                  freespace_handler = xargs(
                      FreeSpaceHandler, ["CELL_FREE"]),
                  wind_handler = xargs(
-                     WindHandler, ["wind_strength", "CELL_WIND_NEWS"]),
+                     WindHandler, ["rng", "wind_strength", "CELL_WIND_NEWS"]),
                  wall_handler = xargs(
                      WallHandler, ["wall_reward", "WALL_CELL_CODE"]),
                  goal_handler = xargs(
