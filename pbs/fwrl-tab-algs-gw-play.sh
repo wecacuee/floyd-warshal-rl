@@ -19,5 +19,5 @@ git clone $MID_DIR/git/ floyd_warshall_rl
 cd floyd_warshall_rl
 git pull
 . setup.sh
-fwrl-tab-algs-gw
+fwrl-tab-algs-gw-play
 echo "end of pbs script"
