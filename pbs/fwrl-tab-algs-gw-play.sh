@@ -1,6 +1,6 @@
 #PBS -N fwrl-tab-algs-grid-world-play          # Any name to identify your job
 #PBS -j oe                   # Join error and output files for convinience
-#PBS -l walltime=96:00:00     # Keep walltime big enough to finish the job
+#PBS -l walltime=1000:00:00     # Keep walltime big enough to finish the job
 #PBS -l nodes=1:ppn=1 # nodes requested: Processor per node: gpus requested
 #PBS -S /bin/bash            # Shell to use
 #PBS -m a                  # Mail to <user>@umich.edu on abort, begin and end
