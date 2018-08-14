@@ -271,7 +271,7 @@ class LavaHandler:
              cell_code, potential_cell_code):
         potential_next_pose = np.array(None)
         potential_reward    += self.lava_reward
-        potential_done      = True
+        potential_done      = False
         return potential_next_pose, potential_reward, potential_done
 
     def render(self, canvas, pose, grid_size, cell_code,

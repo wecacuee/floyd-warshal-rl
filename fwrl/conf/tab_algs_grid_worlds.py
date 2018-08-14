@@ -57,13 +57,14 @@ def tab_algs_grid_worlds(
         probs      = xargsonce(
             AgentInGridWorlds_from_maze_names,
             "rng max_steps maze_name".split()),
-        alg_names = ["ql", "fw"],
-        gw_plays = [_ql_grid_world_play, _fw_grid_world_play]):
+        alg_names = ["fw", "ql"],
+        gw_plays = [_fw_grid_world_play, _ql_grid_world_play]):
     return [[
         play(prob      = prob,
              seed      = seed,
              max_steps = max_steps,
              rng       = rng,
+             observer  = NoVisMultiObserverXargs,
              confname  = "{}-{}".format(alg, mn))
         for mn, prob in zip(maze_name, probs)]
             for alg, play in zip(alg_names, gw_plays)]
