@@ -32,27 +32,38 @@ class LatencyObserver:
         self.prob = prob
         self.times_to_goal_hit_all_episodes = []
         self.times_to_goal_hit              = None
-        self.start_step                     = 0
+        self.obs_history                   = []
         super().__init__()
 
     def on_new_episode(self, episode_n=None, **kwargs):
         if self.times_to_goal_hit:
             self.times_to_goal_hit_all_episodes.append(self.times_to_goal_hit)
         self.times_to_goal_hit = []
-        self.start_step = 0
+        self.obs_history = []
 
     def on_goal_hit(self, steps=None, **kwargs):
-        time_to_hit = steps - self.start_step
+        time_to_hit = len(self.obs_history)
         if time_to_hit:
             self.times_to_goal_hit.append(time_to_hit)
-        self.start_step = steps + 1
+        self.obs_history = []
+
+    def on_new_step_with_pose_steps(self, obs=None, act=None,
+                                    rew=None, pose=None, steps=None,
+                                    episode_n=None, **kwargs):
+        self.obs_history.append(obs)
+
+    def on_new_spawn(self, pose, episode_n, steps):
+        # reset the start step but append nothing to time_to_hit
+        #self.obs_history = []
+        pass
 
     def on_play_end(self):
         self.on_new_episode(episode_n=len(self.times_to_goal_hit)+1)
         info(str(self.times_to_goal_hit_all_episodes))
         mean_latency, min_l, max_l = compute_latency(
             self.times_to_goal_hit_all_episodes)
-        info(f"latency : {mean_latency}; min latency {min_l}; max latency {max_l}")
+        info("latency : {mean_latency}; min latency {min_l}; max latency {max_l}".format(
+            mean_latency = mean_latency, min_l = min_l, max_l = max_l))
 
 
 class DistineffObs:
@@ -73,6 +84,7 @@ class DistineffObs:
         self.goal_was_hit_on_last_step = True
         self.goal_pose                 = goal_pose
         self.episode_n                 = episode_n
+        self.last_spawn_pose                = None
 
     def on_respawn(self, pose=None, steps=None):
         self.goal_was_hit_on_last_step = False
@@ -80,7 +92,7 @@ class DistineffObs:
             diffs = np.diff(np.array(self.pose_history), axis=0)
             distance_traveled = np.sum(np.abs(diffs))
             shortest_distance, _ = self.prob.shortest_path(
-                start = self.pose_history[0],
+                start = self.last_spawn_pose,
                 end = self.goal_pose)
             distineff = distance_traveled / shortest_distance
             if distineff < 1.0:
@@ -89,9 +101,17 @@ class DistineffObs:
             self.distineff_per_episode.append(distineff)
 
         self.pose_history = []
+        self.last_spawn_pose = None
 
     def on_goal_hit(self, **kwargs):
         self.goal_was_hit_on_last_step = True
+
+    def on_new_spawn(self, pose, episode_n, steps):
+        # reset the start step but append nothing to time_to_hit
+        # Do not reset the pose history as a penalty to not being able to hit
+        # goal while getting respawned.
+        #self.pose_history = []
+        self.last_spawn_pose = pose
 
     def on_new_step_with_pose_steps(self, obs=None, act=None,
                                     rew=None, pose=None, steps=None,
@@ -99,9 +119,12 @@ class DistineffObs:
         if self.goal_was_hit_on_last_step and np.any(pose != self.goal_pose):
             self.on_respawn(pose, steps)
 
+        if self.last_spawn_pose is None:
+            self.last_spawn_pose = pose
         self.pose_history.append(np.array(pose))
 
     def on_new_step(self, obs, act, rew):
+        print("Deprecated")
         self.on_new_step_with_pose_steps(self, obs, act, rew, self.prob.pose)
 
     def on_play_end(self):
@@ -121,7 +144,6 @@ class ComputeMetricsFromLogReplay:
                  log_file_reader = None,
                  metrics_observers = prop(lambda s : [s.latency_observer,
                                                       s.distineff_observer]),
-                 
                  latency_observer = xargs(LatencyObserver, ["prob"]),
                  distineff_observer = xargs(DistineffObs, ["prob"]),
                  ):

@@ -271,7 +271,7 @@ class LavaHandler:
              cell_code, potential_cell_code):
         potential_next_pose = np.array(None)
         potential_reward    += self.lava_reward
-        potential_done      = False
+        potential_done      = True
         return potential_next_pose, potential_reward, potential_done
 
     def render(self, canvas, pose, grid_size, cell_code,
@@ -681,13 +681,15 @@ class AgentInGridWorld(Problem):
             self.pose, self.pose + self.action_space.tovector(act))
         if gw_pose.tolist() is None or gw_done:
             self._respawn()
+            new_spawn = True
         else:
             self.pose = gw_pose
+            new_spawn = False
 
         self._last_reward = gw_rew
         self.steps += 1
-        self._done = gw_done or self.steps >= self.max_steps
-        return self.pose, self._last_reward
+        self._done = self.steps >= self.max_steps
+        return self.pose, self._last_reward, self._done, dict(new_spawn = new_spawn)
 
     def _respawn(self):
         self.pose          = self.start_pose_gen(self, self.goal_pose)

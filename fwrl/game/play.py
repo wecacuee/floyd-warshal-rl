@@ -126,6 +126,7 @@ class LoggingObserver(NoOPObserver):
         self.goal_hit_tag    = "{self.__class__.__name__}:goal_hit".format(self=self)
         self.new_step_tag    = "{self.__class__.__name__}:new_step".format(self=self)
         self.new_episode_tag = "{self.__class__.__name__}:new_episode".format(self=self)
+        self.new_spawn_tag   = "{self.__class__.__name__}:new_spawn".format(self=self)
         self.play_end_tag    = "{self.__class__.__name__}:play_end".format(self=self)
         super().__init__()
 
@@ -134,7 +135,7 @@ class LoggingObserver(NoOPObserver):
 
     def on_new_episode(self, episode_n):
         self.last_episode_n = episode_n
-        self.info(self.human_tag, 
+        self.info(self.human_tag,
                   dict(msg=" +++++++++++++++++ New episode: {episode_n} +++++++++++++".format(
                       episode_n=episode_n)))
         self.info(self.new_episode_tag,
@@ -144,8 +145,16 @@ class LoggingObserver(NoOPObserver):
         self.info(self.goal_hit_tag,
                   dict(episode_n=self.last_episode_n, steps=current_step))
 
-    def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps, **kw):
-        if rew >= self.prob.goal_reward: self.on_goal_hit(self.prob.steps)
+    def on_new_spawn(self, obs, rew, action, pose, prob_steps, info):
+        if rew >= self.prob.goal_reward:
+            self.on_goal_hit(prob_steps)
+        else:
+            self.info(self.new_spawn_tag,
+                      dict(pose      = pose.tolist(),
+                           episode_n = int(self.last_episode_n),
+                           steps     = int(prob_steps)))
+
+    def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps, info, **kw):
         if steps % self.log_interval == 0:
             self.info(self.new_step_tag,
                       dict(episode_n = int(self.last_episode_n),
@@ -153,11 +162,14 @@ class LoggingObserver(NoOPObserver):
                            obs       = obs.tolist(),
                            rew       = float(rew),
                            act       = int(act),
-                           pose      = pose.tolist()))
+                           pose      = pose.tolist(),
+                           info      = info))
 
-    def on_new_step(self, obs, rew, action):
+    def on_new_step(self, obs, rew, action, info):
+        if info.get("new_spawn", False):
+            self.on_new_spawn(obs, rew, action, self.prob.pose, self.prob.steps, info)
         self.on_new_step_with_pose_steps(
-            obs, rew, action, self.prob.pose, self.prob.steps)
+            obs, rew, action, self.prob.pose, self.prob.steps, info)
 
     def on_play_end(self):
         self.info(self.play_end_tag, {})
@@ -167,7 +179,8 @@ class LoggingObserver(NoOPObserver):
         return dict([(self.new_step_tag, "on_new_step_with_pose_steps"),
                      (self.goal_hit_tag, "on_goal_hit"),
                      (self.new_episode_tag, "on_new_episode"),
-                     (self.play_end_tag, "on_play_end")])
+                     (self.play_end_tag, "on_play_end"),
+                     (self.new_spawn_tag, "on_new_spawn")])
 
     def replay_observers_from_logs(self, observers, log_file_reader):
         tag_event_map = self.tag_event_map()
@@ -176,7 +189,7 @@ class LoggingObserver(NoOPObserver):
                 for obs in observers:
                     if hasattr(obs, tag_event_map[tag]):
                         getattr(obs, tag_event_map[tag])(**dct)
-            else: 
+            else:
                 #print("Ignoring tag '{}'".format(tag))
                 pass
 
@@ -308,17 +321,19 @@ def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop):
     rew = prob.reward()
     act = prob.action_space.sample()
     step_n = 0
-    while not (prob.done() or alg.done()):
-        observer.on_new_step(obs=obs, rew=rew, action=act)
+    done = False
+    info = dict()
+    while not done:
+        observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
         alg.update(obs, act, rew)
         act = alg.egreedy(alg.policy(obs))
-        obs, rew = prob.step(act)
+        obs, rew, done, info = prob.step(act)
         renderer(prob)
 
         step_n += 1
 
     # Update rewards the "done" step
-    observer.on_new_step(obs=obs, rew=rew, action=act)
+    observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
     alg.update(obs, act, rew)
 
     # Record end of episode

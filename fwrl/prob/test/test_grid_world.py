@@ -47,7 +47,7 @@ class TestGridWorld(TestCase):
         p, r, d = self.lgw.step(pose, next_pose)
         self.assertTrue(np.all(p == np.array(None)))
         self.assertEqual(r, self.lava_reward)
-        self.assertEqual(d, False)
+        self.assertEqual(d, True)
 
     def test_render(self, expected_img_rsrc = "data/4-room-lava-world.png"):
         cnvs = self.lgw.render(None, 100)
