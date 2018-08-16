@@ -1,5 +1,5 @@
 import os
-import functools
+from functools import partial
 import logging
 from collections import namedtuple
 
@@ -9,25 +9,23 @@ import umcog.draw as draw
 from ..game.play import Space, Alg, NoOPObserver
 from .qlearning import (QLearningDiscrete, QLearningVis,
                         post_process_from_log_conf as ql_post_process_from_log_conf,
-                        post_process_data_iter, post_process_generic)
+                        post_process_data_iter, post_process_generic,
+                        rand_argmax, Renderer)
 from umcog.confutils import xargs, xargspartial, xargmem, KWProp as prop, extended_kwprop
 
 def logger():
     return logging.getLogger(__name__)
+
 
 class FloydWarshallAlgDiscrete(object):
     @extended_kwprop
     def __init__(self,
                  qlearning = xargs(
                      QLearningDiscrete,
-                     "action_space observation_space reward_range rng".split()), 
+                     "action_space observation_space reward_range rng".split()),
     ):
         self.qlearning            = qlearning
         self.reset()
-
-    @property
-    def per_edge_cost(self):
-        return 10 * self.qlearning.reward_range[1] * (1-self.qlearning.discount)
 
     @property
     def path_cost_init(self):
@@ -38,6 +36,7 @@ class FloydWarshallAlgDiscrete(object):
 
     def reset(self):
         self.qlearning.reset()
+        self.goal_state    = None
         self.path_cost     = self._default_path_cost(0)
 
     def _default_path_cost(self, new_state_size):
@@ -59,10 +58,16 @@ class FloydWarshallAlgDiscrete(object):
             self.path_cost = self._resize_path_cost(state_idx + 1)
         return state_idx
 
-    def update(self, obs, act, rew):
+    def update(self, obs, act, rew, done, info):
         stm1, am1 = self.last_state_idx_act or (None, None)
         st = self._state_idx_from_obs(obs, act, rew)
-        self.qlearning.update(obs, act, rew)
+
+        if self.qlearning._hit_goal(obs, act, rew, done, info):
+            self.goal_state = st
+        else:
+            # No update on goal hit
+            self.qlearning.update(obs, act, rew, done, info)
+
         if stm1 is None:
             return
 
@@ -71,8 +76,10 @@ class FloydWarshallAlgDiscrete(object):
         Q = self.qlearning.action_value
 
         # Make a conservative estimate of differential
-        F[stm1, act, st] = max(np.max(Q[st, :]) - Q[stm1, act],
-                               self.per_edge_cost)
+        #F[stm1, act, st] = max(np.max(Q[st, :]) - Q[stm1, act],
+        #                       self.per_edge_cost)
+        F[stm1, act, st] = max(-rew, 0)
+
         # We have found a new way to reach state st
         old_F_to_st = F[:, :, st].copy()
         F[:, :, st] = np.minimum(F[:, :, st], F[:, :, stm1] + F[stm1, act, st])
@@ -104,17 +111,16 @@ class FloydWarshallAlgDiscrete(object):
         assert np.all(self.path_cost >= 0), "The Floyd cost should be positive at all times"
 
     def net_value(self, state_idx):
-        Q = self.qlearning.action_value
-        V = np.max(Q, axis=-1)
-        state_action_values = np.maximum(
-            Q[state_idx, :],
-            np.max(V[None, :] - self.path_cost[state_idx, :, :] , axis=-1))
-        return state_action_values
+        if self.goal_state is None:
+            return self.qlearning.action_value[state_idx, :]
+        else:
+            Q = self.qlearning.action_value
+            return Q[state_idx, :] - self.path_cost[state_idx, :, self.goal_state]
 
     def policy(self, obs):
         state = self._state_from_obs(obs)
         state_idx = self.hash_state[tuple(state)]
-        return np.argmax(self.net_value(state_idx))
+        return rand_argmax(self.net_value(state_idx), self.qlearning.rng)
 
     def __getattr__(self, attr):
         if attr in """action_space done action_value hash_state
@@ -122,7 +128,7 @@ class FloydWarshallAlgDiscrete(object):
                       _state_from_obs""".split():
             return getattr(self.qlearning, attr)
         else:
-            raise AttributeError(f"No attribute {attr}")
+            raise AttributeError("No attribute {attr}".format(attr=attr))
 
 class FloydWarshallVisualizer(QLearningVis):
     def _path_cost_to_mat(self, path_cost, hash_state, goal_state_idx, grid_shape):
@@ -160,7 +166,7 @@ class FloydWarshallVisualizer(QLearningVis):
             if i % 2 == 0 and j % 2 == 0:
                 draw.rectangle(ax, center - cellsize/2, center + cellsize*3/2,
                                (0, 0, 0))
-            draw.putText(ax, f"{path_cost_mat[i, j]:.3}",
+            draw.putText(ax, "{:.3}".format(path_cost_mat[i, j]),
                          center, fontScale=4)
 
     def visualize_all(self, ax, action_value, policy, path_cost,
@@ -169,12 +175,12 @@ class FloydWarshallVisualizer(QLearningVis):
         ax = draw.white_img(
             (grid_shape[1]*2*cellsize, grid_shape[0]*2*cellsize),
             dpi=cellsize*2)
-        ax.set_position([0, 0, 0.5, 0.5])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xlim([0, grid_shape[1]*cellsize])
-        ax.set_ylim([0, grid_shape[0]*cellsize])
-        self.visualize_action_value(ax, action_value, hash_state, grid_shape)
+        #ax.set_position([0, 0, 0.5, 0.5])
+        #ax.set_xticks([])
+        #ax.set_yticks([])
+        #ax.set_xlim([0, grid_shape[1]*cellsize])
+        #ax.set_ylim([0, grid_shape[0]*cellsize])
+        #self.visualize_action_value(ax, action_value, hash_state, grid_shape)
 
         ax2 = ax.figure.add_axes([0.5, 0, 0.5, 0.5], frameon=False)
         ax2.set_position([0.5, 0, 0.5, 0.5])
@@ -184,13 +190,13 @@ class FloydWarshallVisualizer(QLearningVis):
         ax2.set_ylim([0, grid_shape[0]*cellsize])
         self.visualize_policy(ax2, policy, hash_state, grid_shape)
 
-        ax3 = ax.figure.add_axes([0, 0.5, 0.5, 0.5], frameon=False)
-        ax3.set_position([0, 0.5, 0.5, 0.5])
-        ax3.set_xticks([])
-        ax3.set_yticks([])
-        ax3.set_xlim([0, grid_shape[1]*cellsize])
-        ax3.set_ylim([0, grid_shape[0]*cellsize])
-        self.visualize_path_cost(ax3, path_cost, hash_state, goal_pose, grid_shape)
+        #ax3 = ax.figure.add_axes([0, 0.5, 0.5, 0.5], frameon=False)
+        #ax3.set_position([0, 0.5, 0.5, 0.5])
+        #ax3.set_xticks([])
+        #ax3.set_yticks([])
+        #ax3.set_xlim([0, grid_shape[1]*cellsize])
+        #ax3.set_ylim([0, grid_shape[0]*cellsize])
+        #self.visualize_path_cost(ax3, path_cost, hash_state, goal_pose, grid_shape)
 
         ax4 = ax.figure.add_axes([0.5, 0.5, 0.5, 0.5], frameon=False)
         ax4.set_position([0.5, 0.5, 0.5, 0.5])
@@ -239,7 +245,8 @@ def visualize_action_value(action_value, policy, path_cost, net_value,
                              goal_pose    = goal_pose,
                              cellsize     = cellsize)
 
-def post_process_data_tag(data, tag, cellsize, image_file_fmt):
+
+def post_process_data_tag(data, tag, cellsize, renderer):
     ax = visualize_action_value(
         action_value = data["action_value"],
         policy       = data["policy"],
@@ -249,29 +256,25 @@ def post_process_data_tag(data, tag, cellsize, image_file_fmt):
         grid_shape   = data["grid_shape"],
         goal_pose    = data["goal_pose"],
         cellsize     = cellsize)
-    fname = image_file_fmt.format(
-        tag = "action_value",
-        episode=data["episode_n"], step=data["steps"])
-    img_dir = os.path.dirname(fname)
-    if not os.path.exists(img_dir):
-        os.makedirs(img_dir)
-    print("Writing img to: {}".format(fname))
-    draw.imwrite(fname, ax)
+    return renderer(ax, data)
 
-post_process_from_log_conf = functools.partial(
+
+post_process_from_log_conf = partial(
     ql_post_process_from_log_conf,
     process_data_tag = xargspartial(
         post_process_data_tag,
-        "cellsize image_file_fmt".split()),
-)
+        "cellsize renderer".split()))
 
 class FloydWarshallLogger(NoOPObserver):
     @extended_kwprop
     def __init__(self, logger, log_interval = 1,
                  action_value_tag = "FloydWarshallLogger:action_value",
+                 renderer         = prop(lambda s: partial(
+                     Renderer.log,
+                     image_file_fmt = s.image_file_fmt)),
                  post_process     = xargspartial(
                      post_process_from_log_conf,
-                     "image_file_fmt log_file_reader action_value_tag".split()),
+                     "log_file_reader renderer action_value_tag".split()),
     ):
         self.logger           = logger
         self.log_interval     = log_interval
@@ -315,7 +318,7 @@ class FloydWarshallLogger(NoOPObserver):
                            hash_state   = self.alg.hash_state
                       ))
 
-    def on_new_step(self, obs, rew, action):
+    def on_new_step(self, obs, rew, action, info):
         self.on_new_step_with_pose_steps(
             obs, rew, action, self.prob.pose, self.prob.steps)
 

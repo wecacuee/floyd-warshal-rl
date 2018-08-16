@@ -163,15 +163,16 @@ class Loc2DSpace(Space):
                          tuple(self.upper_bound - self.lower_bound)))
 
 class FreeSpaceHandler:
-    def __init__(self, CELL_FREE):
+    def __init__(self, free_space_reward, CELL_FREE):
         self.CELL_FREE = CELL_FREE
+        self.free_space_reward = free_space_reward
 
     def handles(self, cell_code, potential_cell_code):
         return cell_code == self.CELL_FREE
 
     def step(self, pose, potential_next_pose, potential_reward, potential_done,
              cell_code, potential_cell_code):
-        return potential_next_pose, potential_reward, potential_done
+        return potential_next_pose, potential_reward + self.free_space_reward, potential_done
 
     def render(self, canvas, pose, grid_size, cell_code,
                color = draw.color_from_rgb((255,255,255)), thickness = -1):
@@ -182,10 +183,11 @@ class WindHandler:
     def __init__(self,
                  rng,
                  wind_strength,
+                 free_space_reward,
                  CELL_WIND_NEWS,
                  WIND_NEWS_NAMES = "NORTH EAST WEST SOUTH".split(),
                  WIND_NEWS_VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])):
-        for k in "rng wind_strength CELL_WIND_NEWS WIND_NEWS_VECTORS WIND_NEWS_NAMES".split():
+        for k in "rng wind_strength free_space_reward CELL_WIND_NEWS WIND_NEWS_VECTORS WIND_NEWS_NAMES".split():
             setattr(self, k, locals()[k])
 
     def handles(self, cell_code, potential_cell_code):
@@ -194,15 +196,12 @@ class WindHandler:
     def _wind_vectors(self, cell_code):
         return self.WIND_NEWS_VECTORS[cell_code - self.CELL_WIND_NEWS[0]]
 
-    def _step(self, potential_next_pose, cell_code):
+    def step(self, pose, potential_next_pose, potential_reward, potential_done,
+             cell_code, potential_cell_code):
         wind_prob = 1 if (self.rng.uniform() < self.wind_strength) else 0
         potential_next_pose = (potential_next_pose
                                + wind_prob * self._wind_vectors(cell_code))
-        return potential_next_pose
-
-    def step(self, pose, potential_next_pose, potential_reward, potential_done,
-             cell_code, potential_cell_code):
-        return self._step(potential_next_pose, cell_code), potential_reward, potential_done
+        return potential_next_pose, potential_reward + self.free_space_reward, potential_done
 
     def render(self, canvas, pose, grid_size, cell_code,
                wind_color = draw.color_from_rgb((0,0,0)),
@@ -231,7 +230,7 @@ class GoalHandler:
     def step(self, pose, potential_next_pose, potential_reward, potential_done,
              cell_code, potential_cell_code):
         potential_next_pose = self.goal_next_pose
-        potential_reward    = self.goal_reward
+        potential_reward    += self.goal_reward
         potential_done      = False
         return potential_next_pose, potential_reward, potential_done
 
@@ -314,29 +313,30 @@ class WindyGridWorld:
     def __init__(self,
                  rng,
                  maze,
-                 CELL_FREE = 0,
+                 CELL_FREE         = 0,
                  OUTSIDE_GRID_CODE = 1,
-                 wind_strength = 0.25,
-                 wall_reward = 0,
-                 goal_reward = 10,
-                 lava_reward = -10,
-                 CELL_WIND_NEWS = [2, 3, 4, 5],
-                 WALL_CELL_CODE = 1,
-                 GOAL_CELL_CODE = 6,
-                 LAVA_CELL_CODE = 7,
+                 wind_strength     = 0.25,
+                 free_space_reward = -2.5e-4,
+                 wall_reward       = 0,
+                 goal_reward       = 10,
+                 lava_reward       = -10,
+                 CELL_WIND_NEWS    = [2, 3, 4, 5],
+                 WALL_CELL_CODE    = 1,
+                 GOAL_CELL_CODE    = 6,
+                 LAVA_CELL_CODE    = 7,
                  freespace_handler = xargs(
-                     FreeSpaceHandler, ["CELL_FREE"]),
-                 wind_handler = xargs(
-                     WindHandler, ["rng", "wind_strength", "CELL_WIND_NEWS"]),
-                 wall_handler = xargs(
+                     FreeSpaceHandler, ["free_space_reward", "CELL_FREE"]),
+                 wind_handler      = xargs(
+                     WindHandler, ["rng", "wind_strength", "free_space_reward", "CELL_WIND_NEWS"]),
+                 wall_handler      = xargs(
                      WallHandler, ["wall_reward", "WALL_CELL_CODE"]),
-                 goal_handler = xargs(
+                 goal_handler      = xargs(
                      GoalHandler, ["goal_reward", "GOAL_CELL_CODE"]),
-                 lava_handler = xargs(
+                 lava_handler      = xargs(
                      LavaHandler, ["lava_reward", "LAVA_CELL_CODE"]),
-                 handler_keys = """freespace_handler wind_handler wall_handler
+                 handler_keys      = """freespace_handler wind_handler wall_handler
                                    goal_handler lava_handler""".split(),
-                 handlers = prop(lambda s: [
+                 handlers          = prop(lambda s: [
                      getattr(s, h) for h in s.handler_keys
                  ])
     ):
@@ -685,11 +685,13 @@ class AgentInGridWorld(Problem):
         else:
             self.pose = gw_pose
             new_spawn = False
+        hit_goal = (gw_pose.tolist() is None or gw_done) and gw_rew == self.goal_reward
 
         self._last_reward = gw_rew
         self.steps += 1
         self._done = self.steps >= self.max_steps
-        return self.pose, self._last_reward, self._done, dict(new_spawn = new_spawn)
+        return self.pose, self._last_reward, self._done, dict(new_spawn = new_spawn,
+                                                              hit_goal = hit_goal)
 
     def _respawn(self):
         self.pose          = self.start_pose_gen(self, self.goal_pose)
@@ -757,7 +759,7 @@ class AgentVisObserver(NoOPObserver):
                  windy_grid_world        = xargs(
                      WindyGridWorld.from_maze_file_path,
                      "rng maze_file_path".split()),
-                 cellsize                = 80,
+                 cellsize                = 40,
                  process_data_tag = xargspartial(
                      DrawAgentGridWorldFromLogs(),
                      "windy_grid_world cellsize image_file_fmt".split()),

@@ -123,7 +123,7 @@ class DistineffObs:
             self.last_spawn_pose = pose
         self.pose_history.append(np.array(pose))
 
-    def on_new_step(self, obs, act, rew):
+    def on_new_step(self, obs, act, rew, info):
         print("Deprecated")
         self.on_new_step_with_pose_steps(self, obs, act, rew, self.prob.pose)
 

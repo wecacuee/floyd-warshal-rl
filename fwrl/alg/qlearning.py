@@ -15,6 +15,16 @@ from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
 def logger():
     return logging.getLogger(__name__)
 
+
+def rand_argmax(arr, rng):
+    """
+    Chose the a random arg among maxes
+    """
+    val = np.max(arr, keepdims=True)
+    idx = np.arange(arr.shape[0])[arr == val]
+    return rng.choice(idx)
+
+
 class QLearningDiscrete(Alg):
     def __init__(self,
                  action_space,
@@ -22,8 +32,8 @@ class QLearningDiscrete(Alg):
                  reward_range,
                  rng,
                  egreedy_epsilon       = 0.00,
-                 action_value_momentum = 0.1, # Low momentum changes more frequently
-                 discount              = 0.99, # step cost 
+                 action_value_momentum = 0.0, # Low momentum changes more frequently
+                 discount              = 1.00, # step cost
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
@@ -86,15 +96,18 @@ class QLearningDiscrete(Alg):
         #logger().debug(
         #    "state = {state}; action_values = {av}".format(
         #        av=self.action_value[state_idx, :], state=state))
-        return np.argmax(self.action_value[state_idx, :])
+        return rand_argmax(self.action_value[state_idx, :], self.rng)
 
-    def _hit_goal(self, rew):
-        return rew >= 9
+    def _hit_goal(self, obs, act, rew, done, info):
+        return info.get("hit_goal", False)
 
     def on_hit_goal(self, obs, act, rew):
         self.last_state_idx_act = None
 
-    def update(self, obs, act, rew):
+    def is_terminal_step(self, obs, act, rew, done, info):
+        return done or info.get("new_spawn", False)
+
+    def update(self, obs, act, rew, done, info):
         # Protocol defined by: game.play:play_episode()
         # - act = alg.policy(obs)
         # - obs_plus_1, rew_plus_1 = the prob.step(act)
@@ -115,8 +128,11 @@ class QLearningDiscrete(Alg):
         if stm1 is None:
             return
 
-        if self._hit_goal(rew):
+        if self._hit_goal(obs, act, rew, done, info):
             self.on_hit_goal(obs, act, rew)
+
+        # terminal step
+        ts = self.is_terminal_step(obs, act, rew, done, info)
 
         # Abbreviate the variables
         qm = self.action_value_momentum
@@ -124,7 +140,7 @@ class QLearningDiscrete(Alg):
         d = self.discount
 
         # Update step from online observed reward
-        Q[stm1, act] = (1-qm) * (rew + d * np.max(Q[st, :])) + qm * Q[stm1, act]
+        Q[stm1, act] = (1-qm) * (rew + (1-ts) * d * np.max(Q[st, :])) + qm * Q[stm1, act]
 
     def close(self):
         pass
@@ -141,7 +157,7 @@ class QLearningDiscrete(Alg):
 class QLearningVis(NoOPObserver):
     def __init__(self, log_file_dir,
                  update_interval = 1,
-                 cellsize = 80):
+                 cellsize = 40):
         self.update_interval = update_interval
         self.cellsize = cellsize
         self.log_file_dir = log_file_dir
@@ -157,7 +173,7 @@ class QLearningVis(NoOPObserver):
     @property
     def action_space(self):
         return self.alg.action_space
-        
+
     def _invert_hash_state(self, hash_state):
         self._inverted_hash_state = { state_idx : state_pose
             for state_pose, state_idx in hash_state.items() }
@@ -186,8 +202,7 @@ class QLearningVis(NoOPObserver):
             big_c = act % 2
             big_mat[big_r::2, big_c::2] = mat
         return big_mat
-        
-        
+
     def visualize_action_value(self, ax, action_value, hash_state, grid_shape):
         cellsize = ax.get_xlim()[1] / grid_shape[1]
         action_value_mat = self._action_value_to_matrices(
@@ -201,7 +216,7 @@ class QLearningVis(NoOPObserver):
             center = np.array((i*c50 + c25, j*c50 + c25))
             if i % 2 == 0 and j % 2 == 0:
                 draw.rectangle(ax, center - c25, center + c75, (0, 0, 0))
-            draw.putText(ax, f"{action_value_mat[i, j]:.3}",
+            draw.putText(ax, "{:.3}".format(action_value_mat[i, j]),
                          center, fontScale=4)
 
     def _policy_to_mat(self, policy_func):
@@ -280,10 +295,10 @@ class QLearningVis(NoOPObserver):
         self.goal_pose = goal_pose
         return ax
 
-    def on_new_step(self, obs, rew, action):
+    def on_new_step(self, obs, rew, action, info):
         if not np.any(self.goal_pose == self.prob.goal_pose):
             self.on_new_goal_pose(self.prob.goal_pose)
-            
+
         if self.update_steps % self.update_interval == 0:
             ax = self.on_new_goal_pose(self.goal_pose)
             draw.imwrite(
@@ -313,15 +328,34 @@ def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
                   cellsize = cellsize)
     return ax
 
-def post_process_data_tag(data, tag, cellsize, image_file_fmt):
+
+def render_log(ax, data, image_file_fmt = "/tmp/{tag}.png"):
+    fname = image_file_fmt.format(
+        tag = "action_value",
+        episode=data["episode_n"], step=data["steps"])
+    img_dir = os.path.dirname(fname)
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
+    print("Writing img to: {}".format(fname))
+    return draw.imwrite(fname, ax)
+
+
+def render_human(ax, data):
+    return draw.imshow(
+        "action_value".format(
+            episode_n = data["episode_n"], steps = data["steps"]),
+        ax)
+
+
+class Renderer:
+    log = render_log
+    human = render_human
+
+
+def post_process_data_tag(data, tag, cellsize, renderer):
     ax = visualize_action_value(
         data["action_value"], data["hash_state"], data["grid_shape"], cellsize)
-    img_filepath = image_file_fmt.format( tag = "action_value",
-        episode=data["episode_n"], step=data["steps"])
-    img_filedir = os.path.dirname(img_filepath)
-    if not os.path.exists(img_filedir):
-        os.makedirs(img_filedir)
-    draw.imwrite(img_filepath, ax)
+    return renderer(ax, data)
 
 
 def post_process_generic(data_iter, process_data_tag=post_process_data_tag):
@@ -335,16 +369,16 @@ def post_process(
             "log_file_reader filter_criteria".split()),
         process_data_tag = xargspartial(
             post_process_data_tag,
-            "cellsize image_file_fmt".split())):
+            "cellsize renderer".split())):
     return post_process_generic(data_iter, process_data_tag)
 
 post_process_from_log_conf = functools.partial(
     post_process,
-    cellsize         = 80,
+    cellsize         = 40,
     filter_criteria  = KWProp(
         lambda s : dict( tag = s.action_value_tag)),
     # Needs
-    # image_file_fmt,
+    # renderer,
     # log_file_reader,
     # action_value_tag,
 )
@@ -357,9 +391,11 @@ class QLearningLogger(NoOPObserver):
                  human_tag        = "INFO",
                  action_value_tag = "QLearningLogger:action_value",
                  sep              = "\t",
+                 renderer         = KWProp(lambda s: partial(Renderer.log,
+                                                           image_file_fmt = s.image_file_fmt)),
                  post_process     = xargspartial(
                      post_process_from_log_conf,
-                     "image_file_fmt log_file_reader action_value_tag".split()),
+                     "renderer log_file_reader action_value_tag".split()),
     ):
         self.logger           = logger
         self.log_interval     = log_interval

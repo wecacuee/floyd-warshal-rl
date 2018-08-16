@@ -6,7 +6,8 @@ import numpy as np
 from io import BytesIO
 import base64
 import builtins
-from itertools import tee, islice
+from itertools import tee, islice, repeat
+from functools import partial, update_wrapper, reduce
 
 def ensuredirs(file_path):
     file_dir = os.path.dirname(file_path)
@@ -122,19 +123,31 @@ class ChainedEncoders(json.JSONEncoder):
                 return enc.loads(dct)
         return dct
 
+## Functools
 def pairwise(iterable):
     "s -> (s0,s1), (s2,s3), (s4, s5), ..."
     a, b = tee(iterable)
     return zip(islice(a, None, None, 2), islice(b, 1, None, 2))
 
-class compose:
-    def __init__(self, *fs):
-        if len(fs) < 2: raise ValueError("Need at least two functions to compose")
+class kwcompose:
+    def __init__(self,
+                 *fs,
+                 apply_one=lambda ret, f: f(**ret)):
+        if len(fs) < 2: raise ValueError("Need at least one function to compose")
         self.fs = fs
-        functools.update_wrapper(self, fs[-1])
+        self.apply_one = apply_one
+        update_wrapper(self, fs[-1])
 
-    def __call__(self, *a, **kw):
-        ret = self.fs[-1](*a, **kw)
-        for f in self.fs[:-1]:
-            ret = f(ret)
-        return ret
+    def __call__(self, **kw):
+        return reduce(self.apply_one, self.fs[:-1], self.fs[-1](**kw))
+
+
+compose = partial(kwcompose, apply_one = lambda ret, f: f(ret))
+
+
+def dictzip(kwiterables):
+    keys, values = zip(*kwiterables.items())
+    return (dict(zip(keys, v)) for v in zip(*values))
+
+def kwmap(function, **kwiterables):
+    return (function(**kw) for kw in dictzip(kwiterables))

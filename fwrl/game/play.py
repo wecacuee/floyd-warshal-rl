@@ -288,12 +288,39 @@ class Renderer:
                                call_prob = 0.1)
     log = lambda prob: prob.render(mode = 'log')
 
+def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop):
+    prob.episode_reset(episode_n)
+    alg.episode_reset(episode_n)
+    observer.on_new_episode(episode_n)
+    obs = prob.observation()
+    rew = prob.reward()
+    act = prob.action_space.sample()
+    step_n = 0
+    done = False
+    info = dict()
+    while not done:
+        observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
+        alg.update(obs, act, rew, done, info)
+        act = alg.egreedy(alg.policy(obs))
+        obs, rew, done, info = prob.step(act)
+        renderer(prob)
+
+        step_n += 1
+
+    # Update rewards the "done" step
+    observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
+    alg.update(obs, act, rew, done, info)
+
+    # Record end of episode
+    observer.on_episode_end(episode_n)
+
+
 def play(alg,
          prob,
          observer = NOOP_OBSERVER,
          nepisodes = 1,
          logger_factory = default_logger_factory,
-         renderer = Renderer.noop):
+         play_episode_ = play_episode):
     """
     renderer: Options are:
       - Renderer.noop
@@ -308,36 +335,10 @@ def play(alg,
     observer.set_alg(alg)
     observer.on_play_start()
     for n in range(nepisodes):
-        play_episode(alg, prob, observer, n, renderer = renderer)
+        play_episode_(alg, prob, observer, n)
 
     observer.on_play_end()
     return observer
-
-def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop):
-    prob.episode_reset(episode_n)
-    alg.episode_reset(episode_n)
-    observer.on_new_episode(episode_n)
-    obs = prob.observation()
-    rew = prob.reward()
-    act = prob.action_space.sample()
-    step_n = 0
-    done = False
-    info = dict()
-    while not done:
-        observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
-        alg.update(obs, act, rew)
-        act = alg.egreedy(alg.policy(obs))
-        obs, rew, done, info = prob.step(act)
-        renderer(prob)
-
-        step_n += 1
-
-    # Update rewards the "done" step
-    observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
-    alg.update(obs, act, rew)
-
-    # Record end of episode
-    observer.on_episode_end(episode_n)
 
 
 def condition_by_type_map():

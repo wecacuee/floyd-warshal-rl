@@ -28,7 +28,8 @@ from ..alg.qlearning import (post_process_from_log_conf as
 from ..alg.floyd_warshall_grid import (post_process_from_log_conf as
                                      fw_post_process_from_log_conf)
 
-from ..game.play import (MultiObserver, play, LogFileReader, NoOPObserver)
+from ..game.play import (MultiObserver, play, LogFileReader, NoOPObserver,
+                         Renderer, play_episode)
 from ..game.logging import NPJSONEncDec, LogFileConf
 from ..prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
                                    DrawAgentGridWorldFromLogs, AgentVisObserver)
@@ -103,8 +104,11 @@ def grid_world_play(
             lambda s: s.log_file_conf.log_file_dir),
         image_file_fmt_t = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
         action_value_img_fmt_t = prop(lambda s : s.image_file_fmt_t),
+        play_episode     = play_episode,
         **kwargs):
-    return play(alg, prob, observer, nepisodes, logger_factory)
+    return play(alg, prob, observer, nepisodes, logger_factory,
+                play_episode_ = play_episode)
+
 
 ql_grid_world_play = functools.partial(
     grid_world_play,
