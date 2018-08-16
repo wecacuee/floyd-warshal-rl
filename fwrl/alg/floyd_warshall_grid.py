@@ -29,7 +29,8 @@ class FloydWarshallAlgDiscrete(object):
 
     @property
     def path_cost_init(self):
-        return 10 * self.qlearning.reward_range[1]
+        #return 10 * self.qlearning.reward_range[1]
+        return 0#- self.qlearning.init_value
 
     def episode_reset(self, episode_n):
         self.qlearning.episode_reset(episode_n)
@@ -61,19 +62,21 @@ class FloydWarshallAlgDiscrete(object):
     def update(self, obs, act, rew, done, info):
         stm1, am1 = self.last_state_idx_act or (None, None)
         st = self._state_idx_from_obs(obs, act, rew)
+        self.last_state_idx_act = (st, act)
 
         if self.qlearning._hit_goal(obs, act, rew, done, info):
             self.goal_state = st
         else:
             # No update on goal hit
-            self.qlearning.update(obs, act, rew, done, info)
+            #self.qlearning.update(obs, act, rew, done, info)
+            pass
 
         if stm1 is None:
             return
 
         # Abbreviate the variables
         F = self.path_cost
-        Q = self.qlearning.action_value
+        #Q = self.qlearning.action_value
 
         # Make a conservative estimate of differential
         #F[stm1, act, st] = max(np.max(Q[st, :]) - Q[stm1, act],
@@ -82,7 +85,8 @@ class FloydWarshallAlgDiscrete(object):
 
         # We have found a new way to reach state st
         old_F_to_st = F[:, :, st].copy()
-        F[:, :, st] = np.minimum(F[:, :, st], F[:, :, stm1] + F[stm1, act, st])
+        # The cost is allowed to increase
+        F[stm1, act, :] = F[stm1, act, st] + np.min(F[st, :, :], axis=0, keepdims=True)
 
         # # TODO: Disabled for small state spaces. Re-enable for larger ones
         # # Update the top m states
@@ -103,19 +107,19 @@ class FloydWarshallAlgDiscrete(object):
         # O(n^2) step to update all path_costs and action_values
         # If we have found a new path to st, only then we need to update any new paths
         # to via st.
-        if np.any(old_F_to_st != F[:, :, st]):
-            np.minimum(
-                F,
-                F[:, :, st:st+1] + np.min(F[st:st+1, :, :], axis=1, keepdims=True),
-                out=F)
+        if self.goal_state and np.any(old_F_to_st != F[:, :, st]):
+            F[:, :, self.goal_state] = np.minimum(
+                F[:, :, self.goal_state],
+                F[:, :, st] + np.min(F[st:st+1, :, self.goal_state], axis=1, keepdims=True))
         assert np.all(self.path_cost >= 0), "The Floyd cost should be positive at all times"
 
     def net_value(self, state_idx):
         if self.goal_state is None:
-            return self.qlearning.action_value[state_idx, :]
+            #return self.qlearning.action_value[state_idx, :]
+            return - self.path_cost[state_idx, :, self.qlearning.rng.randint(self.path_cost.shape[2])]
         else:
-            Q = self.qlearning.action_value
-            return Q[state_idx, :] - self.path_cost[state_idx, :, self.goal_state]
+            #Q = self.qlearning.action_value
+            return - self.path_cost[state_idx, :, self.goal_state]
 
     def policy(self, obs):
         state = self._state_from_obs(obs)
@@ -173,22 +177,24 @@ class FloydWarshallVisualizer(QLearningVis):
                       net_value, hash_state, grid_shape, goal_pose,
                       cellsize):
         ax = draw.white_img(
-            (grid_shape[1]*2*cellsize, grid_shape[0]*2*cellsize),
+            #(grid_shape[1]*2*cellsize, grid_shape[0]*2*cellsize),
+            (grid_shape[1]*cellsize, grid_shape[0]*2*cellsize),
             dpi=cellsize*2)
-        #ax.set_position([0, 0, 0.5, 0.5])
-        #ax.set_xticks([])
-        #ax.set_yticks([])
-        #ax.set_xlim([0, grid_shape[1]*cellsize])
-        #ax.set_ylim([0, grid_shape[0]*cellsize])
+        ax.set_position([0, 0, 0.5, 1.0])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlim([0, grid_shape[1]*cellsize])
+        ax.set_ylim([0, grid_shape[0]*cellsize])
         #self.visualize_action_value(ax, action_value, hash_state, grid_shape)
 
-        ax2 = ax.figure.add_axes([0.5, 0, 0.5, 0.5], frameon=False)
-        ax2.set_position([0.5, 0, 0.5, 0.5])
-        ax2.set_xticks([])
-        ax2.set_yticks([])
-        ax2.set_xlim([0, grid_shape[1]*cellsize])
-        ax2.set_ylim([0, grid_shape[0]*cellsize])
-        self.visualize_policy(ax2, policy, hash_state, grid_shape)
+        #ax2 = ax.figure.add_axes([0.5, 0, 0.5, 0.5], frameon=False)
+        #ax2.set_position([0.5, 0, 0.5, 0.5])
+        #ax2.set_xticks([])
+        #ax2.set_yticks([])
+        #ax2.set_xlim([0, grid_shape[1]*cellsize])
+        #ax2.set_ylim([0, grid_shape[0]*cellsize])
+        #self.visualize_policy(ax2, policy, hash_state, grid_shape)
+        self.visualize_policy(ax, policy, hash_state, grid_shape, goal_pose)
 
         #ax3 = ax.figure.add_axes([0, 0.5, 0.5, 0.5], frameon=False)
         #ax3.set_position([0, 0.5, 0.5, 0.5])
@@ -198,8 +204,8 @@ class FloydWarshallVisualizer(QLearningVis):
         #ax3.set_ylim([0, grid_shape[0]*cellsize])
         #self.visualize_path_cost(ax3, path_cost, hash_state, goal_pose, grid_shape)
 
-        ax4 = ax.figure.add_axes([0.5, 0.5, 0.5, 0.5], frameon=False)
-        ax4.set_position([0.5, 0.5, 0.5, 0.5])
+        ax4 = ax.figure.add_axes([0.5, 0.0, 0.5, 1.0], frameon=False)
+        ax4.set_position([0.5, 0.0, 0.5, 1.0])
         ax4.set_xticks([])
         ax4.set_yticks([])
         ax4.set_xlim([0, grid_shape[1]*cellsize])

@@ -222,10 +222,19 @@ class QLearningVis(NoOPObserver):
     def _policy_to_mat(self, policy_func):
         return mat
 
-    def visualize_policy(self, ax, policy_func, hash_state, grid_shape):
+    def visualize_policy(self, ax, policy_func, hash_state, grid_shape, goal_pose):
         cellsize = ax.get_xlim()[1] / grid_shape[0]
         VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
 
+
+        if len(hash_state):
+            vis_goal_pose = np.asarray(goal_pose
+                            if tuple(goal_pose) in hash_state
+                            else list(hash_state.keys())[-1])
+
+            draw.rectangle(ax, vis_goal_pose * 2*cellsize,
+                        (vis_goal_pose + 1)*2*cellsize,
+                        (0, 255, 0), thickness=-1)
         for state in hash_state.keys():
             act = policy_func(state)
             act_vec = np.array(VECTORS[act, :])
@@ -374,7 +383,7 @@ def post_process(
 
 post_process_from_log_conf = functools.partial(
     post_process,
-    cellsize         = 40,
+    cellsize         = 80,
     filter_criteria  = KWProp(
         lambda s : dict( tag = s.action_value_tag)),
     # Needs

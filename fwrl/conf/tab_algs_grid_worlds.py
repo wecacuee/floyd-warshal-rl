@@ -74,7 +74,7 @@ def tab_algs_grid_worlds(
                 max_steps = max_stps,
                 rng       = rng,
                 nepisodes = nepisodes,
-                play_episode  = partial(play_episode, renderer = Renderer.human),
+                #play_episode  = partial(play_episode, renderer = Renderer.human),
                 #observer  = NoVisMultiObserverXargs,
                 visualizer_observer = xargs(
                     partial(FloydWarshallLogger, renderer = QRenderer.human),

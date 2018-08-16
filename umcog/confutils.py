@@ -248,21 +248,36 @@ def xargs_(func, expect_args=(), *args, **kwargs):
     return wrapper
 
 def xargs(func, expect_args=(), *args, **kwargs):
+    """
+    Picks up the arguments `expect_args` from the parent namespace.
+    """
     return KWProp(xargs_(func, expect_args, *args, **kwargs))
 
 def xargmem(func, expect_args=(), *args, **kwargs):
+    """
+    Picks up the arguments `expect_args` from the parent namespace and memoizes
+    the results with the parent object.
+    """
     return KWProp(method_memoizer(xargs_(func, expect_args, *args, **kwargs)))
 
 def xargsonce(func, expect_args=(), *args, **kwargs):
+    """
+    Picks up the arguments `expect_args` from the parent namespace and memoizes
+    the results with the parent object considering only function name as the key.
+    May conflict with the same function name.
+    """
     return KWProp(
         method_memoizer(
             xargs_(func, expect_args, *args, **kwargs),
             keyfunc=lambda *a: ()))
 
 def xargspartial(func, expect_args=(), *args, **kwargs):
+    """
+    Do not calls the function itself, but returns the function bound with the args/kwargs.
+    """
     return KWProp(xargs_(functools.partial(functools.partial, func),
                          expect_args, *args, **kwargs))
-    
+
 def kwasattr_to_key_default(kwasattr):
     key_default = []
     for k, v in kwasattr.partial.items():
