@@ -19,11 +19,7 @@ def latency_from_time_list(time_list, n=1):
     return mean(time_list[:n]) / mean(time_list[n:])
 
 def text_quartile(quart):
-    return """
-           +---------------------+
-|{min:<03.3}----{quart_1:<03.3} {median:<03.3}  {quart_3:<03.3}----{max:<03.3}|
-           +---------------------+
-    """.format(**quart)
+    return """ |{min:<03.3}  :  {quart_1:<03.3}  |  {median:<03.3}  |  {quart_3:<03.3}  :  {max:>03.3}| """.format(**quart)
 
 def quartiles(data):
     data = np.asarray(data)
