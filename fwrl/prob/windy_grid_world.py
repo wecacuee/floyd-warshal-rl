@@ -13,8 +13,9 @@ from umcog.memoize import MEMOIZE_METHOD, MethodMemoizer
 from umcog.confutils import (extended_kwprop, KWProp as prop, xargs, xargspartial, xargmem)
 
 from ..game.play import (Space, Problem, NoOPObserver,
-                       post_process_data_iter,
-                       post_process_generic, LogFileReader)
+                         post_process_data_iter,
+                         post_process_generic, LogFileReader,
+                         show_ax_log, show_ax_human)
 from ..game.logging import NPJSONEncDec
 import logging
 from .generate_mazes import gen_maze
@@ -730,7 +731,7 @@ class DrawAgentGridWorldFromLogs:
         self.new_episode_data = None
 
     def __call__(self, data = None, tag = None, windy_grid_world=None,
-                 cellsize=None, image_file_fmt=None):
+                 cellsize=None, show_ax = None):
         if tag == "LoggingObserver:new_episode":
             self.new_episode_data = data
         elif tag == "LoggingObserver:new_step":
@@ -742,27 +743,25 @@ class DrawAgentGridWorldFromLogs:
 
                 # Render agent
                 render_agent(ax, np.asarray(data["pose"]), cellsize)
-                img_filepath = image_file_fmt.format(
-                    tag = "agent_grid_world",
-                    episode=data["episode_n"], step=data["steps"])
-                img_filedir = os.path.dirname(img_filepath)
-                if not os.path.exists(img_filedir):
-                    os.makedirs(img_filedir)
-
-                draw.imwrite(img_filepath, ax)
+                show_ax(ax, data)
         else:
             print("Skipping Unknown tag {}".format(tag))
 
 class AgentVisObserver(NoOPObserver):
+    show_ax_log = partial(show_ax_log, tag = "agent_grid_world")
+    show_ax_human = partial(show_ax_human, tag = "agent_grid_world")
     @extended_kwprop
     def __init__(self,
                  windy_grid_world        = xargs(
                      WindyGridWorld.from_maze_file_path,
                      "rng maze_file_path".split()),
                  cellsize                = 40,
+                 show_ax = xargspartial(
+                     partial(show_ax_log, tag = "agent_grid_world"),
+                     ["image_file_fmt"]),
                  process_data_tag = xargspartial(
                      DrawAgentGridWorldFromLogs(),
-                     "windy_grid_world cellsize image_file_fmt".split()),
+                     "windy_grid_world cellsize show_ax".split()),
                  image_file_fmt_template = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
                  image_file_fmt          = prop(lambda s: s.image_file_fmt_template.format(self=s)),
                  log_file_reader = xargs(LogFileReader,

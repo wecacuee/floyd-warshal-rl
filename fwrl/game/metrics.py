@@ -18,14 +18,49 @@ def mean(l):
 def latency_from_time_list(time_list, n=1):
     return mean(time_list[:n]) / mean(time_list[n:])
 
+def text_quartile(quart):
+    return """
+           +---------------------+
+|{min:<03.3}----{quart_1:<03.3} {median:<03.3}  {quart_3:<03.3}----{max:<03.3}|
+           +---------------------+
+    """.format(**quart)
+
+def quartiles(data):
+    data = np.asarray(data)
+    return dict(
+        min = min(data, default=0),
+        quart_1 = np.quantile(data, 0.25),
+        median = np.quantile(data, 0.50),
+        quart_3 = np.quantile(data, 0.75),
+        max = max(data, default=0))
 
 def compute_latency(times_to_goal_hit_all_episodes):
     # Need at least two hits to the goal for validity
     valid_times = filter(lambda t: len(t) >= 2, times_to_goal_hit_all_episodes)
     latencies_all_episode = list(map(latency_from_time_list, valid_times))
-    return (mean(latencies_all_episode),
-            min(latencies_all_episode, default=0), max(latencies_all_episode, default=0))
+    return quartiles(latencies_all_episode)
 
+class RewardObserver:
+    def __init__(self, prob):
+        self.rewards_all_episodes = []
+        self.rewards = []
+
+    def on_new_episode(self, episode_n=None, **kwargs):
+        if len(self.rewards):
+            self.rewards_all_episodes.append(self.rewards)
+        self.rewards = []
+
+    def on_new_step_with_pose_steps(self, obs=None, act=None,
+                                    rew=None, pose=None, steps=None,
+                                    episode_n=None, **kwargs):
+        self.rewards.append(rew)
+
+    def on_play_end(self):
+        self.on_new_episode(episode_n=len(self.rewards_all_episodes) + 1)
+        total_rewards_all_episodes = list(map(sum, self.rewards_all_episodes))
+        info(str(total_rewards_all_episodes))
+        info("Reward quartiles: "
+             + text_quartile(quartiles(total_rewards_all_episodes)))
 
 class LatencyObserver:
     def __init__(self, prob):
@@ -60,10 +95,9 @@ class LatencyObserver:
     def on_play_end(self):
         self.on_new_episode(episode_n=len(self.times_to_goal_hit)+1)
         info(str(self.times_to_goal_hit_all_episodes))
-        mean_latency, min_l, max_l = compute_latency(
+        latency_quartiles = compute_latency(
             self.times_to_goal_hit_all_episodes)
-        info("latency : {mean_latency}; min latency {min_l}; max latency {max_l}".format(
-            mean_latency = mean_latency, min_l = min_l, max_l = max_l))
+        info("Latency quartiles: " + text_quartile(latency_quartiles))
 
 
 class DistineffObs:
@@ -132,10 +166,8 @@ class DistineffObs:
         print(self.distineff_all_episodes)
         alldistineff = sum(map(lambda l: l[1:],
                                self.distineff_all_episodes), [])
-        mean_distineff = mean(alldistineff)
-        min_distineff = min(alldistineff, default=0)
-        max_distineff = max(alldistineff, default=0)
-        info(f"""mean distineff = {mean_distineff}; +- ({mean_distineff - min_distineff}, {max_distineff - mean_distineff};)""")
+        info("Distance inefficiency quartiles: "
+                 + text_quartile(quartiles(alldistineff)))
 
 class ComputeMetricsFromLogReplay:
     @extended_kwprop
@@ -143,10 +175,11 @@ class ComputeMetricsFromLogReplay:
                  logging_observer = None,
                  log_file_reader = None,
                  metrics_observers = prop(lambda s : [s.latency_observer,
-                                                      s.distineff_observer]),
+                                                      s.distineff_observer,
+                                                      s.reward_observer]),
                  latency_observer = xargs(LatencyObserver, ["prob"]),
                  distineff_observer = xargs(DistineffObs, ["prob"]),
-                 ):
+                 reward_observer    = xargs(RewardObserver, ["prob"])):
         self.logging_observer = logging_observer
         self.metrics_observers = metrics_observers
         self.log_file_reader = log_file_reader

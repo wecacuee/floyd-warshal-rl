@@ -5,12 +5,12 @@ import os
 from queue import PriorityQueue
 import logging
 import operator
-import functools
+from functools import partial
 
 from umcog.misc import NumpyEncoder
 from umcog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwprop
 import umcog.draw as draw
-from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
+from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter, show_ax_human, show_ax_log
 
 def logger():
     return logging.getLogger(__name__)
@@ -24,6 +24,18 @@ def rand_argmax(arr, rng):
     idx = np.arange(arr.shape[0])[arr == val]
     return rng.choice(idx)
 
+def q_policy(state_idx, action_value, rng):
+    # desirable_dest = max(
+    #     self.top_m_states.queue,
+    #     key = lambda s: self.action_value[s[1]])[1]
+    #logger().debug(
+    #    "state = {state}; action_values = {av}".format(
+    #        av=self.action_value[state_idx, :], state=state))
+    return rand_argmax(action_value[state_idx, :], rng)
+
+
+def egreedy_prob_from_step(step, start = 0.8, end = 0.001, max_steps = 400):
+    return start * np.exp( np.log(end) * step / max_steps )
 
 class QLearningDiscrete(Alg):
     def __init__(self,
@@ -31,7 +43,7 @@ class QLearningDiscrete(Alg):
                  observation_space,
                  reward_range,
                  rng,
-                 egreedy_epsilon       = 0.00,
+                 egreedy_prob          = egreedy_prob_from_step,
                  action_value_momentum = 0.0, # Low momentum changes more frequently
                  discount              = 1.00, # step cost
     ):
@@ -39,7 +51,7 @@ class QLearningDiscrete(Alg):
         self.observation_space    = observation_space
         self.reward_range         = reward_range
         self.rng                  = rng
-        self.egreedy_epsilon      = egreedy_epsilon
+        self.egreedy_prob         = egreedy_prob
         self.action_value_momentum= action_value_momentum
         assert reward_range[0] >= 0, "Reward range"
         self.init_value           = discount * reward_range[0]
@@ -48,7 +60,8 @@ class QLearningDiscrete(Alg):
 
     def episode_reset(self, episode_n):
         self.action_value[:]= self.init_value
-        self.last_state_idx_act = None
+        self.last_state_idx = None
+        self.step = 0
 
     def reset(self):
         self.action_value    = self._default_action_value(0)
@@ -65,7 +78,7 @@ class QLearningDiscrete(Alg):
         return new_action_value
 
     def egreedy(self, greedy_act):
-        sample_greedy = (self.rng.rand() >= self.egreedy_epsilon)
+        sample_greedy = (self.rng.rand() >= self.egreedy_prob(self.step))
         return greedy_act if sample_greedy else self.action_space.sample()
 
     def _state_from_obs(self, obs):
@@ -90,24 +103,19 @@ class QLearningDiscrete(Alg):
     def policy(self, obs):
         state = self._state_from_obs(obs)
         state_idx = self.hash_state[tuple(state)]
-        # desirable_dest = max(
-        #     self.top_m_states.queue,
-        #     key = lambda s: self.action_value[s[1]])[1]
-        #logger().debug(
-        #    "state = {state}; action_values = {av}".format(
-        #        av=self.action_value[state_idx, :], state=state))
-        return rand_argmax(self.action_value[state_idx, :], self.rng)
+        return q_policy(state_idx, self.action_value, self.rng)
 
     def _hit_goal(self, obs, act, rew, done, info):
         return info.get("hit_goal", False)
 
     def on_hit_goal(self, obs, act, rew):
-        self.last_state_idx_act = None
+        self.last_state_idx = None
 
     def is_terminal_step(self, obs, act, rew, done, info):
         return done or info.get("new_spawn", False)
 
     def update(self, obs, act, rew, done, info):
+        self.step += 1
         # Protocol defined by: game.play:play_episode()
         # - act = alg.policy(obs)
         # - obs_plus_1, rew_plus_1 = the prob.step(act)
@@ -118,13 +126,9 @@ class QLearningDiscrete(Alg):
             raise ValueError("Bad observation {obs}".format(obs=obs))
 
         # Encoding state_hash from observation
-        state_idx = self._state_idx_from_obs(obs, act, rew)
-        # Why is am1 ignored and act chosen?
-        # Ans: because:
-        # stm1, act -> obs, rew
-        stm1, am1 = self.last_state_idx_act or (None, None)
-        st = state_idx
-        self.last_state_idx_act = state_idx, act
+        st = self._state_idx_from_obs(obs, act, rew)
+        stm1 = self.last_state_idx
+        self.last_state_idx = st
         if stm1 is None:
             return
 
@@ -157,7 +161,9 @@ class QLearningDiscrete(Alg):
 class QLearningVis(NoOPObserver):
     def __init__(self, log_file_dir,
                  update_interval = 1,
-                 cellsize = 40):
+                 cellsize = 40,
+                 rng = np.random.RandomState(seed = 0)):
+        self.rng = rng
         self.update_interval = update_interval
         self.cellsize = cellsize
         self.log_file_dir = log_file_dir
@@ -222,19 +228,19 @@ class QLearningVis(NoOPObserver):
     def _policy_to_mat(self, policy_func):
         return mat
 
-    def visualize_policy(self, ax, policy_func, hash_state, grid_shape, goal_pose):
+    def visualize_policy(self, ax, policy_func, hash_state, grid_shape, goal_pose=None):
         cellsize = ax.get_xlim()[1] / grid_shape[0]
         VECTORS = np.array([[0, -1], [-1, 0], [1, 0], [0, 1]])
 
 
-        if len(hash_state):
+        if goal_pose is not None and len(hash_state):
             vis_goal_pose = np.asarray(goal_pose
                             if tuple(goal_pose) in hash_state
                             else list(hash_state.keys())[-1])
 
-            draw.rectangle(ax, vis_goal_pose * 2*cellsize,
-                        (vis_goal_pose + 1)*2*cellsize,
-                        (0, 255, 0), thickness=-1)
+            draw.rectangle(ax, vis_goal_pose *cellsize,
+                           (vis_goal_pose + 1)*cellsize,
+                           (0, 255, 0), thickness=-1)
         for state in hash_state.keys():
             act = policy_func(state)
             act_vec = np.array(VECTORS[act, :])
@@ -278,8 +284,9 @@ class QLearningVis(NoOPObserver):
         ax2.set_xlim([0, grid_shape[1]*cellsize])
         ax2.set_ylim([0, grid_shape[0]*cellsize])
         self.visualize_policy(ax2,
-                              lambda obs: (np.argmax(action_value[hash_state[obs], :])
-                                         if action_value.size else 0),
+                              lambda obs: (q_policy(hash_state[obs], action_value,
+                                                    self.rng)
+                                           if action_value.size else 0),
                               hash_state, grid_shape)
 
     def normalize_by_std(self, mat):
@@ -338,27 +345,10 @@ def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
     return ax
 
 
-def render_log(ax, data, image_file_fmt = "/tmp/{tag}.png"):
-    fname = image_file_fmt.format(
-        tag = "action_value",
-        episode=data["episode_n"], step=data["steps"])
-    img_dir = os.path.dirname(fname)
-    if not os.path.exists(img_dir):
-        os.makedirs(img_dir)
-    print("Writing img to: {}".format(fname))
-    return draw.imwrite(fname, ax)
-
-
-def render_human(ax, data):
-    return draw.imshow(
-        "action_value".format(
-            episode_n = data["episode_n"], steps = data["steps"]),
-        ax)
-
-
 class Renderer:
-    log = render_log
-    human = render_human
+    human = partial(show_ax_human, tag = "action_value")
+    log = partial(show_ax_log, tag = "action_value")
+
 
 
 def post_process_data_tag(data, tag, cellsize, renderer):
@@ -381,7 +371,7 @@ def post_process(
             "cellsize renderer".split())):
     return post_process_generic(data_iter, process_data_tag)
 
-post_process_from_log_conf = functools.partial(
+post_process_from_log_conf = partial(
     post_process,
     cellsize         = 80,
     filter_criteria  = KWProp(
@@ -440,7 +430,7 @@ class QLearningLogger(NoOPObserver):
                            policy       = self.policy(),
                            hash_state   = self.alg.hash_state))
 
-    def on_new_step(self, obs, rew, action):
+    def on_new_step(self, obs, rew, action, info):
         self.on_new_step_with_pose_steps(
             obs = obs, rew = rew,
             act = action, pose = self.prob.pose, steps = self.prob.steps,

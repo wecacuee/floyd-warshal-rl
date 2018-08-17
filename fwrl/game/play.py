@@ -7,6 +7,7 @@ import numpy as np
 import operator
 from collections import OrderedDict
 
+from umcog import draw
 from umcog.memoize import MEMOIZE_METHOD
 from umcog.confutils import extended_kwprop, KWProp as prop, xargs
 from .logging import LogFileConf
@@ -278,6 +279,21 @@ def call_sometimes(func, call_prob = 1.0, rng = np.random.RandomState()):
         if rng.rand() < call_prob:
             return func(*a, **kw)
     return wrapper
+
+
+def show_ax_log(ax, data, tag = "c", image_file_fmt = "/tmp/{tag}.png"):
+    fname = image_file_fmt.format(
+        tag = tag,
+        episode=data["episode_n"], step=data["steps"])
+    img_dir = os.path.dirname(fname)
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
+    print("Writing img to: {}".format(fname))
+    return draw.imwrite(fname, ax)
+
+
+def show_ax_human(ax, data, tag = "c"):
+    return draw.imshow(tag, ax)
 
 
 class Renderer:

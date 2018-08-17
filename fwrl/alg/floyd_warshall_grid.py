@@ -23,14 +23,16 @@ class FloydWarshallAlgDiscrete(object):
                  qlearning = xargs(
                      QLearningDiscrete,
                      "action_space observation_space reward_range rng".split()),
+                 consistency_update_prob = 0.1
     ):
-        self.qlearning            = qlearning
+        self.qlearning     = qlearning
+        self.path_cost     = np.zeros((0, self.action_space.size, 0))
+        self.consistency_update_prob = consistency_update_prob
         self.reset()
 
     @property
     def path_cost_init(self):
-        #return 10 * self.qlearning.reward_range[1]
-        return 0#- self.qlearning.init_value
+        return 10 * self.qlearning.reward_range[1]
 
     def episode_reset(self, episode_n):
         self.qlearning.episode_reset(episode_n)
@@ -43,6 +45,7 @@ class FloydWarshallAlgDiscrete(object):
     def _default_path_cost(self, new_state_size):
         shape = (new_state_size, self.action_space.size, new_state_size)
         path_cost = self.path_cost_init * np.ones(shape)
+        #path_cost[np.arange(shape[0]), :, np.arange(shape[0])] = 0
         return path_cost
 
     def _resize_path_cost(self, new_state_size):
@@ -60,63 +63,44 @@ class FloydWarshallAlgDiscrete(object):
         return state_idx
 
     def update(self, obs, act, rew, done, info):
-        stm1, am1 = self.last_state_idx_act or (None, None)
+        stm1 = self.last_state_idx
         st = self._state_idx_from_obs(obs, act, rew)
-        self.last_state_idx_act = (st, act)
+        self.last_state_idx = st
 
         if self.qlearning._hit_goal(obs, act, rew, done, info):
-            self.goal_state = st
+            self.goal_state = stm1
+            self.last_state_idx = None
+            self.consistency_update()
         else:
             # No update on goal hit
-            #self.qlearning.update(obs, act, rew, done, info)
-            pass
+            self.qlearning.update(obs, act, rew, done, info)
 
         if stm1 is None:
             return
 
         # Abbreviate the variables
         F = self.path_cost
-        #Q = self.qlearning.action_value
-
-        # Make a conservative estimate of differential
-        #F[stm1, act, st] = max(np.max(Q[st, :]) - Q[stm1, act],
-        #                       self.per_edge_cost)
         F[stm1, act, st] = max(-rew, 0)
+        if self.qlearning.rng.rand() < self.consistency_update_prob:
+            self.consistency_update()
 
-        # We have found a new way to reach state st
-        old_F_to_st = F[:, :, st].copy()
-        # The cost is allowed to increase
-        F[stm1, act, :] = F[stm1, act, st] + np.min(F[st, :, :], axis=0, keepdims=True)
-
-        # # TODO: Disabled for small state spaces. Re-enable for larger ones
-        # # Update the top m states
-        # if not self.top_m_states.full():
-        #     self.top_m_states.put((self.action_value[state_idx], state_idx))
-
-        # top_value, top_state_idx = self.top_m_states.get()
-        # if self.action_value[state_idx] > top_value:
-        #     self.top_m_states.put((self.action_value[state_idx], state_idx))
-        # else:
-        #     self.top_m_states.put((top_value, top_state_idx))
-
-        # Update step from actual Floyd Warshall algorithm
-        # This is an expensive step depending up on the number of states
-        # Linear in the number of states
-
-        #for (si, sj) in self.state_pairs_iter():
-        # O(n^2) step to update all path_costs and action_values
-        # If we have found a new path to st, only then we need to update any new paths
-        # to via st.
-        if self.goal_state and np.any(old_F_to_st != F[:, :, st]):
-            F[:, :, self.goal_state] = np.minimum(
-                F[:, :, self.goal_state],
-                F[:, :, st] + np.min(F[st:st+1, :, self.goal_state], axis=1, keepdims=True))
+    def consistency_update(self):
+        F = self.path_cost
+        np.minimum(
+            F,
+            np.min(
+                F[:, :,  :, np.newaxis] + np.min(F[:, :, :], axis=1),
+                axis=2),
+            out=F)
         assert np.all(self.path_cost >= 0), "The Floyd cost should be positive at all times"
+
+    def random_state(self):
+        return self.qlearning.rng.randint(self.path_cost.shape[2])
 
     def net_value(self, state_idx):
         if self.goal_state is None:
-            #return self.qlearning.action_value[state_idx, :]
-            return - self.path_cost[state_idx, :, self.qlearning.rng.randint(self.path_cost.shape[2])]
+            return self.qlearning.action_value[state_idx, :]
+            #return - self.path_cost[state_idx, :, self.random_state()]
         else:
             #Q = self.qlearning.action_value
             return - self.path_cost[state_idx, :, self.goal_state]
@@ -128,7 +112,7 @@ class FloydWarshallAlgDiscrete(object):
 
     def __getattr__(self, attr):
         if attr in """action_space done action_value hash_state
-                      grid_shape init_value last_state_idx_act egreedy
+                      grid_shape init_value last_state_idx egreedy
                       _state_from_obs""".split():
             return getattr(self.qlearning, attr)
         else:
