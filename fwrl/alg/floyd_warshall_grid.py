@@ -32,11 +32,13 @@ class FloydWarshallAlgDiscrete(object):
 
     @property
     def path_cost_init(self):
-        return 10 * self.qlearning.reward_range[1]
+        #return 10 * self.qlearning.reward_range[1]
+        return np.inf
 
     def episode_reset(self, episode_n):
         self.qlearning.episode_reset(episode_n)
         self.goal_state    = None
+        self.last_state_idx = None
 
     def reset(self):
         self.qlearning.reset()
@@ -69,18 +71,23 @@ class FloydWarshallAlgDiscrete(object):
 
         if self.qlearning._hit_goal(obs, act, rew, done, info):
             self.goal_state = stm1
-            self.last_state_idx = None
             self.consistency_update()
-        else:
-            # No update on goal hit
-            self.qlearning.update(obs, act, rew, done, info)
+            return
+
+        self.qlearning.update(obs, act, rew, done, info)
 
         if stm1 is None:
             return
 
         # Abbreviate the variables
         F = self.path_cost
-        F[stm1, act, st] = max(-rew, 0)
+
+        if self.qlearning.is_terminal_step(obs, act, rew, done, info):
+            # stm1 -----> respawn ---> st
+            F[stm1, act, :] = max(-rew, 0)
+        else:
+            F[stm1, act, st] = max(-rew, 0)
+
         if self.qlearning.rng.rand() <= self.consistency_update_prob:
             self.consistency_update()
 
@@ -98,9 +105,10 @@ class FloydWarshallAlgDiscrete(object):
         return self.qlearning.rng.randint(self.path_cost.shape[2])
 
     def net_value(self, state_idx):
-        if self.goal_state is None:
+        if self.goal_state is None \
+           or np.all(self.path_cost[state_idx, :, self.goal_state] == self.path_cost_init):
             return self.qlearning.action_value[state_idx, :]
-            #return - self.path_cost[state_idx, :, self.random_state()]
+            #return self.path_cost[self.spawn_state, :, state_idx]
         else:
             #Q = self.qlearning.action_value
             return - self.path_cost[state_idx, :, self.goal_state]
@@ -108,11 +116,13 @@ class FloydWarshallAlgDiscrete(object):
     def policy(self, obs):
         state = self._state_from_obs(obs)
         state_idx = self.hash_state[tuple(state)]
-        return rand_argmax(self.net_value(state_idx), self.qlearning.rng)
+        net_val = self.net_value(state_idx)
+        #print("st:{} -> {}".format(state_idx, net_val))
+        return rand_argmax(net_val, self.qlearning.rng)
 
     def __getattr__(self, attr):
         if attr in """action_space done action_value hash_state
-                      grid_shape init_value last_state_idx egreedy
+                      grid_shape init_value egreedy
                       _state_from_obs""".split():
             return getattr(self.qlearning, attr)
         else:

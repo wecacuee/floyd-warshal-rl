@@ -350,6 +350,7 @@ class WindyGridWorld:
         self.GOAL_CELL_CODE = GOAL_CELL_CODE
         self.LAVA_CELL_CODE = LAVA_CELL_CODE
         self.handlers = handlers
+        self.free_space_reward = free_space_reward
 
     # TODO: make these function as partials on the constructor
     @classmethod
@@ -708,7 +709,6 @@ class AgentInGridWorld(Problem):
 
     def episode_reset(self, episode_n):
         self.steps         = 0
-        self._last_reward  = 0
         self.goal_pose     = self.goal_pose_gen(self)
         self.grid_world_goal = self.grid_world.clone()
         self.grid_world_goal.set_maze_code(
@@ -716,6 +716,7 @@ class AgentInGridWorld(Problem):
         self.pose          = self.start_pose_gen(self, self.goal_pose)
         self.episode_n     = episode_n
         self._done         = False
+        self._last_reward  = self.grid_world_goal.free_space_reward
 
     def done(self):
         return self._done

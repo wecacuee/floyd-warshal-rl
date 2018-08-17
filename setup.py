@@ -29,6 +29,7 @@ def CONF():
                          "opencv>=3.4.0",
                          "matplotlib>=2.1.2",
                          "ipython>=6.2.1",
+                         "ipdb",
                          "pytorch>=0.4.1",
                          "torchvision",
                          "gym[mujoco]",

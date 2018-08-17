@@ -18,12 +18,6 @@ from .default import (grid_world_play,
                       NoVisMultiObserverXargs)
 
 
-def AgentInGridWorlds_from_maze_names(rng = None, max_step = None, maze_names = []):
-    return [AgentInGridWorld.from_maze_name(
-        rng = rng, max_steps = max_steps, maze_name = mn)
-            for mn in maze_names]
-
-
 def isiterable(e):
     return isinstance(e, collections.Iterable)
 
@@ -69,7 +63,7 @@ def tab_algs_grid_worlds(
         nepisodes = 20,
         max_steps = [#4000,
                      #1000,
-                     1000
+                     400
         ],
         maze_name = [#"4-room-lava-world",
                      #"4-room-windy-world",
@@ -79,9 +73,9 @@ def tab_algs_grid_worlds(
         probs      = xargsonce(
             AgentInGridWorlds_from_maze_names_repeat,
             "rng max_steps maze_name".split()),
-        alg_names = ["ql",
+        alg_names = [#"ql",
                      "fw"],
-        gw_plays = [_ql_grid_world_play,
+        gw_plays = [#_ql_grid_world_play,
                     _fw_grid_world_play],
 ):
     return_vals = []
@@ -98,7 +92,7 @@ def tab_algs_grid_worlds(
                 max_steps = max_stps,
                 rng       = rng,
                 nepisodes = nepisodes,
-                #play_episode  = partial(play_episode, renderer = Renderer.human),
+                #play_episode  = partial(play_episode, renderer = Renderer.sometimes),
                 observer  = NoVisMultiObserverXargs,
                 #observer = AgentVisHumanMultiObserverXargs,
                 confname = confname)

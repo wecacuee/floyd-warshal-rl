@@ -34,16 +34,24 @@ def q_policy(state_idx, action_value, rng):
     return rand_argmax(action_value[state_idx, :], rng)
 
 
-def egreedy_prob_from_step(step, start = 0.8, end = 0.001, max_steps = 400):
-    return start * np.exp( np.log(end) * step / max_steps )
+def egreedy_prob_exp(step, start_eps = 0.5, end_eps = 0.001, max_steps = None):
+    """
+    >>> egreedy_prob_exp(np.array([0, 500, 1000]), start_eps = 0.8, end_eps = 0.001,
+    ...                  max_steps = 1000)
+    array([ 0.8       ,  0.02828427,  0.001     ])
+    """
+    assert max_steps is not None, "max_steps is required"
+    return start_eps * np.exp( np.log( end_eps / start_eps ) * np.minimum(step, max_steps) / max_steps )
+
 
 class QLearningDiscrete(Alg):
+    egreedy_prob_exp = egreedy_prob_exp
     def __init__(self,
                  action_space,
                  observation_space,
                  reward_range,
                  rng,
-                 egreedy_prob          = egreedy_prob_from_step,
+                 egreedy_prob          = partial(egreedy_prob_exp, max_steps = 200),
                  action_value_momentum = 0.0, # Low momentum changes more frequently
                  discount              = 1.00, # step cost
     ):

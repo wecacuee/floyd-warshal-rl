@@ -113,8 +113,12 @@ def grid_world_play(
 ql_grid_world_play = functools.partial(
     grid_world_play,
     confname            = "ql_grid_world_play",
-    alg                 = xargs(QLearningDiscrete,
-                                "action_space observation_space reward_range rng".split()),
+    alg                 = xargs(
+        QLearningDiscrete,
+        "action_space observation_space reward_range egreedy_prob rng".split()),
+    egreedy_prob        = xargspartial(
+        QLearningDiscrete.egreedy_prob_exp,
+        ["max_steps"]),
     action_space        = prop(lambda s : s.prob.action_space),
     observation_space   = prop(lambda s : s.prob.observation_space),
     reward_range        = prop(lambda s : s.prob.reward_range),
