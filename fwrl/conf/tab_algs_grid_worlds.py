@@ -81,8 +81,8 @@ def tab_algs_grid_worlds(
             "rng max_steps maze_name".split()),
         alg_names = ["ql",
                      "fw"],
-        gw_plays = [ql_grid_world_play,
-                    fw_grid_world_play],
+        gw_plays = [_ql_grid_world_play,
+                    _fw_grid_world_play],
 ):
     return_vals = []
     prob_args = list(zip(maze_name, probs, max_steps))
