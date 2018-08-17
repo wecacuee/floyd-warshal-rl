@@ -36,10 +36,10 @@ class FloydWarshallAlgDiscrete(object):
 
     def episode_reset(self, episode_n):
         self.qlearning.episode_reset(episode_n)
+        self.goal_state    = None
 
     def reset(self):
         self.qlearning.reset()
-        self.goal_state    = None
         self.path_cost     = self._default_path_cost(0)
 
     def _default_path_cost(self, new_state_size):
