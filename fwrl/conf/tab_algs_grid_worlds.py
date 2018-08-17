@@ -67,12 +67,12 @@ AgentVisHumanMultiObserverXargs = xargs(
 def tab_algs_grid_worlds(
         seed      = 0,
         nepisodes = 20,
-        max_steps = [4000,
-                     1000,
+        max_steps = [#4000,
+                     #1000,
                      1000
         ],
-        maze_name = ["4-room-lava-world",
-                     "4-room-windy-world",
+        maze_name = [#"4-room-lava-world",
+                     #"4-room-windy-world",
                      "4-room-grid-world"
         ],
         rng       = xargs(np.random.RandomState, ["seed"]),

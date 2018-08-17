@@ -23,7 +23,7 @@ class FloydWarshallAlgDiscrete(object):
                  qlearning = xargs(
                      QLearningDiscrete,
                      "action_space observation_space reward_range rng".split()),
-                 consistency_update_prob = 0.1
+                 consistency_update_prob = 1.0
     ):
         self.qlearning     = qlearning
         self.path_cost     = np.zeros((0, self.action_space.size, 0))
@@ -81,7 +81,7 @@ class FloydWarshallAlgDiscrete(object):
         # Abbreviate the variables
         F = self.path_cost
         F[stm1, act, st] = max(-rew, 0)
-        if self.qlearning.rng.rand() < self.consistency_update_prob:
+        if self.qlearning.rng.rand() <= self.consistency_update_prob:
             self.consistency_update()
 
     def consistency_update(self):
