@@ -81,12 +81,7 @@ class FloydWarshallAlgDiscrete(object):
 
         # Abbreviate the variables
         F = self.path_cost
-
-        if self.qlearning.is_terminal_step(obs, act, rew, done, info):
-            # stm1 -----> respawn ---> st
-            F[stm1, act, :] = max(-rew, 0)
-        else:
-            F[stm1, act, st] = max(-rew, 0)
+        F[stm1, act, st] = max(-rew, 0)
 
         if self.qlearning.rng.rand() <= self.consistency_update_prob:
             self.consistency_update()
