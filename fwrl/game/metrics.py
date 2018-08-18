@@ -53,7 +53,7 @@ class RewardObserver:
 
     def on_play_end(self):
         self.on_new_episode(episode_n=len(self.rewards_all_episodes) + 1)
-        total_rewards_all_episodes = map(sum, self.rewards_all_episodes)
+        total_rewards_all_episodes = list(map(sum, self.rewards_all_episodes))
         info(str(total_rewards_all_episodes))
         info("Reward quartiles: "
              + text_quartile(quartiles(total_rewards_all_episodes)))

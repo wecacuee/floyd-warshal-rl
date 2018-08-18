@@ -23,7 +23,7 @@ class FloydWarshallAlgDiscrete(object):
                  qlearning = xargs(
                      QLearningDiscrete,
                      "action_space observation_space reward_range rng".split()),
-                 consistency_update_prob = 1.0
+                 consistency_update_prob = 0.1
     ):
         self.qlearning     = qlearning
         self.path_cost     = np.zeros((0, self.action_space.size, 0))
