@@ -133,6 +133,32 @@ dhiman@lens:~/wrk/floyd-warshall-rl$ tail -2 /z/home/dhiman/mid/floyd_warshall_r
         {}
 
 
+Aug 18:
+```
+dhiman@lens:.../mid/floyd_warshall_rl$ tail -n 5 201808_d6fde7e*/*.log | grep -vF 'metrics ['
+==> 201808_d6fde7e_fw-4-room-grid-world/18-124205.log <==
+18 15:04:22 fwrl.game.metrics Latency quartiles:  |0.373  ====  6.03  IIII  11.4  IIII  29.7  ====  73.1|       human   2  {}
+18 15:04:22 fwrl.game.metrics Distance inefficiency quartiles:  |1.0  ====  1.0  IIII  1.0  IIII  1.0  ====  5.0|       human       2       {}
+18 15:04:22 fwrl.game.metrics Reward quartiles:  |6.1e+02  ====  8.95e+02  IIII  1.1e+03  IIII  1.2e+03  ====  1.29e+03|   human    2       {}
+
+==> 201808_d6fde7e_fw-4-room-windy-world/18-120756.log <==
+18 12:42:05 fwrl.game.metrics Latency quartiles:  |1.36  ====  4.14  IIII  24.1  IIII  34.0  ====  56.3|        human   2  {}
+18 12:42:05 fwrl.game.metrics Distance inefficiency quartiles:  |1.0  ====  1.09  IIII  1.18  IIII  1.33  ====  7.5|    human       2       {}
+18 12:42:05 fwrl.game.metrics Reward quartiles:  |5.8e+02  ====  7.92e+02  IIII  9.15e+02  IIII  1.07e+03  ====  1.25e+03| human    2       {}
+
+==> 201808_d6fde7e_ql-4-room-grid-world/18-115402.log <==
+18 12:07:56 fwrl.game.metrics Latency quartiles:  |0.0266  ====  0.397  IIII  1.48  IIII  3.85  ====  20.5|     human   2  {}
+18 12:07:56 fwrl.game.metrics Distance inefficiency quartiles:  |1.0  ====  2.33  IIII  5.73  IIII  12.2  ====  1.17e+02|  human    2       {}
+18 12:07:56 fwrl.game.metrics Reward quartiles:  |39.8  ====  69.8  IIII  84.8  IIII  1.2e+02  ====  1.6e+02|   human   2  {}
+
+==> 201808_d6fde7e_ql-4-room-windy-world/18-115002.log <==
+18 11:54:02 fwrl.game.metrics Latency quartiles:  |0.0968  ====  0.581  IIII  1.45  IIII  2.82  ====  6.27|     human   2  {}
+18 11:54:02 fwrl.game.metrics Distance inefficiency quartiles:  |1.0  ====  2.0  IIII  5.0  IIII  13.9  ====  1.19e+02|    human    2       {}
+18 11:54:02 fwrl.game.metrics Reward quartiles:  |9.75  ====  49.8  IIII  84.8  IIII  1.1e+02  ====  1.9e+02|   human   2  {}
+dhiman@lens:.../mid/floyd_warshall_rl$ 
+```
+
+
 
 # Observations
 1. Q(s,a) = F(s, a, \infty) is an exploration specific build up. Encourages

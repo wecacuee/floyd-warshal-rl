@@ -8,8 +8,8 @@ from umcog.confutils import extended_kwprop, KWProp as prop, xargs
 def LOG():
     return logging.getLogger(__name__)
 
-def info(msg):
-    LOG().info(msg, extra=dict(tag="human", data={}))
+def info(msg, extra=dict(tag="human", data={})):
+    LOG().info(msg, extra=extra)
 
 def mean(l):
     return sum(l) / max(len(l), 1)
@@ -34,6 +34,8 @@ def compute_latency(times_to_goal_hit_all_episodes):
     # Need at least two hits to the goal for validity
     valid_times = filter(lambda t: len(t) >= 2, times_to_goal_hit_all_episodes)
     latencies_all_episode = list(map(latency_from_time_list, valid_times))
+    info("", extra = dict(tag = "latencies_all_episodes",
+                          latencies_all_episodes = latencies_all_episodes))
     return quartiles(latencies_all_episode)
 
 class RewardObserver:
@@ -54,7 +56,9 @@ class RewardObserver:
     def on_play_end(self):
         self.on_new_episode(episode_n=len(self.rewards_all_episodes) + 1)
         total_rewards_all_episodes = list(map(sum, self.rewards_all_episodes))
-        info(str(total_rewards_all_episodes))
+        info(str(total_rewards_all_episodes),
+             extra = dict(tag = "rewards_all_episodes",
+                          total_rewards_all_episodes = total_rewards_all_episodes))
         info("Reward quartiles: "
              + text_quartile(quartiles(total_rewards_all_episodes)))
 
@@ -162,6 +166,8 @@ class DistineffObs:
         print(self.distineff_all_episodes)
         alldistineff = sum(map(lambda l: l[1:],
                                self.distineff_all_episodes), [])
+        info("", extra=dict(tag = "distineff_all_episodes",
+                            distineff_all_episodes = alldistineff))
         info("Distance inefficiency quartiles: "
                  + text_quartile(quartiles(alldistineff)))
 
