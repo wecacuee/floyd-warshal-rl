@@ -72,12 +72,12 @@ class FloydWarshallAlgDiscrete(object):
         if self.qlearning._hit_goal(obs, act, rew, done, info):
             self.goal_state = stm1
             self.consistency_update()
-            return
+            return self.qlearning.egreedy(self.policy(obs))
 
         self.qlearning.update(obs, act, rew, done, info)
 
         if stm1 is None:
-            return
+            return self.qlearning.egreedy(self.policy(obs))
 
         # Abbreviate the variables
         F = self.path_cost
@@ -85,6 +85,8 @@ class FloydWarshallAlgDiscrete(object):
 
         if self.qlearning.rng.rand() <= self.consistency_update_prob:
             self.consistency_update()
+
+        return self.qlearning.egreedy(self.policy(obs))
 
     def consistency_update(self):
         F = self.path_cost

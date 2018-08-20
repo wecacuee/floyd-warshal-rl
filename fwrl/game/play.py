@@ -305,28 +305,22 @@ class Renderer:
                                call_prob = 0.1)
     log = lambda prob: prob.render(mode = 'log')
 
-def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop):
+def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop,
+                 # 5 million steps in one episode is a lot
+                 max_steps = 5000000):
     prob.episode_reset(episode_n)
     alg.episode_reset(episode_n)
     observer.on_new_episode(episode_n)
     obs = prob.observation()
-    rew = prob.reward()
-    act = prob.action_space.sample()
-    step_n = 0
-    done = False
-    info = dict()
-    while not done:
-        observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
-        alg.update(obs, act, rew, done, info)
-        act = alg.egreedy(alg.policy(obs))
+    act = alg.update(obs, None, None, None, dict())
+    for step_n in range(max_steps):
         obs, rew, done, info = prob.step(act)
+        observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
+
+        act = alg.update(obs, act, rew, done, info)
+
         renderer(prob)
-
-        step_n += 1
-
-    # Update rewards the "done" step
-    observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
-    alg.update(obs, act, rew, done, info)
+        if done: break
 
     # Record end of episode
     observer.on_episode_end(episode_n)

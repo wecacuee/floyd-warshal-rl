@@ -26,6 +26,9 @@ class MPLAsCV(object):
         self.am_i_matplotlib = True
         self.fig_manager = dict()
 
+    def mplfig(self, **kw):
+        return Figure(**kw)
+
     def white_img(self, imgsize, dpi = 200.0):
         fig = Figure(figsize = (imgsize[1] / dpi, imgsize[0] / dpi) ,
                      dpi = dpi)

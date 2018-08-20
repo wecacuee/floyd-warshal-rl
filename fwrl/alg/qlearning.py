@@ -33,15 +33,21 @@ def q_policy(state_idx, action_value, rng):
     #        av=self.action_value[state_idx, :], state=state))
     return rand_argmax(action_value[state_idx, :], rng)
 
+def linscale(x, src_range, target_range):
+    ss, se = src_range
+    ts, te = target_range
+    return (x - ss) / (se - ss) * (te - ts) + ts
 
-def egreedy_prob_exp(step, start_eps = 0.5, end_eps = 0.001, max_steps = None):
+def egreedy_prob_exp(step, start_eps = 0.5, end_eps = 0.001, max_steps = None, alpha = -20):
     """
     >>> egreedy_prob_exp(np.array([0, 500, 1000]), start_eps = 0.8, end_eps = 0.001,
-    ...                  max_steps = 1000)
+    ...                  max_steps = 1000, alpha = np.log(0.001 / 0.8))
     array([ 0.8       ,  0.02828427,  0.001     ])
     """
     assert max_steps is not None, "max_steps is required"
-    return start_eps * np.exp( np.log( end_eps / start_eps ) * np.minimum(step, max_steps) / max_steps )
+    # scale later
+    return linscale(np.exp( alpha * np.minimum(step, max_steps) / max_steps ),
+                    (1, np.exp(alpha)), (start_eps, end_eps))
 
 
 class QLearningDiscrete(Alg):
@@ -138,7 +144,7 @@ class QLearningDiscrete(Alg):
         stm1 = self.last_state_idx
         self.last_state_idx = st
         if stm1 is None:
-            return
+            return self.egreedy(self.policy(obs))
 
         if self._hit_goal(obs, act, rew, done, info):
             self.on_hit_goal(obs, act, rew)
@@ -153,6 +159,7 @@ class QLearningDiscrete(Alg):
 
         # Update step from online observed reward
         Q[stm1, act] = (1-qm) * (rew + (1-ts) * d * np.max(Q[st, :])) + qm * Q[stm1, act]
+        return self.egreedy(self.policy(obs))
 
     def close(self):
         pass
