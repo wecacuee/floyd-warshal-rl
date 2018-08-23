@@ -11,7 +11,7 @@
 # #PBS -A jjcorso_fluxg      # Not required for blindspot but for flux
 
 echo "starting pbs script"
-VERSION=0.1.0
+VERSION=0.2.0
 MID_DIR=/z/home/dhiman/mid/floyd_warshall_rl/
 for d in src-$VERSION pbs build; do mkdir -p $MID_DIR/$d; done
 cd $MID_DIR/src-$VERSION/
