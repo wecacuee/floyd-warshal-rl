@@ -19,7 +19,7 @@ from .default import grid_world_play, PROJECT_NAME
 
 play_scrolling = partial(
     grid_world_play,
-    nepisodes         = 100000,
+    nepisodes         = 1000,
     seed              = 0,
     max_steps         = 400,
     project_name      = PROJECT_NAME,
