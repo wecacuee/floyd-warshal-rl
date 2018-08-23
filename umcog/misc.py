@@ -2,12 +2,14 @@ import os
 import subprocess
 import json
 import pickle
-import numpy as np
+import operator
 from io import BytesIO
 import base64
 import builtins
 from itertools import tee, islice, repeat
 from functools import partial, update_wrapper, reduce
+
+import numpy as np
 
 def ensuredirs(file_path):
     file_dir = os.path.dirname(file_path)
@@ -151,3 +153,7 @@ def dictzip(kwiterables):
 
 def kwmap(function, **kwiterables):
     return (function(**kw) for kw in dictzip(kwiterables))
+
+def prod(seq):
+    return reduce(operator.mul, seq, 1)
+

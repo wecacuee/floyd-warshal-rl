@@ -19,7 +19,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 # project
-from umcog.misc import NumpyEncoder
+from umcog.misc import NumpyEncoder, prod
 from umcog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwprop
 import umcog.draw as draw
 from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
@@ -261,9 +261,6 @@ class ReplayMemoryNumpy:
 def ensureseq(ele_or_seq):
     return (ele_or_seq,) if not isinstance(ele_or_seq, Iterable) else ele_or_seq
 
-def prod(seq):
-    return reduce(operator.mul, seq, 1)
-
 def egreedy_prob_tut(steps_done, start_eps = 0.9, end_eps = 0.05, eps_decay = 200):
     return  end_eps + (start_eps - end_eps) * \
         math.exp(-1. * steps_done / eps_decay)
@@ -366,7 +363,7 @@ class QLearningNetAgent:
         bmf = self._best_model_filepath(model_name = typename(action_value_net))
         if Path(bmf).exists():
             print("******** Loading model from {} *************".format(bmf))
-            action_value_net.load_state_dict(torch.load(bmf))
+            action_value_net.load_state_dict(torch.load(bmf, map_location=self.device))
         return action_value_net.to(device = self.device)
 
     def reset(self):

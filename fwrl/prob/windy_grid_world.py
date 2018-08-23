@@ -3,7 +3,8 @@ from __future__ import absolute_import, division, print_function
 from pathlib import Path
 import numpy as np
 import functools
-from functools import partial
+from functools import partial, reduce
+import operator
 import os
 import pkg_resources
 from pkg_resources import resource_stream
@@ -17,6 +18,7 @@ from PIL import Image
 from umcog import draw
 from umcog.memoize import MEMOIZE_METHOD, MethodMemoizer
 from umcog.confutils import (extended_kwprop, KWProp as prop, xargs, xargspartial, xargmem)
+from umcog.misc import prod
 
 from ..game.play import (Space, Problem, NoOPObserver,
                          post_process_data_iter,
@@ -366,7 +368,7 @@ class WindyGridWorld:
                  wall_reward       = 0,
                  goal_reward       = 10,
                  lava_reward       = -10,
-                 apple_reward      = 1,
+                 apple_reward      = prop(lambda s: s.goal_reward / prod(s.maze.shape)),
                  CELL_WIND_NEWS    = [2, 3, 4, 5],
                  WALL_CELL_CODE    = 1,
                  GOAL_CELL_CODE    = 6,
@@ -401,6 +403,12 @@ class WindyGridWorld:
         self.APPLE_CELL_CODE = APPLE_CELL_CODE
         self.handlers = handlers
         self.free_space_reward = free_space_reward
+        assert free_space_reward < apple_reward, \
+            "free: {} > apple: {}".format(free_space_reward, apple_reward)
+        napples = np.sum(maze == APPLE_CELL_CODE)
+        assert apple_reward * napples  < goal_reward, \
+            "apples: {}*{} > goal: {}".format(apples, napples, goal_reward)
+
 
     # TODO: make these function as partials on the constructor
     @classmethod
