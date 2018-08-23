@@ -38,15 +38,15 @@ def linscale(x, src_range, target_range):
     ts, te = target_range
     return (x - ss) / (se - ss) * (te - ts) + ts
 
-def egreedy_prob_exp(step, start_eps = 0.5, end_eps = 0.001, max_steps = None, alpha = -20):
+def egreedy_prob_exp(step, start_eps = 0.5, end_eps = 0.001, nepisodes = None, alpha = -20):
     """
     >>> egreedy_prob_exp(np.array([0, 500, 1000]), start_eps = 0.8, end_eps = 0.001,
-    ...                  max_steps = 1000, alpha = np.log(0.001 / 0.8))
+    ...                  nepisodes = 1000, alpha = np.log(0.001 / 0.8))
     array([ 0.8       ,  0.02828427,  0.001     ])
     """
-    assert max_steps is not None, "max_steps is required"
+    assert nepisodes is not None, "nepisodes is required"
     # scale later
-    return linscale(np.exp( alpha * np.minimum(step, max_steps) / max_steps ),
+    return linscale(np.exp( alpha * np.minimum(step, nepisodes) / nepisodes ),
                     (1, np.exp(alpha)), (start_eps, end_eps))
 
 
@@ -57,7 +57,7 @@ class QLearningDiscrete(Alg):
                  observation_space,
                  reward_range,
                  rng,
-                 egreedy_prob          = partial(egreedy_prob_exp, max_steps = 200),
+                 egreedy_prob          = partial(egreedy_prob_exp, nepisodes = 200),
                  action_value_momentum = 0.0, # Low momentum changes more frequently
                  discount              = 1.00, # step cost
     ):

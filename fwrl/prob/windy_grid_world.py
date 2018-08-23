@@ -6,7 +6,13 @@ import functools
 from functools import partial
 import os
 import pkg_resources
+from pkg_resources import resource_stream
 import copy
+
+from matplotlib.transforms import Bbox
+from matplotlib.image import BboxImage
+
+from PIL import Image
 
 from umcog import draw
 from umcog.memoize import MEMOIZE_METHOD, MethodMemoizer
@@ -37,8 +43,8 @@ def four_room_grid_world(filep="./data/4-room-grid-world"):
     return maze_from_pkg_rsrc(filep)
 
 def maze_from_string(maze_string,
-                     intable = ". +^<>VGL",
-                     outtable = "001234567",
+                     intable = ". +^<>VGLA",
+                     outtable = "0012345678",
                      firstchar = "0",
                      defaultchar = "0",
                      breakline = "\n"):
@@ -76,8 +82,8 @@ def maze_from_string(maze_string,
             - ord(firstchar))
 
 def maze_to_string(maze,
-                   intable = "001234567",
-                   outtable = ". +^<>VGL",
+                   intable = "0012345678",
+                   outtable = ". +^<>VGLA",
                    firstchar = "0",
                    defaultchar = "0",
                    breakline = "\n",
@@ -93,7 +99,7 @@ def maze_to_string(maze,
     '  +  \n  ^  \n ^^^ \n ^^^ \n  +  \n'
     """
     # Add new lines
-    maze_nl = np.hstack((maze + ord(firstchar),
+    maze_nl = np.hstack((maze.astype('u1') + ord(firstchar),
                          ord(breakline) * np.ones((maze.shape[0], 1), dtype='u1')))
     # Convert to string
     maze_str = maze_nl.tostring().decode("utf-8")
@@ -102,10 +108,13 @@ def maze_to_string(maze,
     return maze_str_tl
 
 
-def random_maze_from_shape(shape):
+def random_maze_from_shape(rng, shape, freespace = [0, 2, 3, 4, 5, 8], blocked = [1, 7]):
     maze = gen_maze(shape[0], shape[1])
     # make walls as 1 and free space as 0s
-    return 1 - maze
+    maze = 1 - maze
+    maze[maze == 0] = rng.choice(freespace, size=maze.shape)[maze == 0]
+    maze[maze == 1] = rng.choice(blocked, size=maze.shape)[maze == 1]
+    return maze
 
 class Act2DSpace(Space):
     def __init__(self,
@@ -175,9 +184,9 @@ class FreeSpaceHandler:
     def handles(self, cell_code, potential_cell_code):
         return cell_code == self.CELL_FREE
 
-    def step(self, pose, potential_next_pose, potential_reward, potential_done,
+    def step(self, pose, potential_next_pose, potential_reward, potential_done, info,
              cell_code, potential_cell_code):
-        return potential_next_pose, potential_reward + self.free_space_reward, potential_done
+        return potential_next_pose, potential_reward + self.free_space_reward, potential_done, info
 
     def render(self, canvas, pose, grid_size, cell_code,
                color = draw.color_from_rgb((255,255,255)), thickness = -1):
@@ -201,12 +210,12 @@ class WindHandler:
     def _wind_vectors(self, cell_code):
         return self.WIND_NEWS_VECTORS[cell_code - self.CELL_WIND_NEWS[0]]
 
-    def step(self, pose, potential_next_pose, potential_reward, potential_done,
+    def step(self, pose, potential_next_pose, potential_reward, potential_done, info,
              cell_code, potential_cell_code):
         wind_prob = 1 if (self.rng.uniform() < self.wind_strength) else 0
         potential_next_pose = (potential_next_pose
                                + wind_prob * self._wind_vectors(cell_code))
-        return potential_next_pose, potential_reward + self.free_space_reward, potential_done
+        return potential_next_pose, potential_reward + self.free_space_reward, potential_done, info
 
     def render(self, canvas, pose, grid_size, cell_code,
                wind_color = draw.color_from_rgb((0,0,0)),
@@ -232,12 +241,13 @@ class GoalHandler:
     def handles(self, cell_code, potential_cell_code):
         return cell_code == self.GOAL_CELL_CODE
 
-    def step(self, pose, potential_next_pose, potential_reward, potential_done,
+    def step(self, pose, potential_next_pose, potential_reward, potential_done, info,
              cell_code, potential_cell_code):
         potential_next_pose = self.goal_next_pose
         potential_reward    += self.goal_reward
         potential_done      = False
-        return potential_next_pose, potential_reward, potential_done
+        info["hit_goal"]   = True
+        return potential_next_pose, potential_reward, potential_done, info
 
     def render(self, canvas, pose, grid_size, cell_code):
         # Render goal
@@ -252,11 +262,11 @@ class WallHandler:
     def handles(self, cell_code, potential_cell_code):
         return potential_cell_code == self.WALL_CELL_CODE
 
-    def step(self, pose, potential_next_pose, potential_reward, potential_done,
+    def step(self, pose, potential_next_pose, potential_reward, potential_done, info,
              cell_code, potential_cell_code):
         potential_next_pose = pose
         potential_reward    += self.wall_reward
-        return potential_next_pose, potential_reward, potential_done
+        return potential_next_pose, potential_reward, potential_done, info
 
     def render(self, canvas, pose, grid_size, cell_code,
                color=draw.color_from_rgb((0,0,0)),
@@ -271,17 +281,48 @@ class LavaHandler:
     def handles(self, cell_code, potential_cell_code):
         return potential_cell_code == self.LAVA_CELL_CODE
 
-    def step(self, pose, potential_next_pose, potential_reward, potential_done,
+    def step(self, pose, potential_next_pose, potential_reward, potential_done, info,
              cell_code, potential_cell_code):
         potential_next_pose = np.array(None)
         potential_reward    += self.lava_reward
         potential_done      = True
-        return potential_next_pose, potential_reward, potential_done
+        return potential_next_pose, potential_reward, potential_done, info
 
     def render(self, canvas, pose, grid_size, cell_code,
                color=draw.color_from_rgb((255,0,0)),
                thickness = -1):
         render_block(canvas, pose, grid_size, color)
+
+class AppleHandler:
+    def __init__(self, apple_reward, APPLE_CELL_CODE, apple_img = "data/apple.png"):
+        self.apple_reward = apple_reward
+        self.APPLE_CELL_CODE = APPLE_CELL_CODE
+        self.img = np.asarray(
+            Image.open(resource_stream(__name__, apple_img)))
+
+    def handles(self, cell_code, potential_cell_code):
+        return potential_cell_code == self.APPLE_CELL_CODE
+
+    def step(self, pose, potential_next_pose, potential_reward, potential_done, info,
+             cell_code, potential_cell_code):
+        potential_reward    += self.apple_reward
+        info["hit_apple"]   = True
+        return potential_next_pose, potential_reward, potential_done, info
+
+    def render(self, canvas, pose, grid_size, cell_code,
+               color=draw.color_from_rgb((255,255,255)),
+               thickness = -1):
+        render_block(canvas, pose, grid_size, color = color)
+        pose_top_left = pose * grid_size
+        left, top = pose_top_left
+        right, bottom = pose_top_left + self.img.shape[1::-1]
+        bbox = Bbox.from_bounds(left, top, self.img.shape[1], self.img.shape[0])
+        artist = BboxImage(bbox)
+        artist.set_data(self.img[..., 3])
+        canvas.add_artist(artist)
+        draw.putText(canvas, "A", pose_top_left + grid_size * np.array([0.5, 0.6]),
+                     fontScale = grid_size / 8,
+                     color=draw.color_from_rgb((0, 255, 0)))
 
 
 def np_tuple(arr):
@@ -325,10 +366,12 @@ class WindyGridWorld:
                  wall_reward       = 0,
                  goal_reward       = 10,
                  lava_reward       = -10,
+                 apple_reward      = 1,
                  CELL_WIND_NEWS    = [2, 3, 4, 5],
                  WALL_CELL_CODE    = 1,
                  GOAL_CELL_CODE    = 6,
                  LAVA_CELL_CODE    = 7,
+                 APPLE_CELL_CODE   = 8,
                  freespace_handler = xargs(
                      FreeSpaceHandler, ["free_space_reward", "CELL_FREE"]),
                  wind_handler      = xargs(
@@ -339,8 +382,10 @@ class WindyGridWorld:
                      GoalHandler, ["goal_reward", "GOAL_CELL_CODE"]),
                  lava_handler      = xargs(
                      LavaHandler, ["lava_reward", "LAVA_CELL_CODE"]),
+                 apple_handler     = xargs(
+                     AppleHandler, ["apple_reward", "APPLE_CELL_CODE"]),
                  handler_keys      = """freespace_handler wind_handler wall_handler
-                                   goal_handler lava_handler""".split(),
+                                   goal_handler lava_handler apple_handler""".split(),
                  handlers          = prop(lambda s: [
                      getattr(s, h) for h in s.handler_keys
                  ])
@@ -353,6 +398,7 @@ class WindyGridWorld:
         self.WALL_CELL_CODE = WALL_CELL_CODE
         self.GOAL_CELL_CODE = GOAL_CELL_CODE
         self.LAVA_CELL_CODE = LAVA_CELL_CODE
+        self.APPLE_CELL_CODE = APPLE_CELL_CODE
         self.handlers = handlers
         self.free_space_reward = free_space_reward
 
@@ -402,8 +448,10 @@ class WindyGridWorld:
     def from_random_maze(cls,
                          shape,
                          seed = 0,
-                         maze = prop(lambda s: random_maze_from_shape(s.shape)),
-                         rng  = prop(lambda s: np.random.RandomState(s.seed)),
+                         freespace = [0, 8],
+                         blocked = [1],
+                         rng  = xargs(np.random.RandomState, ["seed"]),
+                         maze = xargs(random_maze_from_shape, "rng shape freespace blocked".split()),
                          **kwargs
     ):
         return cls(rng = rng, maze = maze, **kwargs)
@@ -424,15 +472,16 @@ class WindyGridWorld:
         potential_reward = 0
         potential_done = False
         cell_code = self.cell_code(pose)
+        info = dict()
         for h in self.handlers:
             potential_cell_code = self.cell_code(potential_next_pose)
             if h.handles(cell_code, potential_cell_code):
-                potential_next_pose, potential_reward, potential_done = h.step(
-                    pose, potential_next_pose, potential_reward, potential_done,
+                potential_next_pose, potential_reward, potential_done, info = h.step(
+                    pose, potential_next_pose, potential_reward, potential_done, info,
                     cell_code, potential_cell_code)
             if potential_next_pose.tolist() is None:
                 break
-        return potential_next_pose, potential_reward, potential_done
+        return potential_next_pose, potential_reward, potential_done, info
 
     def render(self, canvas, grid_size, mode=None):
         if canvas is None:
@@ -497,6 +546,12 @@ class WindyGridWorld:
                     nbrs.add(np_tuple(valid_pose))
         return nbrs
 
+    def remove_apple(self, pose):
+        if self.cell_code(pose) == self.APPLE_CELL_CODE:
+            self.set_maze_code(pose, self.CELL_FREE)
+        else:
+            raise RuntimeError("pose:{} is not an apple cell. it is {}".format(pose, self.cell_code(pose)))
+
 
 def random_goal_pose_gen(prob):
     return prob.grid_world.valid_random_pos()
@@ -543,10 +598,8 @@ def canvas_gen(shape):
 
 def agent_renderer(self, canvas, canvas_gen = canvas_gen, grid_size = 50,
                    wait_time = 10, mode='log'):
-    canvas = self._canvas = (
-        self._canvas
-        if self._canvas is not None else
-        draw.white_img(np.array(self.grid_world_goal.shape) * grid_size))
+    canvas = (canvas if canvas is not None else
+              draw.white_img(np.array(self.grid_world_goal.shape) * grid_size))
     canvas = render_agent_grid_world(
         canvas, self.grid_world_goal, self.pose, grid_size)
     if wait_time != 0 and mode == 'human':
@@ -590,8 +643,7 @@ class AgentInGridWorld(Problem):
         self.no_render         = no_render
         self.log_file_dir      = log_file_dir
         self.observation_space = observation_space # Obs2DSpace
-        self._canvas           = None
-        self.renderer  = agent_renderer
+        self.renderer          = agent_renderer
         #Loc2DSpace(
         #    lower_bound = np.array([0, 0]),
         #    upper_bound = np.array(grid_world.shape),
@@ -683,21 +735,23 @@ class AgentInGridWorld(Problem):
         if self._done:
             raise StopIteration("Done here. Please call episode_reset")
 
-        gw_pose, gw_rew, gw_done = self.grid_world_goal.step(
+        gw_pose, gw_rew, gw_done, info = self.grid_world_goal.step(
             self.pose, self.pose + self.action_space.tovector(act))
+
         if gw_pose.tolist() is None or gw_done:
             self._respawn()
-            new_spawn = True
+            info["new_spawn"] = True
         else:
             self.pose = gw_pose
-            new_spawn = False
-        hit_goal = (gw_pose.tolist() is None or gw_done) and gw_rew == self.goal_reward
+
+        if info.get("hit_apple"):
+            self.grid_world_goal.remove_apple(gw_pose)
+
 
         self._last_reward = gw_rew
         self.steps += 1
         self._done = self.steps >= self.max_steps
-        return self.pose, self._last_reward, self._done, dict(new_spawn = new_spawn,
-                                                              hit_goal = hit_goal)
+        return self.pose, self._last_reward, self._done, info
 
     def _respawn(self):
         self.pose          = self.start_pose_gen(self, self.goal_pose)

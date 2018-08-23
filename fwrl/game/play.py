@@ -7,6 +7,7 @@ from functools import lru_cache, partial, wraps
 import numpy as np
 import operator
 from collections import OrderedDict
+from enum import Enum
 
 from umcog import draw
 from umcog.memoize import MEMOIZE_METHOD
@@ -297,7 +298,7 @@ def show_ax_human(ax, data, tag = "c"):
     return draw.imshow(tag, ax)
 
 
-class Renderer:
+class Renderer(Enum):
     noop = lambda prob: 0
     gym = lambda prob: prob.render()
     human = lambda prob: prob.render(mode = 'human')
@@ -305,7 +306,8 @@ class Renderer:
                                call_prob = 0.1)
     log = lambda prob: prob.render(mode = 'log')
 
-def play_episode(alg, prob, observer, episode_n, renderer = Renderer.noop,
+def play_episode(alg, prob, observer, episode_n,
+                 renderer = Renderer.noop,
                  # 5 million steps in one episode is a lot
                  max_steps = 5000000):
     prob.episode_reset(episode_n)

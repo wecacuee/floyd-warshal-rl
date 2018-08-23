@@ -33,6 +33,7 @@ class MPLAsCV(object):
         fig = Figure(figsize = (imgsize[1] / dpi, imgsize[0] / dpi) ,
                      dpi = dpi)
         ax = fig.gca() if fig.axes else fig.add_axes([0, 0, 1, 1])
+        ax.cla()
         ax.clear()
         ax.axis('equal')
         ax.set_xlim(0, imgsize[1])
@@ -143,7 +144,7 @@ class MPLAsCV(object):
         self.fig_manager[name].show()
 
     def waitKey(self, milliseconds):
-        from matplotlib.backends.backend_tkagg import Tk
+        from six.moves import tkinter as Tk
         key_pressed = [None]
         def callback(event):
             key_pressed[0] = event.key
@@ -182,7 +183,7 @@ class MPLAsCV(object):
             self.destroyWindow(name)
 
     def from_ndarray(self, arr):
-        ax = white_img(arr.shape[:2])
+        ax = self.white_img(arr.shape[:2])
         ax.imshow(arr)
         return ax
 

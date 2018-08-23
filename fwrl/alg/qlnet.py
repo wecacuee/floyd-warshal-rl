@@ -53,21 +53,24 @@ def typename(x):
     return type(x).__name__
 
 class Normalizer:
-    def __init__(self):
+    def __init__(self, max_n = 1000):
         self._n_mean_std = (0, None, None)
+        self.max_n = max_n
 
     def __call__(self, obs):
         n, mean, std = self._n_mean_std
         if notnone(mean) and notnone(std):
-            mean = (n * mean + obs) / (n+1)
-            std = torch.sqrt(((n * std**2) + (obs-mean)**2) / (n+1))
+            if n < self.max_n:
+                mean = (n * mean + obs) / (n+1)
+                std = torch.sqrt(((n * std**2) + (obs-mean)**2) / (n+1))
+
             normzd = (obs - mean) / torch.where(std == 0, std.new_ones((1,)), std)
         else:
             mean = obs
             std = 0
             normzd = obs
 
-        self._obs_n_mean_std = (n+1, mean, std)
+        self._n_mean_std = (n+1, mean, std) if n < self.max_n else self._n_mean_std
         return normzd
 
 
@@ -153,7 +156,7 @@ Transition = namedtuple(
     ('prev_state', 'obs', 'action', 'next_obs', 'reward', 'done'))
 
 class TransitionRW:
-    __slots__ = ('state', 'action', 'next_state', 'reward', 'done')
+    __slots__ = ('prev_state', 'obs', 'action', 'next_obs', 'reward', 'done')
     def __init__(self, *args):
         for k, a in zip(self.__slots__, args):
             setattr(self, k, a)
@@ -193,7 +196,8 @@ class ReplayMemory(object):
         """Saves a transition."""
         if self.memory is None:
             self._init_memory(*args)
-        self.memory[self.next_entry_idx % self.capacity] = Transition(*args)
+        trans = Transition(* [a.detach() for a in args])
+        self.memory[self.next_entry_idx % self.capacity] = trans
         self.next_entry_idx = self.next_entry_idx + 1
 
     def _isfull(self):
@@ -279,13 +283,14 @@ class IdEnc:
 class QLearningNetAgent:
     egreedy_prob_exp = egreedy_prob_exp
     egreedy_prob_tut = egreedy_prob_tut
+    @extended_kwprop
     def __init__(self,
                  action_space,
                  observation_space,
                  reward_range,
                  rng,
                  nepisodes,
-                 egreedy_prob          = partial(egreedy_prob_exp, max_steps = 500),
+                 egreedy_prob          = xargspartial(egreedy_prob_exp, ["nepisodes"]),
                  discount              = 0.999, # step cost
                  qnet                  = partial(MLP, hiddens = [64]),
                  batch_size            = 128,
@@ -325,17 +330,18 @@ class QLearningNetAgent:
         self.model_save_fmt       = str(Path(model_save_dir) / model_save_fmt)
         self.best_model_fmt       = str(Path(model_save_dir) / best_model_fmt)
         self._no_display           = no_display
+        self.normalizer           = Normalizer()
         self.reset()
 
-    @property
-    def egreedy_epsilon(self):
-        return self.egreedy_prob(self._episode_count)
-
-    def switch_no_train(self):
+    def test_mode(self):
         self.batch_update_prob = 0
         self.target_update_prob = 0
         self.egreedy_prob = lambda step : 0
         self.model_save_prob = 0
+
+    @property
+    def egreedy_epsilon(self):
+        return self.egreedy_prob(self._episode_count)
 
     def episode_reset(self, episode_n):
         # Reset parameters
@@ -375,7 +381,7 @@ class QLearningNetAgent:
         self._episode_count = 0
         self.episode_rewards = []
         self._this_episode_reward = 0
-        self._memory = ReplayMemoryNumpy(self.memory_size, self.np_rng)
+        self._memory = ReplayMemory(self.memory_size, self.rng)
         self._best_reward_average = float('-inf')
         self.episode_reset(0)
 
@@ -414,6 +420,7 @@ class QLearningNetAgent:
         if not self.observation_space.contains(obs):
             raise ValueError("Bad observation {obs}".format(obs=obs))
         obs = torch.as_tensor(obs, dtype=torch.float).to(device=self.device).view(1, -1)
+        obs = self.normalizer(obs)
 
         stm2, obstm1, stm1 = self.stm2_obstm1_stm1
         st = self._state_from_obs(obs, stm1)

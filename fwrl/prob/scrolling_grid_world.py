@@ -46,4 +46,6 @@ class ScrollingWindow:
     def __getattr__(self, attr):
         return getattr(self.agent_in_gw, attr)
 
-AgentInScrollingGW = compose(ScrollingWindow, AgentInGridWorld.from_maze_name)
+class AgentInScrollingGW:
+    from_maze_name = compose(ScrollingWindow, AgentInGridWorld.from_maze_name)
+    from_random_maze = compose(ScrollingWindow, AgentInGridWorld.from_random_maze)
