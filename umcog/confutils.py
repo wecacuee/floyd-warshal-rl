@@ -269,7 +269,7 @@ def xargsonce(func, expect_args=(), *args, **kwargs):
     return KWProp(
         method_memoizer(
             xargs_(func, expect_args, *args, **kwargs),
-            keyfunc=lambda *a: ()))
+            keyfunc=lambda f, a, kw: id(f)))
 
 def xargspartial(func, expect_args=(), *args, **kwargs):
     """
@@ -277,6 +277,20 @@ def xargspartial(func, expect_args=(), *args, **kwargs):
     """
     return KWProp(xargs_(functools.partial(functools.partial, func),
                          expect_args, *args, **kwargs))
+
+def getattrpath(o, attr_path):
+    attr_path = iter(attr_path)
+    try:
+        head = next(attr_path)
+    except StopIteration:
+        return o
+
+    return getattrpath(getattr(o, head), attr_path)
+
+
+def alias(attr_path):
+    return KWProp(functools.partial(getattrpath, attr_path = attr_path))
+
 
 def kwasattr_to_key_default(kwasattr):
     key_default = []

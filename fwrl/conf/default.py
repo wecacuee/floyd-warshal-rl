@@ -80,7 +80,7 @@ NoVisMultiObserverXargs = xargs(MultiObserver,
 @extended_kwprop
 def grid_world_play(
         alg            = None,
-        observer       = None,
+        observer       = NoOPObserver(),
         nepisodes      = 20,
         seed           = 0,
         max_steps      = 500,

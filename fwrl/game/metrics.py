@@ -33,10 +33,10 @@ def quartiles(data):
 def compute_latency(times_to_goal_hit_all_episodes):
     # Need at least two hits to the goal for validity
     valid_times = filter(lambda t: len(t) >= 2, times_to_goal_hit_all_episodes)
-    latencies_all_episode = list(map(latency_from_time_list, valid_times))
+    latencies_all_episodes = list(map(latency_from_time_list, valid_times))
     info("", extra = dict(tag = "latencies_all_episodes",
-                          latencies_all_episodes = latencies_all_episodes))
-    return quartiles(latencies_all_episode)
+                          data = dict(latencies_all_episodes = latencies_all_episodes)))
+    return quartiles(latencies_all_episodes)
 
 class RewardObserver:
     def __init__(self, prob):
@@ -58,7 +58,7 @@ class RewardObserver:
         total_rewards_all_episodes = list(map(sum, self.rewards_all_episodes))
         info(str(total_rewards_all_episodes),
              extra = dict(tag = "rewards_all_episodes",
-                          total_rewards_all_episodes = total_rewards_all_episodes))
+                          data = dict(total_rewards_all_episodes = total_rewards_all_episodes)))
         info("Reward quartiles: "
              + text_quartile(quartiles(total_rewards_all_episodes)))
 
@@ -167,7 +167,7 @@ class DistineffObs:
         alldistineff = sum(map(lambda l: l[1:],
                                self.distineff_all_episodes), [])
         info("", extra=dict(tag = "distineff_all_episodes",
-                            distineff_all_episodes = alldistineff))
+                            data = dict(distineff_all_episodes = alldistineff)))
         info("Distance inefficiency quartiles: "
                  + text_quartile(quartiles(alldistineff)))
 

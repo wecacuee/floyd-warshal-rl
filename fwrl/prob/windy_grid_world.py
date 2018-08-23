@@ -116,6 +116,10 @@ class Act2DSpace(Space):
         self.NAMES = NAMES
         self.VECTORS = VECTORS
 
+    @property
+    def n(self):
+        return self.size
+
     def sample(self):
         act = self.rng.randint(self.size)
         return act
@@ -725,6 +729,9 @@ class AgentInGridWorld(Problem):
         start = np.asarray(start) if start is not None else self.pose
         end = np.asarray(end) if end is not None else self.goal_pose
         return shortest_path(self.grid_world, start, end, self.action_space)
+
+    def maze(self):
+        return self.grid_world_goal.maze
 
 
 class DrawAgentGridWorldFromLogs:

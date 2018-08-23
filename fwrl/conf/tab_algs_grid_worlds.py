@@ -1,3 +1,4 @@
+if not __package__: __package__ = "fwrl.conf"
 from functools import partial
 from itertools import repeat
 import collections
