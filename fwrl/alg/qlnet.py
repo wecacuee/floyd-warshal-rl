@@ -240,7 +240,7 @@ class ReplayMemoryNumpy:
         """Saves a transition."""
         if self.memory is None:
             self._init_memory(*args)
-        trans = Transition(* [a.detach() for a in args])
+        trans = Transition(* [a.detach().to(device="cpu") for a in args])
         self.memory[self.next_entry_idx % self.capacity] = trans
         self.next_entry_idx = self.next_entry_idx + 1
 
