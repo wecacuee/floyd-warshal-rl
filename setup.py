@@ -153,6 +153,7 @@ def setup():
                 #'fwrl-qlnet-cartpole=fwrl.conf.qlnet_cartpole:demo',
                 #'fw-batch-gw-play=fwrl.conf.fw_batch_fw:main',
                 'fwrl-tab-algs-gw-play=fwrl.conf.tab_algs_grid_worlds:main',
+                'fwrl-qlnet-scrolling-play=fwrl.conf.qlnet_scrolling_gw:main',
             ],
         },
         include_package_data = True,
