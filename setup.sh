@@ -23,7 +23,7 @@ if [[ "$PATH" != *"$PIPDIR/bin"* ]]; then
     export PATH=$PIPDIR/bin:$PATH
 fi
 
-PYTHONUSERBASE=$PIPDIR pip install --user --upgrade -e $THISDIR
+PYTHONUSERBASE=$PIPDIR pip install --user --upgrade --process-dependency-links -e $THISDIR
 MJPATH=$HOME/.mujoco/mjpro150/bin
 if [[ "$LD_LIBRARY_PATH" != *"$MJPATH"* ]]; then
     export LD_LIBRARY_PATH=$MJPATH:$LD_LIBRARY_PATH

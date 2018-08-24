@@ -57,20 +57,21 @@ class Normalizer:
         self.max_n = max_n
 
     def __call__(self, obs):
-        obs = torch.as_tensor(obs).unsqueeze(0)
+        assert obs.dim() >= 2, "atleast has a batch size"
+        incn = obs.shape[0]
         n, mean, std = self._n_mean_std
         if notnone(mean) and notnone(std):
             if n < self.max_n:
-                mean = (n * mean + obs) / (n+1)
-                std = torch.sqrt(((n * std**2) + (obs-mean)**2) / (n+1))
+                mean = (n * mean + obs.sum(dim=0)) / (n+incn)
+                std = torch.sqrt(((n * std**2) + (obs-mean).sum(dim=0)**2) / (n+incn))
 
             normzd = (obs - mean) / torch.where(std == 0, std.new_ones((1,)), std)
         else:
-            mean = obs
+            mean = obs.mean(dim = 0)
             std = 0
             normzd = obs
 
-        self._n_mean_std = (n+1, mean, std) if n < self.max_n else self._n_mean_std
+        self._n_mean_std = (n+incn, mean, std) if n < self.max_n else self._n_mean_std
         return normzd
 
 
@@ -87,9 +88,12 @@ class MLP(nn.Module):
             ph = h
         self.linears["lin{}".format(len(hiddens))] = nn.Linear(ph, D_out)
 
+    def preprocess(self, obs):
+        obs = torch.as_tensor(obs).unsqueeze(0)
+        return obs
+
     def forward(self, obs, h = None,
-                return_encoding=False, return_both=False,
-                from_encoding=False):
+                return_encoding=False, return_both=False):
         # from_encoding does not matter because state = obs
         encoding = obs
         val = reduce(apply_layer, self.linears.values(), obs)
@@ -120,14 +124,10 @@ class RLinNet(nn.Module):
         return x.new_zeros((x.size(0), H))
 
     def forward(self, obs, h = None,
-                return_encoding=False, return_both=False,
-                from_encoding=False):
+                return_encoding=False, return_both=False):
         if h is None:
             h = self.init_hidden(obs, self.lstm_hidden_size)
-        if from_encoding:
-            encoding = obs
-        else:
-            encoding = self.lstm(self.net(obs), h)
+        encoding = self.lstm(self.net(obs), h)
         return ((self.head(encoding), encoding)
                 if return_both
                 else encoding if return_encoding
@@ -153,8 +153,7 @@ class QConvNet(nn.Module):
         self.norm    = Normalizer()
         # left to right arg -> pil -> resize -> tensor
         self.resize  = T.Compose([T.ToPILImage(),
-                    T.Resize(desired_size, interpolation=Image.CUBIC),
-                    T.ToTensor()])
+                    T.Resize(desired_size, interpolation=Image.CUBIC)])
         height, width = inp2d_shape
         inp2d_shape = ((height * desired_size / width, desired_size)
                            if height > width
@@ -179,13 +178,11 @@ class QConvNet(nn.Module):
 
 
     def preprocess(self, obs):
-        return self.norm(self.resize(obs))
+        return torch.as_tensor(np.asarray(self.resize(obs))).permute(2, 0, 1).unsqueeze(0)
 
     def forward(self, obs, h = None,
-                return_encoding=False, return_both=False,
-                from_encoding=False):
-        #obs = obs.unsqueeze(0)
-        encoding = obs
+                return_encoding=False, return_both=False):
+        encoding = self.norm(obs.to(dtype = self.dtype))
         return ((self._forward(encoding), encoding)
                 if return_both
                 else encoding if return_encoding
@@ -248,14 +245,12 @@ class ReplayMemory(object):
         return self.next_entry_idx >= self.capacity
 
     def sample(self, batch_size):
-        max_valid_idx = (self.next_entry_idx
-                        if not self._isfull()
-                         else self.capacity)
+        max_valid_idx = len(self)
         idx = self.rng.randint(max_valid_idx, (batch_size,), dtype=torch.int64)
         return self.memory[idx]
 
     def __len__(self):
-        return len(self.memory)
+        return (self.next_entry_idx if not self._isfull() else self.capacity)
 
 
 class ReplayMemoryNumpy:
@@ -292,15 +287,13 @@ class ReplayMemoryNumpy:
         return self.next_entry_idx >= self.capacity
 
     def sample(self, batch_size):
-        max_valid_idx = (self.next_entry_idx
-                        if not self._isfull()
-                         else self.capacity)
+        max_valid_idx = len(self)
         idx = self.rng.randint(0, high=max_valid_idx, size=(batch_size,))
         transitions = self.memory[idx]
         return Transition(*map(torch.cat, zip(*transitions)))
 
     def __len__(self):
-        return len(self.memory)
+        return (self.next_entry_idx if not self._isfull() else self.capacity)
 
 def ensureseq(ele_or_seq):
     return (ele_or_seq,) if not isinstance(ele_or_seq, Iterable) else ele_or_seq
@@ -442,13 +435,13 @@ class QLearningNetAgent:
             stm1.to(device = self.device) if stm1 is not None else None,
             return_encoding = True)
 
-    def greedy_policy(self, state, usetarget=False):
+    def greedy_policy(self, obs, prev_state, usetarget=False):
         Q = self._action_value_target if usetarget else self._action_value_online
         with torch.no_grad():
-            return Q(state.to(device = self.device), from_encoding=True).argmax(dim = -1)
+            return Q(obs.to(device = self.device), prev_state).argmax(dim = -1)
 
-    def policy(self, state):
-        return self.egreedy(self.greedy_policy(state)).item()
+    def policy(self, obs, prev_state):
+        return self.egreedy(self.greedy_policy(obs, prev_state)).item()
 
     def _hit_goal(self, rew):
         return rew >= self.goal_reward
@@ -471,7 +464,7 @@ class QLearningNetAgent:
         st = self._state_from_obs(obs, stm1)
         self.stm2_obstm1_stm1 = stm1, obs, st
         if stm1 is None:
-            return self.policy(st)
+            return self.policy(obs, stm1)
 
         self._this_episode_reward += rew
 
@@ -486,10 +479,11 @@ class QLearningNetAgent:
                       torch.as_tensor(rew, dtype=self.dtype).view(1,1),
                       torch.as_tensor(done, dtype=torch.uint8).view(1,1))
         self._memory.push(*transition)
-        if self.rng.rand(1) < self.batch_update_prob:
+        if (len(self._memory) >= self.batch_size
+                and self.rng.rand(1) < self.batch_update_prob):
             self.batch_update()
 
-        return self.policy(st)
+        return self.policy(obs, stm1)
 
     def _plot_rewards(self):
         ax = draw.backend.mplfig().add_subplot(111)
@@ -558,7 +552,7 @@ class QLearningNetAgent:
         # Q(sₜ, aₜ)
         # Compute Q(s_t, aₜ) - the model computes Q(s_t), then we select the
         # columns of actions taken
-        state_action_values = Q_values.gather(1, batch_action)
+        state_action_values = Q_values.gather(1, batch_action).squeeze(1)
 
         # next_state_best_actions = argmaxₐ Q(sₜ₊₁, a)
         next_state_best_actions_nd = next_Q_values_nd.argmax(dim=-1, keepdim=True)
@@ -568,7 +562,7 @@ class QLearningNetAgent:
         next_state_values = batch_state.new_zeros(self.batch_size)
         next_state_values[batch_not_done] = Q_target(
             batch.next_obs[batch_not_done], batch_state[batch_not_done]
-        ).gather(1, next_state_best_actions_nd).detach().squeeze()
+        ).gather(1, next_state_best_actions_nd).detach().squeeze(1)
         #).max(dim=1)[0].detach()
 
         # Compute the expected Q values
@@ -579,7 +573,7 @@ class QLearningNetAgent:
         # loss = rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a)) - Q(sₜ, aₜ)
         loss = F.smooth_l1_loss(
             state_action_values,
-            expected_state_action_values.unsqueeze(1))
+            expected_state_action_values)
 
         # Optimize the model
         # Reset the _optimizer

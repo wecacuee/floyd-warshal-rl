@@ -36,7 +36,8 @@ def CONF():
                          "gym[atari]",
                          "atari-py>=0.1.1",
                          "PyOpenGL",
-                         "makecite"
+                         "makecite",
+                         "gym_moving_dot",
                      ])
 
 def relpath(fpath, rootdir=Path(__file__).parent):
@@ -143,6 +144,7 @@ def setup():
         install_requires=setup_install_requires(conf.install_requires),
         dependency_links=[
             "http://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl",
+            "git+https://github.com/mrahtz/gym-moving-dot#egg=gym_moving_dot-1.0.0"
 
         ],
         python_requires='~=3.6',

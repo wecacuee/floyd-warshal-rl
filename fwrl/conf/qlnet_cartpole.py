@@ -9,6 +9,8 @@ import numpy as np
 import torch
 import gym
 
+import gym_moving_dot
+
 from umcog.confutils import extended_kwprop, KWProp, xargsonce, alias
 from umcog.misc import compose
 
@@ -42,6 +44,19 @@ play_qlnet_pong = partial(
                               rng nepisodes qnet model_save_dir""".split()),
 )
 
+play_qlnet_moving_dot = partial(
+    play_qlnet_pong,
+    confname          = "qlnet_moving_dot",
+    prob              = xargsonce(partial(GymProblem, gym.make("Pong-v0")),
+                                  ["seed"]),
+    qnet              = partial(QConvNet, hiddens = [8, 16]),
+    alg               = xargsonce(partial(QLearningNetAgent,
+                                          batch_update_prob = 0.1,
+                                          no_display = True),
+                              """action_space observation_space reward_range
+                              rng nepisodes qnet model_save_dir""".split()),
+)
+
 def demo(confname = "qlnet_cartpole", nepisodes = 1000, seed = 0, max_steps = 5000):
     cartpole = GymProblem(gym.make("CartPole-v0").unwrapped, seed = seed)
     random.seed(seed)
@@ -70,6 +85,10 @@ def demo(confname = "qlnet_cartpole", nepisodes = 1000, seed = 0, max_steps = 50
     return qlnet, cartpole
 
 
+def listget(l, i, default=None):
+    return l[i] if len(l) > i else default
 
 if __name__ == "__main__":
-    demo()
+    import sys
+    entry_point = listget(sys.argv, 1, "demo")
+    globals()[entry_point]()
