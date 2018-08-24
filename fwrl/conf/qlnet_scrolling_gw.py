@@ -17,13 +17,13 @@ from ..game.logging import LogFileConf
 
 from .default import grid_world_play, PROJECT_NAME
 
-play_scrolling = partial(
+play_rlinnet_scrolling = partial(
     grid_world_play,
     nepisodes         = 1000,
     seed              = 0,
     max_steps         = 400,
     project_name      = PROJECT_NAME,
-    confname          = "qlnet_scrolling",
+    confname          = "qlnet_rlinnet_scrolling",
     rng               = xargsonce(np.random.RandomState, ["seed"]),
     prob              = xargsonce(partial(AgentInScrollingGW.from_random_maze,
                                           shape=(21,21)), ["seed"]),
@@ -38,8 +38,16 @@ play_scrolling = partial(
                               rng nepisodes qnet model_save_dir""".split()),
 )
 
+play_linnet_scrolling = partial(
+    confname = "qlnet_linnet_scrolling",
+    qnet     = partial(MLP, hiddens = [64]),
+)
+
 def main():
-    return play_scrolling()
+    import sys
+    if len(sys.argv) >= 2:
+        main_func = globals().get(sys.argv[1], "play_rlinnet_scrolling")
+    return main_func()
 
 if __name__ == '__main__':
     main()

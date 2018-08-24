@@ -17,6 +17,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
+import torchvision.transforms.functional as TF
+from PIL import Image
 
 # project
 from umcog.misc import NumpyEncoder, prod
@@ -25,7 +27,8 @@ import umcog.draw as draw
 from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
 from .qlearning import egreedy_prob_exp
 
-LOG = logging.getLogger(__name__)
+def LOG():
+    return logging.getLogger(__name__)
 
 def iif(cond, a, b):
     return a if cond else b
@@ -34,10 +37,6 @@ def iif(cond, a, b):
 @lru_cache()
 def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-def logger():
-    return logging.getLogger(__name__)
-
 
 def notnone(x):
     return x is not None
@@ -58,6 +57,7 @@ class Normalizer:
         self.max_n = max_n
 
     def __call__(self, obs):
+        obs = torch.as_tensor(obs).unsqueeze(0)
         n, mean, std = self._n_mean_std
         if notnone(mean) and notnone(std):
             if n < self.max_n:
@@ -105,12 +105,16 @@ class RLinNet(nn.Module):
         self.D_in = D_in
         self.hiddens = hiddens
         self.D_out = D_out
+        self.normalize = Normalizer()
         self.net = nn.Sequential(
             nn.Linear(prod(ensureseq(D_in)), hiddens[0]),
             nn.ReLU())
         self.lstm = nn.GRUCell(hiddens[0], hiddens[1])
         self.lstm_hidden_size = hiddens[1]
         self.head = MLP(hiddens[2:], D_in = (hiddens[1],), D_out = D_out)
+
+    def preprocess(self, obs):
+        return self.normalize(obs)
 
     def init_hidden(self, x, H):
         return x.new_zeros((x.size(0), H))
@@ -129,23 +133,63 @@ class RLinNet(nn.Module):
                 else encoding if return_encoding
                 else self.head(encoding))
 
+def conv2d_output_size(in_shape, kernel_size, padding=0, dilation=1,  stride=1):
+    in_shape = torch.as_tensor(in_shape, dtype=torch.float64)
+    assert in_shape.dim() == 1 and in_shape.shape == (2,), "bad input shape"
+    return (torch.floor(
+        (in_shape + 2*padding - dilation * (kernel_size - 1) - 1) / stride) + 1
+    ).to(dtype=torch.int64).tolist()
+
 
 class QConvNet(nn.Module):
-    def __init__(self, hiddens, D_in, D_out):
+    def __init__(self, hiddens, D_in, D_out, kernel_sizes = [3,3],
+                 strides=[2,2], desired_size = 40):
         super(QConvNet, self).__init__()
-        self.D_in = D_in
-        self.D_out= D_out
-        self.H = hiddens[0]
-        self.conv1 = nn.Conv2d(1, H, kernel_size=3, stride=2)
-        self.bn1 = nn.BatchNorm2d(H)
-        self.conv2 = nn.Conv2d(H, 2*H, kernel_size=3, stride=2)
-        self.bn2 = nn.BatchNorm2d(2*H)
-        self.head = nn.Linear(2*H*prod(ensureseq(D_in)), D_out)
+        self.hiddens = hiddens
+        self.D_in    = D_in
+        self.D_out   = D_out
+        self.dtype   = torch.get_default_dtype()
+        inp2d_shape  = D_in[:2]
+        self.norm    = Normalizer()
+        # left to right arg -> pil -> resize -> tensor
+        self.resize  = T.Compose([T.ToPILImage(),
+                    T.Resize(desired_size, interpolation=Image.CUBIC),
+                    T.ToTensor()])
+        height, width = inp2d_shape
+        inp2d_shape = ((height * desired_size / width, desired_size)
+                           if height > width
+                           else (desired_size, width * desired_size / height))
 
-    def forward(self, x):
-        x = torch.as_tensor(x).to(get_device())
-        x = self.bn2(self.conv2(self.bn1(self.conv1(x))))
-        return self.head(x.view(x.size(0), -1))
+        channels     = D_in[2] if len(D_in) >= 3 else 1
+        prev_h = channels
+        layers = []
+        for h, ks, strd in zip(hiddens, kernel_sizes, strides):
+            layers.append(nn.Conv2d(prev_h, h, kernel_size=ks, stride=strd))
+            layers.append(nn.ReLU())
+            layers.append(nn.BatchNorm2d(h))
+            inp2d_shape = conv2d_output_size(inp2d_shape, kernel_size=ks, stride =strd)
+
+            prev_h = h
+        self.convnet = nn.Sequential(*layers)
+        self.head = nn.Linear(hiddens[-1]*prod(inp2d_shape), D_out)
+
+    def _forward(self, obs):
+        convout = self.convnet(obs)
+        return self.head(convout.view(convout.shape[0], -1))
+
+
+    def preprocess(self, obs):
+        return self.norm(self.resize(obs))
+
+    def forward(self, obs, h = None,
+                return_encoding=False, return_both=False,
+                from_encoding=False):
+        #obs = obs.unsqueeze(0)
+        encoding = obs
+        return ((self._forward(encoding), encoding)
+                if return_both
+                else encoding if return_encoding
+                else self._forward(encoding))
 
 
 def apply_layer(x, layer, activation = F.relu):
@@ -190,7 +234,7 @@ class ReplayMemory(object):
         """
         c = self.capacity
         self.memory = TransitionRW(
-            *[torch.empty(c, a.shape[1], dtype=a.dtype) for a in args])
+            *[torch.empty(c, *a.shape[1:], dtype=a.dtype) for a in args])
 
     def push(self, *args):
         """Saves a transition."""
@@ -287,6 +331,7 @@ class QLearningNetAgent:
                  reward_range,
                  rng,
                  nepisodes,
+                 logger                = LOG(),
                  egreedy_prob          = xargspartial(egreedy_prob_exp, ["nepisodes"]),
                  discount              = 0.999, # step cost
                  qnet                  = partial(MLP, hiddens = [64]),
@@ -302,7 +347,8 @@ class QLearningNetAgent:
                  model_save_dir        = "/tmp",
                  model_save_fmt        = "model:{model_name}_rew:{reward:.4}_epi:{episode_n}.pkl",
                  best_model_fmt        = "model:{model_name}_best.pkl",
-                 no_display            = False
+                 no_display            = False,
+                 preprocess            = xargs(Normalizer)
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
@@ -310,6 +356,7 @@ class QLearningNetAgent:
         self.np_rng               = rng
         torch.manual_seed(rng.randint(10000))
         self.rng                  = torch
+        self.logger               = logger
         self.egreedy_prob         = egreedy_prob
         self.init_value           = discount * reward_range[0]
         self.discount             = discount
@@ -322,12 +369,12 @@ class QLearningNetAgent:
         self.memory_size          = memory_size
         self.moving_average_window = moving_average_window
         self.device               = device
+        self.dtype                = torch.get_default_dtype()
         self.model_save_prob      = model_save_prob
         self.model_save_dir       = model_save_dir
         self.model_save_fmt       = str(Path(model_save_dir) / model_save_fmt)
         self.best_model_fmt       = str(Path(model_save_dir) / best_model_fmt)
         self._no_display           = no_display
-        self.normalizer           = Normalizer()
         self.reset()
 
     def test_mode(self):
@@ -362,7 +409,7 @@ class QLearningNetAgent:
 
         bmf = self._best_model_filepath(model_name = typename(action_value_net))
         if Path(bmf).exists():
-            print("******** Loading model from {} *************".format(bmf))
+            self.logger.info("*** Loading model from {} ***".format(bmf))
             action_value_net.load_state_dict(torch.load(bmf, map_location=self.device))
         return action_value_net.to(device = self.device)
 
@@ -390,13 +437,15 @@ class QLearningNetAgent:
                 self.rng.randint(self.action_space.n, (1,1), dtype=torch.int64))
 
     def _state_from_obs(self, obs, stm1):
-        return self._action_value_online(obs, stm1, return_encoding = True)
+        return self._action_value_online(
+            obs.to(device = self.device),
+            stm1.to(device = self.device) if stm1 is not None else None,
+            return_encoding = True)
 
     def greedy_policy(self, state, usetarget=False):
-        state = state.to(device = self.device)
         Q = self._action_value_target if usetarget else self._action_value_online
         with torch.no_grad():
-            return Q(state, from_encoding=True).argmax(dim = -1)
+            return Q(state.to(device = self.device), from_encoding=True).argmax(dim = -1)
 
     def policy(self, state):
         return self.egreedy(self.greedy_policy(state)).item()
@@ -416,8 +465,7 @@ class QLearningNetAgent:
         # obs_m_1 --alg--> act --prob--> obs, rew # # # obs, rew = prob.step(action)
         if not self.observation_space.contains(obs):
             raise ValueError("Bad observation {obs}".format(obs=obs))
-        obs = torch.as_tensor(obs, dtype=torch.float).to(device=self.device).view(1, -1)
-        obs = self.normalizer(obs)
+        obs = self._action_value_online.preprocess(obs)
 
         stm2, obstm1, stm1 = self.stm2_obstm1_stm1
         st = self._state_from_obs(obs, stm1)
@@ -435,9 +483,8 @@ class QLearningNetAgent:
                       obstm1,
                       torch.as_tensor(act, dtype=torch.int64).view(1, 1),
                       obs,
-                      torch.as_tensor(rew, dtype=torch.float32).view(1,1),
+                      torch.as_tensor(rew, dtype=self.dtype).view(1,1),
                       torch.as_tensor(done, dtype=torch.uint8).view(1,1))
-        #print(", ".join(map(str, transition)))
         self._memory.push(*transition)
         if self.rng.rand(1) < self.batch_update_prob:
             self.batch_update()
@@ -479,7 +526,7 @@ class QLearningNetAgent:
     def _save_model(self):
         if self._latest_reward_average() > self._best_reward_average:
             msf = self._model_save_filepath()
-            print("******** Saving model to {} *************".format(msf))
+            self.logger.info("*** Saving model to {} ***".format(msf))
             Path(msf).parent.mkdir(parents=True, exist_ok=True)
             torch.save(self._action_value_online.state_dict(), msf)
             self._best_reward_average = self._latest_reward_average()
@@ -527,7 +574,6 @@ class QLearningNetAgent:
         # Compute the expected Q values
         # rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a))
         expected_state_action_values = (next_state_values * d) + batch_reward
-        #print("r+max_a Q_target(s, a): {}".format(expected_state_action_values))
 
         # Compute Huber loss
         # loss = rₜ + γ Q'(sₜ₊₁, argmaxₐ Q(sₜ₊₁, a)) - Q(sₜ, aₜ)

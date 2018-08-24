@@ -368,7 +368,8 @@ class WindyGridWorld:
                  wall_reward       = 0,
                  goal_reward       = 10,
                  lava_reward       = -10,
-                 apple_reward      = prop(lambda s: s.goal_reward / prod(s.maze.shape)),
+                 apple_reward      = prop(lambda s: s.goal_reward /
+                                          np.sum(s.maze == s.APPLE_CELL_CODE)),
                  CELL_WIND_NEWS    = [2, 3, 4, 5],
                  WALL_CELL_CODE    = 1,
                  GOAL_CELL_CODE    = 6,
