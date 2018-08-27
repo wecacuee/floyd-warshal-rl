@@ -24,6 +24,7 @@ if [[ "$PATH" != *"$PIPDIR/bin"* ]]; then
 fi
 
 PYTHONUSERBASE=$PIPDIR pip install --user --upgrade --process-dependency-links -e $THISDIR
+python setup.py test
 MJPATH=$HOME/.mujoco/mjpro150/bin
 if [[ "$LD_LIBRARY_PATH" != *"$MJPATH"* ]]; then
     export LD_LIBRARY_PATH=$MJPATH:$LD_LIBRARY_PATH

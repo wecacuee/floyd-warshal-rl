@@ -38,6 +38,7 @@ def CONF():
                          "PyOpenGL",
                          "makecite",
                          "gym_moving_dot",
+                         "mypy",
                      ])
 
 def relpath(fpath, rootdir=Path(__file__).parent):
@@ -164,6 +165,8 @@ def setup():
             # If any package contains *.txt or *.rst files, include them:
             '': ['*.txt', '*.png'],
         },
+        setup_requires=["pytest-runner", "pytest-mypy"],
+        tests_requires=["pytest"],
     )
 
 setup()

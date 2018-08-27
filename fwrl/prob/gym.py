@@ -37,7 +37,7 @@ class GymProblem:
         return x
 
     def render(self, *a, **kw):
-        self._gym.render()
+        self._gym.render(*a, **kw)
 
     def episode_reset(self, episode_n):
         self._episode_n = episode_n

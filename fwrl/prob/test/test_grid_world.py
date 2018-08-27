@@ -28,7 +28,7 @@ class TestGridWorld(TestCase):
 
     def test_free_space(self):
         next_pose = np.array([1, 3])
-        p, r, d = self.lgw.step(np.array([1, 2]), next_pose)
+        p, r, d, _ = self.lgw.step(np.array([1, 2]), next_pose)
         self.assertTrue(np.all(p == next_pose))
         self.assertEqual(r, self.free_space_reward)
         self.assertEqual(d, False)
@@ -36,7 +36,7 @@ class TestGridWorld(TestCase):
     def test_wall(self):
         pose = np.array([1, 2])
         next_pose = np.array([0, 2])
-        p, r, d = self.lgw.step(pose, next_pose)
+        p, r, d, _ = self.lgw.step(pose, next_pose)
         self.assertTrue(np.all(p == pose))
         self.assertEqual(r, self.wall_reward)
         self.assertEqual(d, False)
@@ -44,7 +44,7 @@ class TestGridWorld(TestCase):
     def test_lava(self):
         pose = np.array([1, 2])
         next_pose = np.array([2, 2])
-        p, r, d = self.lgw.step(pose, next_pose)
+        p, r, d, _ = self.lgw.step(pose, next_pose)
         self.assertTrue(np.all(p == np.array(None)))
         self.assertEqual(r, self.lava_reward)
         self.assertEqual(d, True)

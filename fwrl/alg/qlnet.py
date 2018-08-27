@@ -143,7 +143,7 @@ def conv2d_output_size(in_shape, kernel_size, padding=0, dilation=1,  stride=1):
 
 class QConvNet(nn.Module):
     def __init__(self, hiddens, D_in, D_out, kernel_sizes = [3,3],
-                 strides=[2,2], desired_size = 40):
+                 strides=[2,2], desired_size = 80):
         super(QConvNet, self).__init__()
         self.hiddens = hiddens
         self.D_in    = D_in
@@ -151,9 +151,10 @@ class QConvNet(nn.Module):
         self.dtype   = torch.get_default_dtype()
         inp2d_shape  = D_in[:2]
         self.norm    = Normalizer()
+        self.prev_frame = None
         # left to right arg -> pil -> resize -> tensor
         self.resize  = T.Compose([T.ToPILImage(),
-                    T.Resize(desired_size, interpolation=Image.CUBIC)])
+                    T.Resize(desired_size, interpolation=Image.NEAREST)])
         height, width = inp2d_shape
         inp2d_shape = ((height * desired_size / width, desired_size)
                            if height > width
@@ -178,7 +179,10 @@ class QConvNet(nn.Module):
 
 
     def preprocess(self, obs):
-        return torch.as_tensor(np.asarray(self.resize(obs))).permute(2, 0, 1).unsqueeze(0)
+        tobs = torch.as_tensor(np.asarray(self.resize(obs))).permute(2, 0, 1).unsqueeze(0)
+        prev_frame = self.prev_frame
+        self.prev_frame = tobs
+        return (tobs if prev_frame is None  else (tobs - self.prev_frame))
 
     def forward(self, obs, h = None,
                 return_encoding=False, return_both=False):
@@ -387,7 +391,7 @@ class QLearningNetAgent:
         self.stm2_obstm1_stm1 = (None, None, None)
         self._episode_count = episode_n
         self.episode_rewards.append(self._this_episode_reward)
-        self._this_episode_reward = 0
+        self._this_episode_reward = 0.0
         if self.rng.rand(1) < self.target_update_prob:
             self._action_value_target.load_state_dict(
                 self._action_value_online.state_dict())
@@ -417,9 +421,11 @@ class QLearningNetAgent:
         self._obs_n_mean_std = (0, None, None)
         self._episode_count = 0
         self.episode_rewards = []
-        self._this_episode_reward = 0
+        self._this_episode_reward = 0.0
         self._memory = ReplayMemory(self.memory_size, self.rng)
         self._best_reward_average = float('-inf')
+        self.episode_num = []
+        self.egreedy_values = []
         self.episode_reset(0)
 
     def egreedy(self, greedy_act):
@@ -481,6 +487,9 @@ class QLearningNetAgent:
         self._memory.push(*transition)
         if (len(self._memory) >= self.batch_size
                 and self.rng.rand(1) < self.batch_update_prob):
+            draw.imwrite(str(Path(self.model_save_dir) / "sample_obs.png"),
+                         draw.from_ndarray(self._memory.sample(1)
+                                           .obs.squeeze(0).permute(1, 2, 0).numpy()))
             self.batch_update()
 
         return self.policy(obs, stm1)
@@ -491,8 +500,12 @@ class QLearningNetAgent:
         ax.set_xlabel("Episode")
         ax.set_ylabel("Rewards")
         ax.plot(self.episode_rewards)
-        ma = moving_average(torch.as_tensor(self.episode_rewards), self.moving_average_window)
+        ma = moving_average(torch.as_tensor(self.episode_rewards),
+                            self.moving_average_window)
         ax.plot(ma.numpy())
+        self.episode_num.append(self._episode_count)
+        self.egreedy_values.append(self.egreedy_prob)
+        ax.plot(self.episode_num, self.egreedy_values)
         if not self._no_display:
             from tkinter import TclError
             try:

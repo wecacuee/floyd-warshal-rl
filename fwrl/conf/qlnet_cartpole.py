@@ -47,7 +47,7 @@ play_qlnet_pong = partial(
 play_qlnet_moving_dot = partial(
     play_qlnet_pong,
     confname          = "qlnet_moving_dot",
-    prob              = xargsonce(partial(GymProblem, gym.make("Pong-v0")),
+    prob              = xargsonce(partial(GymProblem, gym.make("MovingDot-v0")),
                                   ["seed"]),
     qnet              = partial(QConvNet, hiddens = [8, 16]),
     alg               = xargsonce(partial(QLearningNetAgent,
@@ -55,6 +55,7 @@ play_qlnet_moving_dot = partial(
                                           no_display = True),
                               """action_space observation_space reward_range
                               rng nepisodes qnet model_save_dir""".split()),
+    #play_episode      = partial(play_episode, renderer = Renderer.human)
 )
 
 def demo(confname = "qlnet_cartpole", nepisodes = 1000, seed = 0, max_steps = 5000):

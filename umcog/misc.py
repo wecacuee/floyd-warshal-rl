@@ -5,9 +5,8 @@ import pickle
 import operator
 from io import BytesIO
 import base64
-import builtins
 from itertools import tee, islice, repeat
-from functools import partial, update_wrapper, reduce
+from functools import reduce
 
 import numpy as np
 
@@ -126,34 +125,4 @@ class ChainedEncoders(json.JSONEncoder):
         return dct
 
 ## Functools
-def pairwise(iterable):
-    "s -> (s0,s1), (s2,s3), (s4, s5), ..."
-    a, b = tee(iterable)
-    return zip(islice(a, None, None, 2), islice(b, 1, None, 2))
-
-class kwcompose:
-    def __init__(self,
-                 *fs,
-                 apply_one=lambda ret, f: f(**ret)):
-        if len(fs) < 2: raise ValueError("Need at least one function to compose")
-        self.fs = fs
-        self.apply_one = apply_one
-        update_wrapper(self, fs[-1])
-
-    def __call__(self, **kw):
-        return reduce(self.apply_one, self.fs[:-1], self.fs[-1](**kw))
-
-
-compose = partial(kwcompose, apply_one = lambda ret, f: f(ret))
-
-
-def dictzip(kwiterables):
-    keys, values = zip(*kwiterables.items())
-    return (dict(zip(keys, v)) for v in zip(*values))
-
-def kwmap(function, **kwiterables):
-    return (function(**kw) for kw in dictzip(kwiterables))
-
-def prod(seq):
-    return reduce(operator.mul, seq, 1)
-
+from .functools import kwcompose, compose, dictzip, kwmap, prod

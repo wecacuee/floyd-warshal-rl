@@ -368,8 +368,7 @@ class WindyGridWorld:
                  wall_reward       = 0,
                  goal_reward       = 10,
                  lava_reward       = -10,
-                 apple_reward      = prop(lambda s: s.goal_reward /
-                                          np.sum(s.maze == s.APPLE_CELL_CODE)),
+                 apple_reward      = prop(lambda s: s.goal_reward / s.maze.size),
                  CELL_WIND_NEWS    = [2, 3, 4, 5],
                  WALL_CELL_CODE    = 1,
                  GOAL_CELL_CODE    = 6,
@@ -408,7 +407,7 @@ class WindyGridWorld:
             "free: {} > apple: {}".format(free_space_reward, apple_reward)
         napples = np.sum(maze == APPLE_CELL_CODE)
         assert apple_reward * napples  < goal_reward, \
-            "apples: {}*{} > goal: {}".format(apples, napples, goal_reward)
+            "apples: {}*{} > goal: {}".format(napples, napples, goal_reward)
 
 
     # TODO: make these function as partials on the constructor
@@ -549,7 +548,7 @@ class WindyGridWorld:
         for _ in range(samples):
             for a in action_space.values():
                 avect = action_space.tovector(a)
-                valid_pose, _, _ = self.step(pos, pos + avect)
+                valid_pose, _, _, _ = self.step(pos, pos + avect)
                 if (np.any(valid_pose != np.asarray(pos))
                     and valid_pose.tolist() is not None):
                     nbrs.add(np_tuple(valid_pose))
