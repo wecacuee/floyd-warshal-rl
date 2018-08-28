@@ -6,20 +6,22 @@ from numbers import Number
 
 T = TypeVar('T')
 
-def slidingiter(iterable : Iterable, n : int = 2) -> Iterable[Tuple]:
-    """ s -> (s0,s1), (s2,s3), (s4, s5), ...
+def slidingiter(iterable : Iterable, stride : int, size : int) -> Iterable[Tuple]:
+    """
+    >>> list(pairwise([1, 2, 3, 4, 5, 6]))
+    [(1, 2), (3, 4), (5, 6)]
 
-    >>> list(pairwise([1, 2, 3]))
-    [(1, 2), (2, 3)]
-
-    >>> list(pairwise([1, 2, 3, 4, 5], n = 3))
+    >>> list(slidingiter([1, 2, 3, 4, 5], stride = 1, size = 3))
     [(1, 2, 3), (2, 3, 4), (3, 4, 5)]
     """
-    a, b = tee(iterable)
-    return zip(islice(a, None, None, n), islice(b, 1, None, n))
+    iters = tee(iterable, size)
+    return zip(*(islice(it, i, None, stride) for i, it in enumerate(iters)))
 
 
-pairwise = partial(slidingiter, n = 2)
+pairwise = partial(slidingiter, stride = 2, size = 2)
+"""
+s -> (s0,s1), (s2,s3), (s4, s5), ...
+"""
 
 
 def _apply_kw(ret, f):

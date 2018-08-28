@@ -39,6 +39,7 @@ def CONF():
                          "makecite",
                          "gym_moving_dot",
                          "mypy",
+                         "matplotlib",
                      ])
 
 def relpath(fpath, rootdir=Path(__file__).parent):

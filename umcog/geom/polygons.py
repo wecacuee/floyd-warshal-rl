@@ -1,11 +1,12 @@
 """ Dealing with polygons """
+from functools import reduce
 import numpy as np
 
 def vertices2edges(vertices):
     """
     >>> vertices = [[3, 3], [2, 2], [4, 2.5]]
-    >>> vertices2edges(vertices)
-    [(array([ 3.,  3.]), array([ 2.,  2.])), (array([ 2.,  2.]), array([ 4. ,  2.5])), (array([ 4. ,  2.5]), array([ 3.,  3.]))]
+    >>> list(vertices2edges(vertices))
+    [(array([3., 3.]), array([2., 2.])), (array([2., 2.]), array([4. , 2.5])), (array([4. , 2.5]), array([3., 3.]))]
     """
     vertices = np.asarray(vertices)
     return zip(vertices, np.roll(vertices, -1, axis=0))
@@ -23,7 +24,7 @@ def hyplane(points):
 
     >>> vertices = np.array([[3, 3], [2, 2], [4, 2.5]])
     >>> hyplane(vertices[:2, :])
-    array([  7.07106781e-01,  -7.07106781e-01,   1.73472348e-15])
+    array([ 7.07106781e-01, -7.07106781e-01,  1.73472348e-15])
 
     >>> hyplane(vertices[1:3, :])
     array([ 0.13736056, -0.54944226,  0.82416338])

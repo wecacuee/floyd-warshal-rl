@@ -39,6 +39,7 @@ play_rlinnet_scrolling = partial(
 )
 
 play_linnet_scrolling = partial(
+    play_rlinnet_scrolling,
     confname = "qlnet_linnet_scrolling",
     qnet     = partial(MLP, hiddens = [64]),
 )

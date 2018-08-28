@@ -223,10 +223,10 @@ class ReplayMemory(object):
 
     def _init_memory(self, *args):
         """
-        >>> mem = ReplayMemory(100, rng = t)
-        >>> fargs = (torch.rand(1, 4), torch.rand(1, 1).to(dtype=torch.int64), torch.rand(1, 4), torch.rand(1, 1), torch.rand(1, 1).to(dtype=torch.uint8))
-        >>> mem.init_memory(*fargs)
-        >>> mem.memory.state.shape
+        >>> mem = ReplayMemory(100, rng = torch)
+        >>> fargs = (torch.rand(1, 4), torch.rand(1, 4), torch.rand(1, 1).to(dtype=torch.int64), torch.rand(1, 4), torch.rand(1, 1), torch.rand(1, 1).to(dtype=torch.uint8))
+        >>> mem._init_memory(*fargs)
+        >>> mem.memory.obs.shape
         torch.Size([100, 4])
         >>> mem.memory.done.dtype
         torch.uint8
@@ -265,17 +265,6 @@ class ReplayMemoryNumpy:
         self.memory = None
 
     def _init_memory(self, *args):
-        """
-        >>> mem = ReplayMemory(100, rng = t)
-        >>> fargs = (torch.rand(1, 4), torch.rand(1, 1).to(dtype=torch.int64), torch.rand(1, 4), torch.rand(1, 1), torch.rand(1, 1).to(dtype=torch.uint8))
-        >>> mem.init_memory(*fargs)
-        >>> mem.memory.state.shape
-        torch.Size([100, 4])
-        >>> mem.memory.done.dtype
-        torch.uint8
-        >>> mem.memory.action.dtype
-        torch.int64
-        """
         c = self.capacity
         self.memory = np.empty(self.capacity, dtype=np.object)
 

@@ -42,7 +42,7 @@ def egreedy_prob_exp(step, start_eps = 0.5, end_eps = 0.001, nepisodes = None, a
     """
     >>> egreedy_prob_exp(np.array([0, 500, 1000]), start_eps = 0.8, end_eps = 0.001,
     ...                  nepisodes = 1000, alpha = np.log(0.001 / 0.8))
-    array([ 0.8       ,  0.02828427,  0.001     ])
+    array([0.8       , 0.02828427, 0.001     ])
     """
     assert nepisodes is not None, "nepisodes is required"
     # scale later
