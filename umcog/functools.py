@@ -63,8 +63,11 @@ def prod(seq : Iterable[Number]) -> Number:
     """
     >>> prod([1, 2, 3])
     6
+    >>> prod([7, 7])
+    49
     """
-    first = next(iter(seq))
+    seq = iter(seq)
+    first = next(seq)
     return reduce(operator.mul, seq, first)
 
 

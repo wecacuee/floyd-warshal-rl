@@ -25,7 +25,7 @@ from umcog.misc import NumpyEncoder, prod
 from umcog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwprop
 import umcog.draw as draw
 from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter
-from .qlearning import egreedy_prob_exp
+from .common import conv2d_output_size, egreedy_prob_exp
 
 def LOG():
     return logging.getLogger(__name__)
@@ -132,13 +132,6 @@ class RLinNet(nn.Module):
                 if return_both
                 else encoding if return_encoding
                 else self.head(encoding))
-
-def conv2d_output_size(in_shape, kernel_size, padding=0, dilation=1,  stride=1):
-    in_shape = torch.as_tensor(in_shape, dtype=torch.float64)
-    assert in_shape.dim() == 1 and in_shape.shape == (2,), "bad input shape"
-    return (torch.floor(
-        (in_shape + 2*padding - dilation * (kernel_size - 1) - 1) / stride) + 1
-    ).to(dtype=torch.int64).tolist()
 
 
 class QConvNet(nn.Module):

@@ -11,6 +11,7 @@ from umcog.misc import NumpyEncoder
 from umcog.confutils import xargs, xargspartial, xargmem, KWProp, extended_kwprop
 import umcog.draw as draw
 from ..game.play import Space, Alg, NoOPObserver, post_process_data_iter, show_ax_human, show_ax_log
+from .common import egreedy_prob_exp
 
 def logger():
     return logging.getLogger(__name__)
@@ -32,22 +33,6 @@ def q_policy(state_idx, action_value, rng):
     #    "state = {state}; action_values = {av}".format(
     #        av=self.action_value[state_idx, :], state=state))
     return rand_argmax(action_value[state_idx, :], rng)
-
-def linscale(x, src_range, target_range):
-    ss, se = src_range
-    ts, te = target_range
-    return (x - ss) / (se - ss) * (te - ts) + ts
-
-def egreedy_prob_exp(step, start_eps = 0.5, end_eps = 0.001, nepisodes = None, alpha = -20):
-    """
-    >>> egreedy_prob_exp(np.array([0, 500, 1000]), start_eps = 0.8, end_eps = 0.001,
-    ...                  nepisodes = 1000, alpha = np.log(0.001 / 0.8))
-    array([0.8       , 0.02828427, 0.001     ])
-    """
-    assert nepisodes is not None, "nepisodes is required"
-    # scale later
-    return linscale(np.exp( alpha * np.minimum(step, nepisodes) / nepisodes ),
-                    (1, np.exp(alpha)), (start_eps, end_eps))
 
 
 class QLearningDiscrete(Alg):
