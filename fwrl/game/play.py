@@ -362,29 +362,25 @@ def train(alg,
           observer = NOOP_OBSERVER,
           nepisodes = 1,
           logger_factory = default_logger_factory,
-          play_episode_ = play_episode,
-          evaluation_interval = 100000,
-          evaluation_episodes = 10,
-          evaluation_size     = 500):
+          play_episode_ = play_episode):
     logger = logger_factory(__name__)
-    if len(logging.root.handlers) >= 2 and hasattr(logging.root.handlers[1], "baseFilename"):
-        logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
+    if len(logging.root.handlers) >= 2 \
+       and hasattr(logging.root.handlers[1], "baseFilename"):
+        logger.info("Logging to file : {}".format(
+            logging.root.handlers[1].baseFilename))
     observer.set_prob(prob)
     observer.set_alg(alg)
     observer.on_play_start()
     for n in range(nepisodes):
         play_episode_(alg, prob, observer, n)
-        if n % evaluation_interval == 0:
-            for en in range(evaluation_episodes):
-                play_episode_(alg.evaluator(), prob, observer, n)
 
     observer.on_play_end()
     return observer
 
 
 def condition_by_type_map():
-    return { str : operator.eq,
-             list : operator.contains }
+    return {str: operator.eq,
+            list: operator.contains}
 
 
 def comparison_op(criteria_val, data_val):

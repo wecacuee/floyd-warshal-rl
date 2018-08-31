@@ -40,6 +40,7 @@ def CONF():
                          "gym_moving_dot",
                          "mypy",
                          "matplotlib",
+                         "plotly",
                      ])
 
 def relpath(fpath, rootdir=Path(__file__).parent):
