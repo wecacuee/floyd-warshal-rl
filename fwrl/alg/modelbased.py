@@ -2,10 +2,125 @@ from functools import partial
 
 import torch
 
-from umcog.memoize import MEMOIZE_METHOD
-
 from .qlearning import egreedy_prob_exp
 from ..game.play import Alg
+
+
+def one_step_exp_reward(dynamics_model, rewards, st):
+    """Returns one-step expected reward to state `st` from all states
+
+    >>> dynamics = torch.zeros((3, 2, 3))
+    >>> dynamics[0, 0, 2] = 1
+    >>> dynamics[0, 1, 1] = 1
+    >>> dynamics[2, 1, 1] = 1
+    >>> rewards = torch.ones((3, 2))
+    >>> rewards[0, 0] = -1e-4
+    >>> rewards[0, 1] = -1e-4
+    >>> rewards[2, 1] = 10
+    >>> one_step_exp_reward(dynamics, rewards, 1)
+    tensor([[-0.0000, -0.0001],
+            [ 0.0000,  0.0000],
+            [ 0.0000, 10.0000]])
+
+    >>> rewards = torch.ones((3, 2))
+    >>> rewards[0, 0] = -1e-4
+    >>> rewards[0, 1] = 10
+    >>> rewards[2, 1] = 10
+    >>> one_step_exp_reward(dynamics, rewards, 1)
+    tensor([[-0., 10.],
+            [ 0.,  0.],
+            [ 0., 10.]])
+    """
+    counts = dynamics_model[:, :, st]
+    state_count = counts.sum(dim = -1, keepdim = True)
+    prob = counts / torch.where(state_count == 0, torch.ones_like(state_count),
+                                state_count)
+    return (prob * rewards)
+
+
+def default_value_fun(rewards, init):
+    return rewards.new_ones(rewards.shape) * init
+
+
+def out_neighbors(dynamics_model, state, action):
+    state_to_goal_prob = dynamics_model[state, action, :]
+    nbr_states = state_to_goal_prob.nonzero().squeeze(-1)
+    return nbr_states
+
+
+def in_neighbors(dynamics_model, goal_state):
+    state_to_goal_prob = dynamics_model[:, :, goal_state].max(dim=-1)[0]
+    nbr_states = state_to_goal_prob.nonzero().squeeze(-1)
+    return nbr_states
+
+
+def exp_action_value(dynamics_model, rewards, state, action, goal_state,
+                     value_fun = None,
+                     value_fun_gen = default_value_fun,
+                     value_fun_init = float('-inf'),
+                     discount = 1):
+    """Returns the best action and expected reward
+
+    >>> dynamics = torch.zeros((3, 2, 3))
+    >>> dynamics[0, 0, 2] = 1
+    >>> dynamics[0, 1, 1] = 1
+    >>> dynamics[2, 1, 1] = 1
+    >>> rewards = torch.ones((3, 2))
+    >>> rewards[0, 0] = -1e-4
+    >>> rewards[0, 1] = -1e-4
+    >>> rewards[2, 1] = 10
+    >>> exp_action_value(dynamics, rewards, 0, 0, 1)
+    tensor(9.9999)
+    >>> exp_action_value(dynamics, rewards, 0, 1, 1)
+    tensor(-0.0001)
+
+    >>> rewards = torch.ones((3, 2))
+    >>> rewards[0, 0] = -1e-4
+    >>> rewards[0, 1] = 10
+    >>> rewards[2, 1] = 10
+    >>> exp_action_value(dynamics, rewards, 0, 0, 1)
+    tensor(9.9999)
+    >>> exp_action_value(dynamics, rewards, 0, 1, 1)
+    tensor(10.)
+    """
+    nstates = dynamics_model.shape[0]
+    nactions = dynamics_model.shape[1]
+    assert nstates == dynamics_model.shape[2]
+    assert dynamics_model.dim() == 3
+    assert nstates == rewards.shape[0]
+    assert nactions == rewards.shape[1]
+    assert rewards.dim() == 2
+
+    if value_fun is None:
+        value_fun = value_fun_gen(rewards, value_fun_init)
+
+    # Memoization
+    if value_fun[state, action] != value_fun_init:
+        return value_fun[state, action]
+
+    # Exp_action_value algorithm
+    if state == goal_state:
+        # zero step
+        return rewards.new_zeros(1)
+    else:
+        # There is a trade off in choosing expected reward vs max reward.
+        nbr_states = out_neighbors(dynamics_model, state, action)
+        if not len(nbr_states):
+            # we have run into a dead end
+            # Do not prefer this one
+            return rewards.new_ones(1) * float('-inf')
+
+        for nbr_st in nbr_states.tolist():
+            for a in torch.arange(nactions):
+                rew = exp_action_value(dynamics_model, rewards, nbr_st, a,
+                                       goal_state, value_fun = value_fun)
+                # Memoize
+                value_fun[nbr_st, a] = rew
+
+        max_cumrew = rewards[state, action] + value_fun[nbr_states, :].max()
+        # Memoize
+        value_fun[state, action] = max_cumrew
+        return max_cumrew
 
 
 class ModelBasedTabular(Alg):
@@ -22,7 +137,7 @@ class ModelBasedTabular(Alg):
         self.observation_space = observation_space
         self.reward_range = reward_range
         self.rng = rng
-        self.egreedy_prob = self.egreedy_prob
+        self.egreedy_prob = egreedy_prob
         self.discount = discount
         self.reset()
 
@@ -37,8 +152,8 @@ class ModelBasedTabular(Alg):
 
     def _resize_rewards(self, new_size):
         olds = self.rewards.shape[0]
-        self.rewards.resize_(new_size, self.action_space.n, new_size)
-        self.rewards[olds:new_size, :, olds:new_size] = 1
+        self.rewards.resize_(new_size, self.action_space.n)
+        self.rewards[olds:new_size, :] = 1
         return self.rewards
 
     def _defaut_dynamics(self, state_size):
@@ -70,39 +185,21 @@ class ModelBasedTabular(Alg):
         nstates = self.dynamics_model.shape[0]
         experience_count = self.dynamics_model.view(nstates, -1).sum(dim = -1)
         goal_state = experience_count.argmin()
-        return self._exploitation_policy(state,
-                                         tuple(goal_state.tolist()))
+        return self._exploitation_policy(state, goal_state)
 
-    def _expected_reward(self, st):
-        counts = self.dynamics_model[:, :, st]
-        prob = counts / counts.sum(dim = -1)
-        return (prob * self.rewards).sum(dim = -1)
-
-    @MEMOIZE_METHOD
     def _exploitation_policy(self, state, goal_state):
-        if self.dynamics_model[state, : goal_state].max() > 0:
-            act = self.dynamics_model[state, :, goal_state].argmax()
-            return act, self.rewards[state, act]
-        else:
-            nbr_states = self.dynamics_model[:, :,
-                                             goal_state].max(
-                                                 dim=-1)[0].nonzero()
-            exp_rew = self._expected_reward(goal_state)[nbr_states]
-            act_rewards = (self._exploitation_policy(state, nbr_st)
-                           for nbr_st in nbr_states)
-            act_cumrewards = (
-                (act, rew + erew)
-                for (act, rew), erew in zip(act_rewards, exp_rew))
-            return min(act_cumrewards, key = lambda e: e[1])
-
+        return max(
+            [(act, exp_action_value(self.dynamics_model, self.rewards, state,
+                                    act, goal_state))
+             for act in range(self.action_space.n)],
+            key = lambda x: x[1])[0]
 
     def policy(self, obs):
         state = self._state_from_obs(obs)
         if self.goal_state is None:
-            return self._exploration_policy(state)[0]
+            return self._exploration_policy(state)
         else:
-            return self._exploitation_policy(tuple(state.tolist()),
-                                             tuple(self.goal_state.tolist()))[0]
+            return self._exploitation_policy(state, self.goal_state)
 
     def _hit_goal(self, obs, act, rew, done, info):
         return info.get("hit_goal", False)
@@ -129,7 +226,7 @@ class ModelBasedTabular(Alg):
         if not self.observation_space.contains(obs):
             raise ValueError("Bad observation {obs}".format(obs=obs))
         # Encoding state_hash from observation
-        st = self._state_from_obs(obs, act, rew)
+        st = self._state_from_obs(obs)
         stm1 = self.last_state
         self.last_state = st
         if stm1 is None:
@@ -147,4 +244,15 @@ class ModelBasedTabular(Alg):
 
         return self.egreedy(self.policy(obs))
 
+    def close(self):
+        pass
+
+    def seed(self, seed=None):
+        self._seed = seed
+
+    def unwrapped(self):
+        return self
+
+    def done(self):
+        return False
 

@@ -49,18 +49,18 @@ def add_argument_args_from_func_sig(func):
     >>> def main(x, a = 1, b = 2, c = "C"):
     ...     return dict(x = x, a = a, b = b, c = c)
     >>> add_argument_args_from_func_sig(main)
-    [{'option_strings': ('x',)}, {'option_strings': ('--a',), 'type': <class 'int'>, 'default': 1}, {'option_strings': ('--b',), 'type': <class 'int'>, 'default': 2}, {'option_strings': ('--c',), 'type': <class 'str'>, 'default': 'C'}]
+    {'x': {'option_strings': ('x',)}, 'a': {'option_strings': ('--a',), 'type': <class 'int'>, 'default': 1}, 'b': {'option_strings': ('--b',), 'type': <class 'int'>, 'default': 2}, 'c': {'option_strings': ('--c',), 'type': <class 'str'>, 'default': 'C'}}
     """
-    parser_add_argument_args = []
+    parser_add_argument_args = dict()
     required_args = func_required_args_from_sig(func)
     for k in required_args:
         defaults = argparse_req_defaults(k)
-        parser_add_argument_args.append(defaults)
+        parser_add_argument_args[k] = defaults
 
     kwdefaults = func_kwonlydefaults(func)
     for k, deflt in kwdefaults.items():
         defaults = argparse_opt_defaults(k, deflt)
-        parser_add_argument_args.append(defaults)
+        parser_add_argument_args[k] = defaults
     return parser_add_argument_args
 
 
@@ -71,7 +71,7 @@ def argparser_from_func_sig(func,
     """
     """
     parser = parser_factory()
-    for kw in add_argument_args_from_func_sig(func):
+    for k, kw in add_argument_args_from_func_sig(func).items():
         foreach_argument_cb(parser, dict(kw, **argparseopts.get(k, dict())))
     return parser
 
