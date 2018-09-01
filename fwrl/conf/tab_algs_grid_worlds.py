@@ -10,6 +10,7 @@ from umcog.misc import kwmap, kwcompose
 from ..alg.qlearning import Renderer as QRenderer, QLearningLogger
 from ..alg.floyd_warshall_grid import FloydWarshallLogger
 from ..alg.modelbased import ModelBasedTabular
+from ..alg.common import egreedy_prob_exp
 from ..prob.windy_grid_world import AgentInGridWorld, AgentVisObserver
 from ..game.play  import Renderer, play_episode, NoOPObserver
 from .default import (grid_world_play,
@@ -52,7 +53,8 @@ mb_grid_world_play = partial(
     confname          = "mb_grid_world_play",
     alg               = xargs(ModelBasedTabular,
                               """action_space observation_space reward_range
-                              rng max_steps""".split()),
+                              rng egreedy_prob""".split()),
+    egreedy_prob        = xargspartial(egreedy_prob_exp, dict(nepisodes="max_steps")),
     action_space      = alias(["prob", "action_space"]),
     observation_space = alias(["prob", "observation_space"]),
     reward_range      = alias(["prob", "reward_range"]),
@@ -78,23 +80,23 @@ AgentVisHumanMultiObserverXargs = xargs(
 def tab_algs_grid_worlds(
         seed      = 0,
         nepisodes = 20,
-        max_steps = [#4000,
-                     #400,
+        max_steps = [#400,
+                     400,
                      400,
         ],
         maze_name = [#"4-room-lava-world",
-                     #"4-room-windy-world",
+                     "4-room-windy-world",
                      "4-room-grid-world"
         ],
         rng       = xargs(np.random.RandomState, ["seed"]),
         probs      = xargsonce(
             AgentInGridWorlds_from_maze_names_repeat,
             "rng max_steps maze_name".split()),
-        alg_names = [# "ql",
-                     # "fw",
+        alg_names = [ "ql",
+                      "fw",
                      "mb"],
-        gw_plays = [# _ql_grid_world_play,
-                    # _fw_grid_world_play,
+        gw_plays = [ _ql_grid_world_play,
+                     _fw_grid_world_play,
                     mb_grid_world_play],
 ):
     return_vals = []
@@ -111,7 +113,7 @@ def tab_algs_grid_worlds(
                 max_steps = max_stps,
                 rng       = rng,
                 nepisodes = nepisodes,
-                play_episode  = partial(play_episode, renderer = Renderer.sometimes),
+                #play_episode  = partial(play_episode, renderer = Renderer.sometimes),
                 observer  = NoVisMultiObserverXargs,
                 #observer  = xargs(NoOPObserver),
                 #observer = AgentVisHumanMultiObserverXargs,

@@ -1,8 +1,7 @@
+from functools import partial
 import math
 
 import torch
-
-from umcog.confutils import xargspartial, extended_kwprop
 
 from .qlearning import egreedy_prob_exp
 from ..game.play import Alg
@@ -147,26 +146,19 @@ def exp_action_value(dynamics_model, rewards, state, action, goal_state,
 class ModelBasedTabular(Alg):
     egreedy_prob_exp = egreedy_prob_exp
 
-    @extended_kwprop
     def __init__(self,
                  action_space,
                  observation_space,
                  reward_range,
                  rng,
-                 start_eps = 0.9, end_eps = 0.01, alpha = -0.1,
-                 egreedy_prob = xargspartial(
-                     egreedy_prob_exp,
-                     dict(start_eps="start_eps",
-                          end_eps="end_eps",
-                          alpha="alpha",
-                          nepisodes="max_steps")),
+                 egreedy_prob = partial(
+                     egreedy_prob_exp, nepisodes = 200),
                  discount = 1.00):  # step cost
         self.action_space = action_space
         self.observation_space = observation_space
         self.reward_range = reward_range
         self.rng = rng
         self.egreedy_prob = egreedy_prob
-        print("egreedy_prob {}".format(egreedy_prob.keywords))
         self.discount = discount
         self.reset()
 
@@ -213,7 +205,7 @@ class ModelBasedTabular(Alg):
 
     def egreedy(self, greedy_act):
         r = self.rng.rand()
-        return_greedy = (r >= self.egreedy_prob(self.episode_n))
+        return_greedy = (r >= self.egreedy_prob(self.step))
         rnd_act = self.action_space.sample()
         ret_act = greedy_act if return_greedy else rnd_act
         return ret_act
@@ -238,7 +230,6 @@ class ModelBasedTabular(Alg):
             if math.isinf(exp_rew) or math.isnan(exp_rew):
                 return self._exploration_policy(state)
             else:
-                print("exploitation, exp_rew {}".format(exp_rew))
                 return act
 
     def _hit_goal(self, obs, act, rew, done, info):
