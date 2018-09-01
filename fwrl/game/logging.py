@@ -72,7 +72,8 @@ def find_latest_file(dir_):
     if not Path(dir_).exists():
         return None
     p_stats = [(p, p.stat()) for p in Path(dir_).iterdir() if p.is_file()]
-    return max(p_stats, key = lambda p_stat: p_stat[1].st_mtime)[0]
+    non_empty_paths = [(p, ps) for p, ps in p_stats if ps.st_size]
+    return max(non_empty_paths, key = lambda p_stat: p_stat[1].st_mtime, default=(None, None))[0]
 
 
 def setLoggerConfig(confname, log_file, logging_encdec):
