@@ -1,9 +1,15 @@
-from functools import partial
+import math
 
 import torch
 
+from umcog.confutils import xargspartial, extended_kwprop
+
 from .qlearning import egreedy_prob_exp
 from ..game.play import Alg
+
+
+def safe_div(num, den):
+    return num / torch.where(den == 0, torch.ones_like(den), den)
 
 
 def one_step_exp_reward(dynamics_model, rewards, st):
@@ -33,8 +39,7 @@ def one_step_exp_reward(dynamics_model, rewards, st):
     """
     counts = dynamics_model[:, :, st]
     state_count = counts.sum(dim = -1, keepdim = True)
-    prob = counts / torch.where(state_count == 0, torch.ones_like(state_count),
-                                state_count)
+    prob = safe_div(counts, state_count)
     return (prob * rewards)
 
 
@@ -56,6 +61,7 @@ def in_neighbors(dynamics_model, goal_state):
 
 def exp_action_value(dynamics_model, rewards, state, action, goal_state,
                      value_fun = None,
+                     visited = None,
                      value_fun_gen = default_value_fun,
                      value_fun_init = float('-inf'),
                      discount = 1):
@@ -63,6 +69,7 @@ def exp_action_value(dynamics_model, rewards, state, action, goal_state,
 
     >>> dynamics = torch.zeros((3, 2, 3))
     >>> dynamics[0, 0, 2] = 1
+    >>> dynamics[2, 1, 1] = 1
     >>> dynamics[0, 1, 1] = 1
     >>> dynamics[2, 1, 1] = 1
     >>> rewards = torch.ones((3, 2))
@@ -94,6 +101,10 @@ def exp_action_value(dynamics_model, rewards, state, action, goal_state,
     if value_fun is None:
         value_fun = value_fun_gen(rewards, value_fun_init)
 
+    if visited is None:
+        visited = set()
+    visited.add(state)
+
     # Memoization
     if value_fun[state, action] != value_fun_init:
         return value_fun[state, action]
@@ -105,19 +116,29 @@ def exp_action_value(dynamics_model, rewards, state, action, goal_state,
     else:
         # There is a trade off in choosing expected reward vs max reward.
         nbr_states = out_neighbors(dynamics_model, state, action)
-        if not len(nbr_states):
+        nbr_states_set = set(nbr_states.tolist()) - visited
+        if not len(nbr_states_set):
             # we have run into a dead end
             # Do not prefer this one
             return rewards.new_ones(1) * float('-inf')
 
-        for nbr_st in nbr_states.tolist():
+        for nbr_st in nbr_states_set:
             for a in torch.arange(nactions):
                 rew = exp_action_value(dynamics_model, rewards, nbr_st, a,
-                                       goal_state, value_fun = value_fun)
+                                       goal_state, value_fun = value_fun,
+                                       visited = visited)
+                assert not math.isnan(rew)
                 # Memoize
                 value_fun[nbr_st, a] = rew
 
-        max_cumrew = rewards[state, action] + value_fun[nbr_states, :].max()
+        nbr_states_t = torch.tensor(list(nbr_states_set))
+        counts = dynamics_model[state, action, nbr_states_t]
+        probs = safe_div(counts, counts.sum(dim = -1, keepdim = True)) + 1e-8
+        # -inf * 0 -> nan; Handle nan
+        future_rewards = (value_fun[nbr_states_t, :].max(dim = -1)[0] * probs)
+        max_cumrew = (rewards[state, action] + future_rewards.sum())
+        assert not math.isnan(max_cumrew)
+
         # Memoize
         value_fun[state, action] = max_cumrew
         return max_cumrew
@@ -126,23 +147,32 @@ def exp_action_value(dynamics_model, rewards, state, action, goal_state,
 class ModelBasedTabular(Alg):
     egreedy_prob_exp = egreedy_prob_exp
 
+    @extended_kwprop
     def __init__(self,
                  action_space,
                  observation_space,
                  reward_range,
                  rng,
-                 egreedy_prob = partial(egreedy_prob_exp, nepisodes = 200),
+                 start_eps = 0.9, end_eps = 0.01, alpha = -0.1,
+                 egreedy_prob = xargspartial(
+                     egreedy_prob_exp,
+                     dict(start_eps="start_eps",
+                          end_eps="end_eps",
+                          alpha="alpha",
+                          nepisodes="max_steps")),
                  discount = 1.00):  # step cost
         self.action_space = action_space
         self.observation_space = observation_space
         self.reward_range = reward_range
         self.rng = rng
         self.egreedy_prob = egreedy_prob
+        print("egreedy_prob {}".format(egreedy_prob.keywords))
         self.discount = discount
         self.reset()
 
     def reset(self):
         self.step = 0
+        self.episode_n = 0
         self.hash_state = dict()
         self.dynamics_model = self._defaut_dynamics(0)
         self.rewards = self._default_rewards(0)
@@ -152,8 +182,10 @@ class ModelBasedTabular(Alg):
 
     def _resize_rewards(self, new_size):
         olds = self.rewards.shape[0]
-        self.rewards.resize_(new_size, self.action_space.n)
-        self.rewards[olds:new_size, :] = 1
+        newrews = self.rewards.new_ones((new_size, self.action_space.n))
+        newrews[:olds, :] = self.rewards
+        self.rewards = newrews
+        assert not torch.isnan(self.rewards).any()
         return self.rewards
 
     def _defaut_dynamics(self, state_size):
@@ -161,8 +193,10 @@ class ModelBasedTabular(Alg):
 
     def _resize_dynamics(self, new_size):
         olds = self.dynamics_model.shape[0]
-        self.dynamics_model.resize_(new_size, self.action_space.n, new_size)
-        self.dynamics_model[olds:new_size, :, olds:new_size] = 1
+        dynm = self.dynamics_model.new_zeros((new_size, self.action_space.n, new_size))
+        dynm[:olds, :, :olds] = self.dynamics_model
+        self.dynamics_model = dynm
+        assert not torch.isnan(self.dynamics_model).any()
         return self.dynamics_model
 
     def _state_from_obs(self, obs):
@@ -178,28 +212,34 @@ class ModelBasedTabular(Alg):
         return state_idx
 
     def egreedy(self, greedy_act):
-        sample_greedy = (self.rng.rand() >= self.egreedy_prob(self.step))
-        return greedy_act if sample_greedy else self.action_space.sample()
+        r = self.rng.rand()
+        return_greedy = (r >= self.egreedy_prob(self.episode_n))
+        rnd_act = self.action_space.sample()
+        ret_act = greedy_act if return_greedy else rnd_act
+        return ret_act
 
     def _exploration_policy(self, state):
-        nstates = self.dynamics_model.shape[0]
-        experience_count = self.dynamics_model.view(nstates, -1).sum(dim = -1)
-        goal_state = experience_count.argmin()
-        return self._exploitation_policy(state, goal_state)
+        return self.action_space.sample()
 
     def _exploitation_policy(self, state, goal_state):
-        return max(
+        act, exp_rew = max(
             [(act, exp_action_value(self.dynamics_model, self.rewards, state,
                                     act, goal_state))
              for act in range(self.action_space.n)],
-            key = lambda x: x[1])[0]
+            key = lambda x: x[1])
+        return act, exp_rew
 
     def policy(self, obs):
         state = self._state_from_obs(obs)
         if self.goal_state is None:
             return self._exploration_policy(state)
         else:
-            return self._exploitation_policy(state, self.goal_state)
+            act, exp_rew = self._exploitation_policy(state, self.goal_state)
+            if math.isinf(exp_rew) or math.isnan(exp_rew):
+                return self._exploration_policy(state)
+            else:
+                print("exploitation, exp_rew {}".format(exp_rew))
+                return act
 
     def _hit_goal(self, obs, act, rew, done, info):
         return info.get("hit_goal", False)
@@ -211,6 +251,8 @@ class ModelBasedTabular(Alg):
         return done or info.get("new_spawn", False)
 
     def episode_reset(self, episode_n):
+        self.step = 0
+        self.episode_n = episode_n
         self.goal_state = None
         self.last_state = None
 
@@ -231,6 +273,8 @@ class ModelBasedTabular(Alg):
         self.last_state = st
         if stm1 is None:
             return self.egreedy(self.policy(obs))
+        print("{stm1} -- {act} --> {st}, {rew}".format(stm1 = stm1, act = act,
+                                                       st = st, rew = rew))
 
         if self._hit_goal(obs, act, rew, done, info):
             self.goal_state = stm1

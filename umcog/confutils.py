@@ -18,6 +18,7 @@ from itertools import chain
 import json
 import functools
 import sys
+from collections.abc import Mapping
 
 from .memoize import method_memoizer
 
@@ -42,7 +43,10 @@ def accepts_arbitrary_kw(func):
                for p in params.values())
 
 def apply_conf(func, conf, args=()):
-    args_from_conf = { k : getattr(conf, k) for k in args }
+    if isinstance(args, Mapping):
+        args_from_conf = { k : getattr(conf, an) for k, an in args.items() }
+    else:
+        args_from_conf = { k : getattr(conf, k) for k in args }
     return func(**args_from_conf)
 
 def func_kwonlydefaults_from_sig(func):

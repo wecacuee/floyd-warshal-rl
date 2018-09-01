@@ -113,10 +113,6 @@ class QLearningDiscrete(Alg):
     def is_terminal_step(self, obs, act, rew, done, info):
         return done or info.get("new_spawn", False)
 
-    def episode_reset(self, episode_n):
-        self.goal_state = None
-        self.last_state = None
-
     def update(self, obs, act, rew, done, info):
         self.step += 1
         # Protocol defined by: game.play:play_episode()

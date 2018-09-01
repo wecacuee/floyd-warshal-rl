@@ -346,9 +346,9 @@ def shortest_path(grid_world, start, end, action_space, visited=None):
         else:
             length, path = min(
                 [shortest_path(grid_world, np.asarray(nbr), end,
-                            action_space, visited | unvisited_nbrs)
+                               action_space, visited | unvisited_nbrs)
                     for nbr in unvisited_nbrs],
-                key = lambda a:a[0],
+                key = lambda a: a[0],
                 default = np.inf)
             if np.isinf(length):
                 return length, []
