@@ -74,7 +74,7 @@ AgentVisMultiObserverXargs = xargs(
 NoVisMultiObserverXargs = xargs(MultiObserver,
                                 """log_file_dir log_file_path prob
                                 logger_factory logging_encdec windy_grid_world
-                                visualizer_observer nepisodes""".split())
+                                nepisodes""".split())
 
 
 @extended_kwprop

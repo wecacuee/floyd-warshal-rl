@@ -112,8 +112,8 @@ def tab_algs_grid_worlds(
                 rng       = rng,
                 nepisodes = nepisodes,
                 play_episode  = partial(play_episode, renderer = Renderer.sometimes),
-                #observer  = NoVisMultiObserverXargs,
-                observer  = xargs(NoOPObserver),
+                observer  = NoVisMultiObserverXargs,
+                #observer  = xargs(NoOPObserver),
                 #observer = AgentVisHumanMultiObserverXargs,
                 confname = confname)
             return_vals_per_alg.append(ret)
