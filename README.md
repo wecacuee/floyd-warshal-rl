@@ -44,11 +44,10 @@
   Latency : 6.001897273610246;
   min latency 1.135483870967742;
   max latency 18.433734939759034
-
-
-
-
-
+*** TODO Compare sample efficiency of Q-learning vs FWRL
+*** TODO Q-learning with state and goal concatenated
+*** TODO HER
+*** TODO Lavaworld
 ** Experimental setup
 
 *** Problem setup
