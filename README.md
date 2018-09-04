@@ -47,6 +47,7 @@
 *** TODO Compare sample efficiency of Q-learning vs FWRL
 *** TODO Q-learning with state and goal concatenated
 *** TODO HER
+*** TODO Random mazes
 *** TODO Lavaworld
 ** Experimental setup
 
