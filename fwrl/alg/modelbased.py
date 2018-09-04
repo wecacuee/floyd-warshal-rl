@@ -5,6 +5,7 @@ import torch
 
 from .qlearning import egreedy_prob_exp
 from ..game.play import Alg
+from .shortest_path import shortest_path
 
 
 def safe_div(num, den):
@@ -56,6 +57,10 @@ def in_neighbors(dynamics_model, goal_state):
     state_to_goal_prob = dynamics_model[:, :, goal_state].max(dim=-1)[0]
     nbr_states = state_to_goal_prob.nonzero().squeeze(-1)
     return nbr_states
+
+
+def distances(rewards, state1, state2):
+    return rewards[state1, state2].item()
 
 
 def exp_action_value(dynamics_model, rewards, state, action, goal_state,
@@ -143,6 +148,19 @@ def exp_action_value(dynamics_model, rewards, state, action, goal_state,
         return max_cumrew
 
 
+def exp_act_val_from_shortest_path(dynamics_model, rewards, state, action,
+                                   goal_state,
+                                   value_fun = None,
+                                   visited = None,
+                                   value_fun_gen = default_value_fun,
+                                   value_fun_init = float('-inf'),
+                                   discount = 1):
+    return shortest_path(state, goal_state,
+                         neighbors = partial(out_neighbors, dynamics_model,
+                                             action = action),
+                         distances = partial(distances, rewards))
+
+
 class ModelBasedTabular(Alg):
     egreedy_prob_exp = egreedy_prob_exp
 
@@ -168,6 +186,7 @@ class ModelBasedTabular(Alg):
         self.hash_state = dict()
         self.dynamics_model = self._defaut_dynamics(0)
         self.rewards = self._default_rewards(0)
+        self.rewards_s2s = self._default_rewards_s2s(0)
 
     def _default_rewards(self, state_size):
         return torch.ones((state_size, self.action_space.n))
@@ -179,6 +198,17 @@ class ModelBasedTabular(Alg):
         self.rewards = newrews
         assert not torch.isnan(self.rewards).any()
         return self.rewards
+
+    def _default_rewards_s2s(self, state_size):
+        return torch.ones((state_size, self.action_space.n))
+
+    def _resize_rewards_s2s(self, new_size):
+        olds = self.rewards_s2s.shape[0]
+        newrews = self.rewards_s2s.new_ones((new_size, new_size))
+        newrews[:olds, :] = self.rewards_s2s
+        self.rewards_s2s = newrews
+        assert not torch.isnan(self.rewards_s2s).any()
+        return self.rewards_s2s
 
     def _defaut_dynamics(self, state_size):
         return torch.zeros((state_size, self.action_space.n, state_size))
@@ -215,8 +245,9 @@ class ModelBasedTabular(Alg):
 
     def _exploitation_policy(self, state, goal_state):
         act, exp_rew = max(
-            [(act, exp_action_value(self.dynamics_model, self.rewards, state,
-                                    act, goal_state))
+            [(act, exp_act_val_from_shortest_path(
+                self.dynamics_model, self.rewards_s2s, state,
+                act, goal_state))
              for act in range(self.action_space.n)],
             key = lambda x: x[1])
         return act, exp_rew
