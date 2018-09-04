@@ -100,7 +100,7 @@ def tab_algs_grid_worlds(
         probs      = xargsonce(
             AgentInGridWorlds_from_maze_names_repeat,
             "rng max_steps maze_name".split()),
-        alg_names = ["mb"
+        alg_names = ["mb",
                      "ql",
                      "fw"],
         gw_plays = [mb_grid_world_play,

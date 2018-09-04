@@ -168,7 +168,7 @@ def setup():
             '': ['*.txt', '*.png'],
         },
         setup_requires=["pytest-runner", "pytest-mypy"],
-        tests_requires=["pytest"],
+        test_requires=["pytest"],
     )
 
 setup()

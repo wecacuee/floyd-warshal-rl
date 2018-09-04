@@ -131,7 +131,7 @@ def exp_action_value(dynamics_model, rewards, state, action, goal_state,
     else:
         # There is a trade off in choosing expected reward vs max reward.
         nbr_states = out_neighbors(dynamics_model, state, action)
-        nbr_states_set = set(nbr_states.tolist()) - visited
+        nbr_states_set = set(nbr_states) - visited
         if not len(nbr_states_set):
             # we have run into a dead end
             # Do not prefer this one
@@ -302,8 +302,9 @@ class ModelBasedTabular(Alg):
         self.last_state = st
         if stm1 is None:
             return self.egreedy(self.policy(obs))
-        print("{stm1} -- {act} --> {st}, {rew}".format(stm1 = stm1, act = act,
-                                                       st = st, rew = rew))
+        # print("{stm1} -- {act} --> {st}, {rew}".format(stm1 = stm1, act =
+        #                                               act, st = st, rew =
+        #                                               rew))
 
         if self._hit_goal(obs, act, rew, done, info):
             self.goal_state = stm1
