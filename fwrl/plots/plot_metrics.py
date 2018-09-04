@@ -1,7 +1,4 @@
 # coding: utf-8
-if not __package__:
-    __package__ = "fwrl.plot"
-
 from fwrl.game.play import LogFileReader
 from fwrl.game.logging import NPJSONEncDec, LogFileConf, find_latest_file
 from fwrl.conf.default import PROJECT_NAME
@@ -80,12 +77,13 @@ def main(algos = "ql mb fw".split(),
          figdir = "/tmp"):
 
     for prob in probs:
-        plot_metrics({k : load_data_from_log_file(
-            str(log_file_from_template(gitrev, "-".join((k, prob)))))
-                      for k in algos},
-                     figname = figname[prob],
-                     figdir = figdir
-                     labels = labels)
+        plot_metrics(
+            {k: load_data_from_log_file(
+                str(log_file_from_template(gitrev, "-".join((k, prob)))))
+             for k in algos},
+            figname = figname[prob],
+            figdir = figdir,
+            labels = labels)
     plt.show()
 
 if __name__ == '__main__':
