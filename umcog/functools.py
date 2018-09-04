@@ -34,7 +34,7 @@ def _kwcompose(*fs,
                **kw):
     if len(fs) < 2:
         raise ValueError("Need at least one function to compose")
-    return reduce(apply_one, reversed(fs), **kw)
+    return reduce(apply_one, reversed(fs), kw)
 
 
 def kwcompose(*a, **kw):

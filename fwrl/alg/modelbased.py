@@ -12,6 +12,12 @@ def safe_div(num, den):
     return num / torch.where(den == 0, torch.ones_like(den), den)
 
 
+def dynamics_prob(dynamics_model, states, actions, next_states):
+    counts = dynamics_model[states, actions, next_states]
+    probs = safe_div(counts, counts.sum(dim = 1, keepdim = True)) + 1e-8
+    return probs
+
+
 def one_step_exp_reward(dynamics_model, rewards, st):
     """Returns one-step expected reward to state `st` from all states
 
@@ -50,7 +56,7 @@ def default_value_fun(rewards, init):
 def out_neighbors(dynamics_model, state, action):
     state_to_goal_prob = dynamics_model[state, action, :]
     nbr_states = state_to_goal_prob.nonzero().squeeze(-1)
-    return nbr_states
+    return nbr_states.tolist()
 
 
 def in_neighbors(dynamics_model, goal_state):
@@ -59,8 +65,13 @@ def in_neighbors(dynamics_model, goal_state):
     return nbr_states
 
 
-def distances(rewards, state1, state2):
-    return rewards[state1, state2].item()
+def distances(dynamics_model, rewards, state, nbr):
+    # nbr is guarateed to be the neighbor of state
+    state = torch.tensor(state).view(1, 1)
+    nbr = torch.tensor(nbr).view(1, 1)
+    prob = dynamics_prob(dynamics_model, state, slice(None), nbr)
+    prob = prob.squeeze()
+    return -(prob * rewards[state, :]).sum()
 
 
 def exp_action_value(dynamics_model, rewards, state, action, goal_state,
@@ -155,16 +166,19 @@ def exp_act_val_from_shortest_path(dynamics_model, rewards, state, action,
                                    value_fun_gen = default_value_fun,
                                    value_fun_init = float('-inf'),
                                    discount = 1):
-    return shortest_path(state, goal_state,
+    length, path = shortest_path(state, goal_state,
                          neighbors = partial(out_neighbors, dynamics_model,
                                              action = action),
-                         distances = partial(distances, rewards))
+                         distances = partial(distances, dynamics_model,
+                                             rewards))
+    return -length
 
 
 class ModelBasedTabular(Alg):
     egreedy_prob_exp = egreedy_prob_exp
 
     def __init__(self,
+                 qlearning,
                  action_space,
                  observation_space,
                  reward_range,
@@ -172,6 +186,7 @@ class ModelBasedTabular(Alg):
                  egreedy_prob = partial(
                      egreedy_prob_exp, nepisodes = 200),
                  discount = 1.00):  # step cost
+        self.qlearning = qlearning
         self.action_space = action_space
         self.observation_space = observation_space
         self.reward_range = reward_range
@@ -181,12 +196,12 @@ class ModelBasedTabular(Alg):
         self.reset()
 
     def reset(self):
+        self.qlearning.reset()
         self.step = 0
         self.episode_n = 0
         self.hash_state = dict()
         self.dynamics_model = self._defaut_dynamics(0)
         self.rewards = self._default_rewards(0)
-        self.rewards_s2s = self._default_rewards_s2s(0)
 
     def _default_rewards(self, state_size):
         return torch.ones((state_size, self.action_space.n))
@@ -199,23 +214,13 @@ class ModelBasedTabular(Alg):
         assert not torch.isnan(self.rewards).any()
         return self.rewards
 
-    def _default_rewards_s2s(self, state_size):
-        return torch.ones((state_size, self.action_space.n))
-
-    def _resize_rewards_s2s(self, new_size):
-        olds = self.rewards_s2s.shape[0]
-        newrews = self.rewards_s2s.new_ones((new_size, new_size))
-        newrews[:olds, :] = self.rewards_s2s
-        self.rewards_s2s = newrews
-        assert not torch.isnan(self.rewards_s2s).any()
-        return self.rewards_s2s
-
     def _defaut_dynamics(self, state_size):
         return torch.zeros((state_size, self.action_space.n, state_size))
 
     def _resize_dynamics(self, new_size):
         olds = self.dynamics_model.shape[0]
-        dynm = self.dynamics_model.new_zeros((new_size, self.action_space.n, new_size))
+        dynm = self.dynamics_model.new_zeros(
+            (new_size, self.action_space.n, new_size))
         dynm[:olds, :, :olds] = self.dynamics_model
         self.dynamics_model = dynm
         assert not torch.isnan(self.dynamics_model).any()
@@ -241,12 +246,12 @@ class ModelBasedTabular(Alg):
         return ret_act
 
     def _exploration_policy(self, state):
-        return self.action_space.sample()
+        return self.qlearning.q_policy(state)
 
     def _exploitation_policy(self, state, goal_state):
         act, exp_rew = max(
             [(act, exp_act_val_from_shortest_path(
-                self.dynamics_model, self.rewards_s2s, state,
+                self.dynamics_model, self.rewards, state,
                 act, goal_state))
              for act in range(self.action_space.n)],
             key = lambda x: x[1])
@@ -273,12 +278,14 @@ class ModelBasedTabular(Alg):
         return done or info.get("new_spawn", False)
 
     def episode_reset(self, episode_n):
+        self.qlearning.episode_reset(episode_n)
         self.step = 0
         self.episode_n = episode_n
         self.goal_state = None
         self.last_state = None
 
     def update(self, obs, act, rew, done, info):
+        self.qlearning.update(obs, act, rew, done, info)
         self.step += 1
         # Protocol defined by: game.play:play_episode()
         # - act = alg.policy(obs)

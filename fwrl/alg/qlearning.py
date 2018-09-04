@@ -96,12 +96,16 @@ class QLearningDiscrete(Alg):
         return state_idx
 
     def _value(self, state_s, act_s, state_g):
-        return (self.path_cost[state_s, act, state_g]
+        return (self.path_cost[state_s, act_s, state_g]
                 + self.action_value[state_g])
 
     def policy(self, obs):
         state = self._state_from_obs(obs)
         state_idx = self.hash_state[tuple(state)]
+        return self.q_policy(state_idx)
+
+    def q_policy(self, state_idx):
+        # directly compute policy from state_idx
         return q_policy(state_idx, self.action_value, self.rng)
 
     def _hit_goal(self, obs, act, rew, done, info):
