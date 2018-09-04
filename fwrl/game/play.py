@@ -72,6 +72,10 @@ class Alg(object):
     action_space = Space()
     observation_space = Space()
     reward_range = Space()
+
+    def set_goal_obs(self, goal_obs):
+        raise NotImplementedError()
+
     def update(self, obs, act, reward):
         raise NotImplementedError()
 
@@ -111,7 +115,7 @@ class NoOPObserver(object):
 
     def __getattr__(self, attr):
         if attr in """on_new_episode on_new_step on_play_end
-                      on_goal_hit on_new_goal_pose
+                      on_goal_hit on_new_goal_obs
                       on_play_start on_episode_end""".split():
             return lambda *args, **kwargs : 0
         else:
@@ -142,7 +146,7 @@ class LoggingObserver(NoOPObserver):
                   dict(msg=" +++++++++++++++++ New episode: {episode_n} +++++++++++++".format(
                       episode_n=episode_n)))
         self.info(self.new_episode_tag,
-                  dict(episode_n=episode_n, goal_pose=self.prob.goal_pose.tolist()))
+                  dict(episode_n=episode_n, goal_obs=self.prob.goal_obs.tolist()))
 
     def on_goal_hit(self, current_step):
         self.info(self.goal_hit_tag,
@@ -348,26 +352,6 @@ def play(alg,
     logger = logger_factory(__name__)
     if len(logging.root.handlers) >= 2 and hasattr(logging.root.handlers[1], "baseFilename"):
         logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
-    observer.set_prob(prob)
-    observer.set_alg(alg)
-    observer.on_play_start()
-    for n in range(nepisodes):
-        play_episode_(alg, prob, observer, n)
-
-    observer.on_play_end()
-    return observer
-
-def train(alg,
-          prob,
-          observer = NOOP_OBSERVER,
-          nepisodes = 1,
-          logger_factory = default_logger_factory,
-          play_episode_ = play_episode):
-    logger = logger_factory(__name__)
-    if len(logging.root.handlers) >= 2 \
-       and hasattr(logging.root.handlers[1], "baseFilename"):
-        logger.info("Logging to file : {}".format(
-            logging.root.handlers[1].baseFilename))
     observer.set_prob(prob)
     observer.set_alg(alg)
     observer.on_play_start()

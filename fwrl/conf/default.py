@@ -32,7 +32,7 @@ from ..game.play import (MultiObserver, play, LogFileReader, NoOPObserver,
                          Renderer, play_episode)
 from ..game.logging import NPJSONEncDec, LogFileConf
 from ..prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
-                                   DrawAgentGridWorldFromLogs, AgentVisObserver)
+                                     DrawAgentGridWorldFromLogs, AgentVisObserver)
 from ..game.vis_imgs_to_video import ImgsToVideoObs
 
 PROJECT_NAME = "floyd_warshall_rl"
@@ -50,6 +50,7 @@ AgentVisMultiObserver = functools.partial(
         "log_file_path log_file_dir windy_grid_world".split()),
     imgs_to_vid_observers = xargs(ImgsToVideoObs, ["log_file_dir", "nepisodes"]),
     # Needs: log_file_dir log_file_path windy_grid_world nepisodes
+    # metric_observer_keys
 )
 
 AgentVisMultiObserverNoAlgVis = functools.partial(

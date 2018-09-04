@@ -162,6 +162,10 @@ class QLearningDiscrete(Alg):
     def done(self):
         return False
 
+    def set_goal_obs(self, obs):
+        self.goal_state = self._state_idx_from_obs(obs, None, None)
+
+
 class QLearningVis(NoOPObserver):
     def __init__(self, log_file_dir,
                  update_interval = 1,

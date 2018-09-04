@@ -12,7 +12,10 @@ from ..alg.floyd_warshall_grid import FloydWarshallLogger
 from ..alg.modelbased import ModelBasedTabular
 from ..alg.common import egreedy_prob_exp
 from ..prob.windy_grid_world import AgentInGridWorld, AgentVisObserver
-from ..game.play  import Renderer, play_episode, NoOPObserver
+from ..game.play  import Renderer, NoOPObserver, MultiObserver
+from ..game.metrics import ComputeMetricsFromLogReplay
+from ..game.goal_conditioned import (
+    play_episode as play_goal_conditioned_episode)
 from .default import (grid_world_play,
                       ql_grid_world_play as _ql_grid_world_play,
                       fw_grid_world_play as _fw_grid_world_play,
@@ -64,6 +67,10 @@ mb_grid_world_play = partial(
                               """qlearning action_space observation_space
                               reward_range rng egreedy_prob""".split()))
 
+ComputeMetricsFromLogReplayNoLatency = partial(
+    ComputeMetricsFromLogReplay,
+    metric_observer_keys = """distineff_observer reward_observer""".split())
+
 AgentVisHumanMultiObserver = partial(
     AgentVisMultiObserver,
     agent_vis_observer = xargs(
@@ -79,6 +86,15 @@ AgentVisHumanMultiObserverXargs = xargs(
     logging_encdec log_file_dir
     windy_grid_world visualizer_observer nepisodes""".split())
 
+NoVisNoLatencyMultiObserver = xargs(
+    partial(MultiObserver,
+            metrics_observers = xargs(
+                ComputeMetricsFromLogReplayNoLatency,
+                """logging_observer log_file_reader prob""".split())),
+    """log_file_dir log_file_path prob
+    logger_factory logging_encdec windy_grid_world
+    nepisodes""".split())
+
 
 @extended_kwprop
 def tab_algs_grid_worlds(
@@ -87,24 +103,21 @@ def tab_algs_grid_worlds(
         max_steps = [
             40,
             40,
-            400,
-            400,
+            #400,
+            #400,
         ],
         maze_name = [
             "rect-maze",
             "i-maze",
-            "4-room-windy-world",
-            "4-room-grid-world",
+            #"4-room-windy-world",
+            #"4-room-grid-world",
         ],
         rng       = xargs(np.random.RandomState, ["seed"]),
         probs      = xargsonce(
             AgentInGridWorlds_from_maze_names_repeat,
             "rng max_steps maze_name".split()),
-        alg_names = ["mb",
-                     "ql",
-                     "fw"],
-        gw_plays = [mb_grid_world_play,
-                    _ql_grid_world_play,
+        alg_names = ["mb", "ql", "fw"],
+        gw_plays = [mb_grid_world_play, _ql_grid_world_play,
                     _fw_grid_world_play],
 ):
     return_vals = []
@@ -121,8 +134,8 @@ def tab_algs_grid_worlds(
                 max_steps = max_stps,
                 rng       = rng,
                 nepisodes = nepisodes,
-                #play_episode = partial(play_episode, renderer = Renderer.human),
-                observer  = NoVisMultiObserverXargs,
+                play_episode = play_goal_conditioned_episode,
+                observer  = NoVisNoLatencyMultiObserver,
                 #observer  = xargs(NoOPObserver),
                 #observer = AgentVisHumanMultiObserverXargs,
                 confname = confname)

@@ -107,16 +107,16 @@ class DistineffObs:
         self.distineff_per_episode     = []
         self.pose_history              = []
         self.goal_was_hit_on_last_step = False
-        self.goal_pose                 = None
+        self.goal_obs                 = None
 
-    def on_new_episode(self, episode_n=None, goal_pose=None, **kwargs):
+    def on_new_episode(self, episode_n=None, goal_obs=None, **kwargs):
         if len(self.distineff_per_episode):
             self.distineff_all_episodes.append(
                 self.distineff_per_episode)
         self.distineff_per_episode     = []
         self.pose_history              = []
         self.goal_was_hit_on_last_step = True
-        self.goal_pose                 = goal_pose
+        self.goal_obs                 = goal_obs
         self.episode_n                 = episode_n
         self.last_spawn_pose                = None
 
@@ -127,7 +127,8 @@ class DistineffObs:
             distance_traveled = np.sum(np.abs(diffs))
             shortest_distance, _ = self.prob.shortest_path(
                 start = self.last_spawn_pose,
-                end = self.goal_pose)
+                end = self.goal_obs)
+            assert shortest_distance != 0, "shortest distance cannot be zero"
             distineff = distance_traveled / shortest_distance
             if distineff < 1.0:
                 info("""[Error]: Distineff should not be less than one. Find out why? Entering debug mode""")
@@ -150,7 +151,7 @@ class DistineffObs:
     def on_new_step_with_pose_steps(self, obs=None, act=None,
                                     rew=None, pose=None, steps=None,
                                     episode_n=None, **kwargs):
-        if self.goal_was_hit_on_last_step and np.any(pose != self.goal_pose):
+        if self.goal_was_hit_on_last_step and np.any(pose != self.goal_obs):
             self.on_respawn(pose, steps)
 
         if self.last_spawn_pose is None:
@@ -176,9 +177,10 @@ class ComputeMetricsFromLogReplay:
     def __init__(self,
                  logging_observer = None,
                  log_file_reader = None,
-                 metrics_observers = prop(lambda s : [s.latency_observer,
-                                                      s.distineff_observer,
-                                                      s.reward_observer]),
+                 metric_observer_keys = """latency_quartiles distineff_observer
+                                           reward_observer """.split(),
+                 metrics_observers = prop(lambda s : [getattr(s, k)
+                                                      for k in s.metric_observer_keys]),
                  latency_observer = xargs(LatencyObserver, ["prob"]),
                  distineff_observer = xargs(DistineffObs, ["prob"]),
                  reward_observer    = xargs(RewardObserver, ["prob"])):

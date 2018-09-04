@@ -125,6 +125,11 @@ class FloydWarshallAlgDiscrete(object):
         else:
             raise AttributeError("No attribute {attr}".format(attr=attr))
 
+    def set_goal_obs(self, goal_obs):
+        self.qlearning.set_goal_obs(goal_obs)
+        self.goal_state = self._state_idx_from_obs(goal_obs, None, None)
+
+
 class FloydWarshallVisualizer(QLearningVis):
     def _path_cost_to_mat(self, path_cost, hash_state, goal_state_idx, grid_shape):
         big_mat = np.zeros(np.array(grid_shape) * 2)

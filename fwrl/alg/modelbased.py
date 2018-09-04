@@ -330,3 +330,7 @@ class ModelBasedTabular(Alg):
     def done(self):
         return False
 
+    def set_goal_obs(self, goal_obs):
+        self.qlearning.set_goal_obs(goal_obs)
+        self.goal_state = self._state_from_obs(goal_obs)
+

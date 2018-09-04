@@ -565,9 +565,9 @@ def random_goal_pose_gen(prob):
     return prob.grid_world.valid_random_pos()
 
 
-def random_start_pose_gen(prob, goal_pose):
-    start_pose = goal_pose
-    while np.all(start_pose == goal_pose):
+def random_start_pose_gen(prob, goal_obs):
+    start_pose = goal_obs
+    while np.all(start_pose == goal_obs):
         start_pose = prob.grid_world.valid_random_pos()
     return start_pose
 
@@ -762,7 +762,7 @@ class AgentInGridWorld(Problem):
         return self.pose, self._last_reward, self._done, info
 
     def _respawn(self):
-        self.pose          = self.start_pose_gen(self, self.goal_pose)
+        self.pose          = self.start_pose_gen(self, self.goal_obs)
 
     def reward(self):
         return self._last_reward
@@ -775,11 +775,11 @@ class AgentInGridWorld(Problem):
 
     def episode_reset(self, episode_n):
         self.steps         = 0
-        self.goal_pose     = self.goal_pose_gen(self)
+        self.goal_obs     = self.goal_pose_gen(self)
         self.grid_world_goal = self.grid_world.clone()
         self.grid_world_goal.set_maze_code(
-            self.goal_pose, self.grid_world.GOAL_CELL_CODE)
-        self.pose          = self.start_pose_gen(self, self.goal_pose)
+            self.goal_obs, self.grid_world.GOAL_CELL_CODE)
+        self.pose          = self.start_pose_gen(self, self.goal_obs)
         self.episode_n     = episode_n
         self._done         = False
         self._last_reward  = self.grid_world_goal.free_space_reward
@@ -789,7 +789,7 @@ class AgentInGridWorld(Problem):
 
     def shortest_path(self, start = None, end = None):
         start = np.asarray(start) if start is not None else self.pose
-        end = np.asarray(end) if end is not None else self.goal_pose
+        end = np.asarray(end) if end is not None else self.goal_obs
         return shortest_path(self.grid_world, start, end, self.action_space)
 
     def maze(self):
@@ -809,7 +809,7 @@ class DrawAgentGridWorldFromLogs:
                 assert self.new_episode_data["episode_n"] == data["episode_n"]
                 ax = windy_grid_world.render(None, cellsize)
                 # Render goal
-                render_goal(ax, np.asarray(self.new_episode_data["goal_pose"]), cellsize)
+                render_goal(ax, np.asarray(self.new_episode_data["goal_obs"]), cellsize)
 
                 # Render agent
                 render_agent(ax, np.asarray(data["pose"]), cellsize)
