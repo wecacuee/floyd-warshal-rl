@@ -170,7 +170,7 @@ class ComputeMetricsFromLogReplay:
     def __init__(self,
                  logging_observer = None,
                  log_file_reader = None,
-                 metric_observer_keys = """latency_quartiles distineff_observer
+                 metric_observer_keys = """latency_observer distineff_observer
                                            reward_observer """.split(),
                  metrics_observers = prop(lambda s: [
                      getattr(s, k) for k in s.metric_observer_keys]),

@@ -6,8 +6,8 @@ def call_alg_update(alg, *a):
     return alg.update(*a)
 
 
-def call_alg_policy(alg, *a):
-    return alg.policy(*a)
+def call_alg_policy(alg, obs, act, rew, done, info):
+    return alg.policy(obs)
 
 
 def play_episode(alg, prob, observer, episode_n,
@@ -20,7 +20,8 @@ def play_episode(alg, prob, observer, episode_n,
     # New goal location
     alg.set_goal_obs(prob.goal_obs)
     obs = prob.observation()
-    observer.on_new_episode(episode_n, obs)
+    observer.on_new_episode(episode_n=episode_n, obs=obs,
+                            goal_obs=prob.goal_obs)
     act = alg.update(obs, None, None, None, dict())
     reward = 0
     for step_n in range(max_steps):
@@ -35,7 +36,7 @@ def play_episode(alg, prob, observer, episode_n,
             break
 
     # Record end of episode
-    observer.on_episode_end(episode_n)
+    observer.on_episode_end(episode_n=episode_n)
     return reward
 
 train_episode = play_episode

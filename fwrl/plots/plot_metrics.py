@@ -1,4 +1,6 @@
 # coding: utf-8
+from functools import partial
+
 from fwrl.game.play import LogFileReader
 from fwrl.game.logging import NPJSONEncDec, log_file_from_template
 from fwrl.conf.default import PROJECT_NAME
@@ -72,8 +74,7 @@ def main(algos = "ql mb fw".split(),
          probs = ["4-room-grid-world", "4-room-windy-world"],
          figname = {"4-room-grid-world" : "metrics-grid-world.pdf",
                     "4-room-windy-world": "metrics-windy-world.pdf"},
-         labels = dict(mb = "MBRL", fw = "FWRL", ql = "QL"),
-         figdir = "/tmp"):
+         labels = dict(qlcat = "QLCAT", mb = "MBRL", fw = "FWRL", ql = "QL")):
 
     for prob in probs:
         log_files = {k: log_file_from_template(PROJECT_NAME, gitrev, "-".join((k, prob)))
@@ -92,6 +93,13 @@ def main(algos = "ql mb fw".split(),
                      labels = labels)
 
     plt.show()
+
+main_9be6f93 = partial(
+    main,
+    gitrev = "9be6f93",
+    algos = "qlcat ql mb fw".split(),
+    labels = dict(qlcat = "QLCAT", mb = "MBRL", fw = "FWRL", ql = "QL"))
+
 
 if __name__ == '__main__':
     main()

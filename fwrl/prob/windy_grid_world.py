@@ -573,6 +573,29 @@ def random_start_pose_gen(prob, goal_obs):
     return start_pose
 
 
+def wrap_step_respawn_on_goal_hit(prob, gw_pose, gw_rew, gw_done, info):
+    if gw_pose.tolist() is None or gw_done:
+        pose = prob.start_pose_gen(prob, prob.goal_obs)
+        info["new_spawn"] = True
+    else:
+        pose = gw_pose
+
+    done = prob.steps >= prob.max_steps
+    return pose, gw_rew, done, info
+
+
+def wrap_step_done(prob, gw_pose, gw_rew, gw_done, info,
+                   done_pose = np.array((0, 0))):
+    if gw_pose.tolist() is None or gw_done:
+        pose = done_pose
+        done = True
+        info["new_spawn"] = True
+    else:
+        done = False
+        pose = gw_pose
+    return pose, gw_rew, done, info
+
+
 def render_block(ax, pose, cellsize, color):
     pose_top_left = pose * cellsize
     draw.rectangle(ax, pose_top_left, pose_top_left + cellsize,
@@ -590,7 +613,7 @@ def render_goal(ax, pose, cellsize, color=draw.color_from_rgb((0, 255, 0))):
     render_block(ax, pose, cellsize, color)
     pose_top_left = pose * cellsize
     draw.putText(ax, "G", pose_top_left + cellsize * np.array([0.5, 0.6]),
-                 fontScale = cellsize / 8,
+                 fontScale = cellsize/ 2 ,
                  color=draw.color_from_rgb((255, 0, 255)))
     return ax
 
@@ -639,6 +662,7 @@ class AgentInGridWorld(Problem):
                  observation_space,
                  start_pose_gen = random_start_pose_gen,
                  goal_pose_gen = random_goal_pose_gen,
+                 wrap_step = wrap_step_respawn_on_goal_hit,
                  max_steps = 300,
                  wall_penality = 1.0,
                  no_render = False,
@@ -649,6 +673,7 @@ class AgentInGridWorld(Problem):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
         self.start_pose_gen    = start_pose_gen
+        self.wrap_step         = wrap_step
         self.action_space      = action_space #Act2DSpace(seed)
         self.reward_range      = reward_range
         self.max_steps         = max_steps
@@ -662,7 +687,7 @@ class AgentInGridWorld(Problem):
         #    lower_bound = np.array([0, 0]),
         #    upper_bound = np.array(grid_world.shape),
         #    seed        = seed)
-        self.episode_reset(0)
+        self.reset()
 
     @property
     def goal_reward(self):
@@ -752,23 +777,14 @@ class AgentInGridWorld(Problem):
         gw_pose, gw_rew, gw_done, info = self.grid_world_goal.step(
             self.pose, self.pose + self.action_space.tovector(act))
 
-        if gw_pose.tolist() is None or gw_done:
-            self._respawn()
-            info["new_spawn"] = True
-        else:
-            self.pose = gw_pose
-
         if info.get("hit_apple"):
             self.grid_world_goal.remove_apple(gw_pose)
 
+        self.pose, self._last_reward, self._done, info = self.wrap_step(
+            self, gw_pose, gw_rew, gw_done, info)
 
-        self._last_reward = gw_rew
         self.steps += 1
-        self._done = self.steps >= self.max_steps
         return self.pose, self._last_reward, self._done, info
-
-    def _respawn(self):
-        self.pose          = self.start_pose_gen(self, self.goal_obs)
 
     def reward(self):
         return self._last_reward
@@ -779,9 +795,18 @@ class AgentInGridWorld(Problem):
     def render(self, canvas = None, **kw):
         return self.renderer(self, canvas = canvas, **kw)
 
+    def reset(self):
+        self.steps         = 0
+        self.grid_world_goal = self.grid_world.clone()
+        self._done         = False
+        self._last_reward  = self.grid_world_goal.free_space_reward
+        self.episode_n = 0
+        self.goal_obs = None
+        self.pose = None
+
     def episode_reset(self, episode_n):
         self.steps         = 0
-        self.goal_obs     = self.goal_pose_gen(self)
+        self.goal_obs      = self.goal_pose_gen(self)
         self.grid_world_goal = self.grid_world.clone()
         self.grid_world_goal.set_maze_code(
             self.goal_obs, self.grid_world.GOAL_CELL_CODE)
@@ -789,6 +814,7 @@ class AgentInGridWorld(Problem):
         self.episode_n     = episode_n
         self._done         = False
         self._last_reward  = self.grid_world_goal.free_space_reward
+        self.episode_n = 0
 
     def done(self):
         return self._done

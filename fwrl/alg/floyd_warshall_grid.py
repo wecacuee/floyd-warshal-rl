@@ -64,6 +64,13 @@ class FloydWarshallAlgDiscrete(object):
             self.path_cost = self._resize_path_cost(state_idx + 1)
         return state_idx
 
+    def get_action_value_dct(self):
+        print("episode_n {}".format(self.qlearning.episode_n))
+        return dict(net_value = -self.path_cost[:, :, self.goal_state],
+                    hash_state = self.hash_state,
+                    episode_n = self.qlearning.episode_n,
+                    steps = self.qlearning.step)
+
     def update(self, obs, act, rew, done, info):
         stm1 = self.last_state_idx
         st = self._state_idx_from_obs(obs, act, rew)
@@ -111,8 +118,7 @@ class FloydWarshallAlgDiscrete(object):
             return - self.path_cost[state_idx, :, self.goal_state]
 
     def policy(self, obs):
-        state = self._state_from_obs(obs)
-        state_idx = self.hash_state[tuple(state)]
+        state_idx = self._state_idx_from_obs(obs, None, None)
         net_val = self.net_value(state_idx)
         #print("st:{} -> {}".format(state_idx, net_val))
         return rand_argmax(net_val, self.qlearning.rng)
@@ -120,7 +126,7 @@ class FloydWarshallAlgDiscrete(object):
     def __getattr__(self, attr):
         if attr in """action_space done action_value hash_state
                       grid_shape init_value egreedy
-                      _state_from_obs""".split():
+                      _state_from_obs """.split():
             return getattr(self.qlearning, attr)
         else:
             raise AttributeError("No attribute {attr}".format(attr=attr))

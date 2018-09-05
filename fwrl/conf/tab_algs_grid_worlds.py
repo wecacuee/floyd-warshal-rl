@@ -73,7 +73,7 @@ NoVisNoLatencyMultiObserver = xargs(
     logger_factory logging_encdec windy_grid_world
     nepisodes""".split())
 
-NoLatencyMultiObserver = xargs(
+NoLatencyMultiObserverXargs = xargs(
     partial(MultiObserver,
             observer_keys = """logging_observer metrics_observers
                                visualizer_observer""".split(),
@@ -93,7 +93,7 @@ ql_grid_world_play = partial(
 
 fw_grid_world_play = partial(
     _fw_grid_world_play,
-    observer            = NoLatencyMultiObserver,
+    observer            = NoLatencyMultiObserverXargs,
     visualizer_observer = xargs(
         FloydWarshallLogger,
         "logger image_file_fmt log_file_reader".split()))

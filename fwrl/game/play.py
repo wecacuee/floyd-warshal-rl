@@ -140,7 +140,7 @@ class LoggingObserver(NoOPObserver):
     def info(self, tag, dct):
         self._logger.debug("", extra=dict(tag=tag, data=dct))
 
-    def on_new_episode(self, episode_n, obs):
+    def on_new_episode(self, episode_n=None, obs=None, goal_obs=None):
         self.last_episode_n = episode_n
         self.info(self.human_tag,
                   dict(msg=" +++++++++++++++++ New episode: {episode_n} +++++++++++++".format(
@@ -323,7 +323,8 @@ def play_episode(alg, prob, observer, episode_n,
     prob.episode_reset(episode_n)
     alg.episode_reset(episode_n)
     obs = prob.observation()
-    observer.on_new_episode(episode_n, obs)
+    observer.on_new_episode(episode_n=episode_n, obs=obs,
+                            goal_obs=prob.goal_obs)
     act = alg.update(obs, None, None, None, dict())
     reward = 0
     for step_n in range(max_steps):

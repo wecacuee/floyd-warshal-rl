@@ -58,11 +58,13 @@ class QLearningDiscrete(Alg):
         self.reset()
 
     def episode_reset(self, episode_n):
+        self.episode_n = episode_n
         self.action_value[:]= self.init_value
         self.last_state_idx = None
         self.step = 0
 
     def reset(self):
+        self.episode_n = 0
         self.action_value    = self._default_action_value(0)
         self.hash_state     = dict()
         self.episode_reset(0)
@@ -115,6 +117,15 @@ class QLearningDiscrete(Alg):
 
     def is_terminal_step(self, obs, act, rew, done, info):
         return done or info.get("new_spawn", False)
+
+    def get_action_value_dct(self):
+        assert self.action_value.shape[0] == len(self.hash_state)
+        assert self.action_value.shape[0] == (max(self.hash_state.values())+1)
+        print("episode_n {}".format(self.episode_n))
+        return dict(net_value = self.action_value.copy(),
+                    hash_state = self.hash_state.copy(),
+                    episode_n = self.episode_n,
+                    steps = self.step)
 
     def update(self, obs, act, rew, done, info):
         self.step += 1
@@ -173,6 +184,7 @@ class QLearningConcatenated(QLearningDiscrete):
     def episode_reset(self, episode_n):
         # self.action_value[:]= self.init_value
         # Copy everything from QLearningDiscrete.episode_reset except self.action_value
+        self.episode_n = episode_n
         self.last_state_idx = None
         self.step = 0
 
