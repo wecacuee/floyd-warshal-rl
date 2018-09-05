@@ -79,7 +79,7 @@ qlcat_grid_world_test = partial(
 )
 
 
-def train_and_test(train_fun, test_fun, kw):
+def train_and_test(train_fun, test_fun, kw = dict()):
     obs = train_fun(**kw)
     test_fun(alg = obs.observers['logging_observer'].alg, **kw)
 
@@ -109,3 +109,12 @@ fw_grid_world_train_and_test = partial(
     train_and_test,
     train_fun = fw_grid_world_train,
     test_fun = fw_grid_world_test)
+
+
+def runall(fs):
+    return [f() for f in fs]
+
+
+grid_world_train_and_test_all = partial(
+    runall,
+    fs = [qlcat_grid_world_train_and_test, fw_grid_world_train_and_test])
