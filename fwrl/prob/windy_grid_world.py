@@ -192,7 +192,8 @@ class FreeSpaceHandler:
 
     def render(self, canvas, pose, grid_size, cell_code,
                color = draw.color_from_rgb((255,255,255)), thickness = -1):
-        render_block(canvas, pose, grid_size, color = color)
+        #render_block(canvas, pose, grid_size, color = color)
+        pass
 
 
 class WindHandler:
@@ -586,7 +587,12 @@ def render_agent(ax, pose, cellsize, color=draw.color_from_rgb((0, 0, 255))):
 
 
 def render_goal(ax, pose, cellsize, color=draw.color_from_rgb((0, 255, 0))):
-    return render_block(ax, pose, cellsize, color)
+    render_block(ax, pose, cellsize, color)
+    pose_top_left = pose * cellsize
+    draw.putText(ax, "G", pose_top_left + cellsize * np.array([0.5, 0.6]),
+                 fontScale = cellsize / 8,
+                 color=draw.color_from_rgb((255, 0, 255)))
+    return ax
 
 
 def render_agent_grid_world(canvas, grid_world, agent_pose,
@@ -809,7 +815,8 @@ class DrawAgentGridWorldFromLogs:
                 assert self.new_episode_data["episode_n"] == data["episode_n"]
                 ax = windy_grid_world.render(None, cellsize)
                 # Render goal
-                render_goal(ax, np.asarray(self.new_episode_data["goal_obs"]), cellsize)
+                render_goal(ax, np.asarray(self.new_episode_data["goal_obs"]),
+                            cellsize)
 
                 # Render agent
                 render_agent(ax, np.asarray(data["pose"]), cellsize)
@@ -817,9 +824,11 @@ class DrawAgentGridWorldFromLogs:
         else:
             print("Skipping Unknown tag {}".format(tag))
 
+
 class AgentVisObserver(NoOPObserver):
     show_ax_log = partial(show_ax_log, tag = "agent_grid_world")
     show_ax_human = partial(show_ax_human, tag = "agent_grid_world")
+
     @extended_kwprop
     def __init__(self,
                  windy_grid_world        = xargs(

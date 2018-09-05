@@ -1,6 +1,6 @@
 # coding: utf-8
 from fwrl.game.play import LogFileReader
-from fwrl.game.logging import NPJSONEncDec, LogFileConf, find_latest_file
+from fwrl.game.logging import NPJSONEncDec, log_file_from_template
 from fwrl.conf.default import PROJECT_NAME
 
 import matplotlib.pyplot as plt
@@ -67,16 +67,6 @@ def plot_rewards(algs_grid_world, figdir, figname, labels = dict()):
     return fig
 
 
-def log_file_from_template(gitrev, confname):
-    lfc = LogFileConf(project_name = PROJECT_NAME, confname = confname,
-                      gitrev = gitrev)
-    log_file_dir = lfc.log_file_dir
-    latest_log_file = find_latest_file(log_file_dir)
-    if not latest_log_file:
-        raise RuntimeError("Unable to find file in {}".format(log_file_dir))
-    return latest_log_file
-
-
 def main(algos = "ql mb fw".split(),
          gitrev = "91a0c46",
          probs = ["4-room-grid-world", "4-room-windy-world"],
@@ -86,7 +76,7 @@ def main(algos = "ql mb fw".split(),
          figdir = "/tmp"):
 
     for prob in probs:
-        log_files = {k: log_file_from_template(gitrev, "-".join((k, prob)))
+        log_files = {k: log_file_from_template(PROJECT_NAME, gitrev, "-".join((k, prob)))
                     for k in algos}
         log_data = {k: load_data_from_log_file(str(log_file))
                     for k, log_file in log_files.items()}

@@ -114,3 +114,13 @@ def LogFileConf(
         run_full_time_format  = "%Y%m%d-%H%M%S",
     ):
     return log_file_conf
+
+
+def log_file_from_template(project_name, gitrev, confname, return_conf=False):
+    lfc = LogFileConf(project_name = project_name, confname = confname,
+                      gitrev = gitrev)
+    log_file_dir = lfc.log_file_dir
+    latest_log_file = find_latest_file(log_file_dir)
+    if not latest_log_file:
+        raise RuntimeError("Unable to find file in {}".format(log_file_dir))
+    return (lfc, latest_log_file) if return_conf else latest_log_file

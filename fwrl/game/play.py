@@ -231,16 +231,18 @@ class MultiObserver(object):
     """
     @extended_kwprop
     def __init__(self,
-                 logging_observer  = xargs(LoggingObserver, ["logger_factory"]),
-                 log_file_reader     = xargs(LogFileReader, "log_file_path enc".split()),
+                 logging_observer  = xargs(LoggingObserver,
+                                           ["logger_factory"]),
+                 log_file_reader   = xargs(LogFileReader,
+                                           "log_file_path enc".split()),
                  enc               = prop(lambda s: s.logging_encdec),
                  metrics_observers = xargs(ComputeMetricsFromLogReplay,
                                            """logging_observer log_file_reader
                                            prob""".split()),
                  observer_keys     = "logging_observer metrics_observers".split(),
-                 observers         = prop(lambda s : OrderedDict([
+                 observers         = prop(lambda s: OrderedDict([
                      (k , getattr(s, k))
-                     for k in s.observer_keys ])),
+                     for k in s.observer_keys])),
     ):
         self.observers = observers
         for o in self.observers.values():

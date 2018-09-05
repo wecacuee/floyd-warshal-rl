@@ -232,7 +232,22 @@ class QLearningVis(NoOPObserver):
                 mat[state_pose] = np.max(action_value[state_idx, :])
         return mat
 
-    def _action_value_to_matrices(self, action_value, hash_state, grid_shape):
+    @classmethod
+    def action_value_to_value_mat(cls, action_value, hash_state, grid_shape,
+                                  act_n=4):
+        mat = np.zeros(np.array(grid_shape))
+        # if self.action_space.size != 4:
+        #     raise NotImplementedError("Do not know how to visualize")
+
+        for state_pose, state_idx in hash_state.items():
+            mat[state_pose] = max(
+                (action_value(state_idx, a) or mat[state_pose])
+                for a in range(act_n))
+        return mat
+
+
+    @classmethod
+    def action_value_to_matrices(cls, action_value, hash_state, grid_shape):
         big_mat = np.zeros(np.array(grid_shape) * 2)
         # if self.action_space.size != 4:
         #     raise NotImplementedError("Do not know how to visualize")
@@ -248,7 +263,7 @@ class QLearningVis(NoOPObserver):
 
     def visualize_action_value(self, ax, action_value, hash_state, grid_shape):
         cellsize = ax.get_xlim()[1] / grid_shape[1]
-        action_value_mat = self._action_value_to_matrices(
+        action_value_mat = self.action_value_to_matrices(
             action_value, hash_state, grid_shape)
         action_value_mat += np.min(action_value_mat[:])
         draw.matshow(ax, self.normalize_by_std(action_value_mat))
@@ -326,7 +341,8 @@ class QLearningVis(NoOPObserver):
                                            if action_value.size else 0),
                               hash_state, grid_shape)
 
-    def normalize_by_std(self, mat):
+    @classmethod
+    def normalize_by_std(cls, mat):
         if not np.any(mat):
             return mat
         median_mat = np.median(mat[:])
@@ -349,8 +365,6 @@ class QLearningVis(NoOPObserver):
         return ax
 
     def on_new_step(self, obs, rew, action, info):
-        if not np.any(self.goal_pose == self.prob.goal_pose):
-            self.on_new_goal_pose(self.prob.goal_pose)
 
         if self.update_steps % self.update_interval == 0:
             ax = self.on_new_goal_pose(self.goal_pose)
@@ -361,9 +375,9 @@ class QLearningVis(NoOPObserver):
                 ax)
         self.update_steps += 1
 
-    def on_new_episode(self, n):
+    def on_new_episode(self, n, obs=None, goal_pose=None):
         self.grid_shape = self.prob.grid_shape
-        self.goal_pose = self.prob.goal_pose
+        self.goal_pose = goal_pose
         self.nepisodes = n
         self.update_steps = 0
 
@@ -385,7 +399,6 @@ def visualize_action_value(action_value, hash_state, grid_shape, cellsize):
 class Renderer:
     human = partial(show_ax_human, tag = "action_value")
     log = partial(show_ax_log, tag = "action_value")
-
 
 
 def post_process_data_tag(data, tag, cellsize, renderer):
@@ -472,10 +485,11 @@ class QLearningLogger(NoOPObserver):
             obs = obs, rew = rew,
             act = action, pose = self.prob.pose, steps = self.prob.steps,
             grid_shape = self.prob.grid_shape,
-            goal_pose = self.prob.grid_shape)
+            goal_pose = self.prob.goal_obs)
 
-    def on_new_episode(self, episode_n):
+    def on_new_episode(self, episode_n, obs=None, goal_obs=None):
         self.episode_n = episode_n
+        self.goal_pose = goal_obs
 
     def on_play_end(self):
         logging.shutdown()

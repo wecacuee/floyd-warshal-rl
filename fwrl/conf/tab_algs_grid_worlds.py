@@ -4,8 +4,7 @@ import collections
 
 import numpy as np
 
-from umcog.confutils import (xargs, xargsonce, xargspartial, extended_kwprop,
-                             alias)
+from umcog.confutils import (xargs, xargsonce, xargspartial, extended_kwprop)
 from umcog.misc import kwmap, kwcompose
 
 from ..alg.qlearning import (Renderer as QRenderer, QLearningLogger,
@@ -44,46 +43,6 @@ AgentInGridWorlds_from_maze_names = partial(kwmap,
 AgentInGridWorlds_from_maze_names_repeat = kwcompose(
     AgentInGridWorlds_from_maze_names, scalars_repeat)
 
-ql_grid_world_play = partial(_ql_grid_world_play,
-                             visualizer_observer = xargs(
-                                 partial(QLearningLogger, renderer = QRenderer.human),
-                                 "logger image_file_fmt log_file_reader".split()))
-fw_grid_world_play = partial(_fw_grid_world_play,
-                             visualizer_observer = xargs(
-                                 partial(FloydWarshallLogger,
-                                         renderer = QRenderer.human),
-                                 "logger image_file_fmt log_file_reader".split()))
-
-qlcat_grid_world_play = partial(
-    grid_world_play,
-    project_name      = PROJECT_NAME,
-    confname          = "qlcat_grid_world_play",
-    egreedy_prob      = xargspartial(egreedy_prob_exp, dict(nepisodes="max_steps")),
-    action_space      = alias(["prob", "action_space"]),
-    observation_space = alias(["prob", "observation_space"]),
-    reward_range      = alias(["prob", "reward_range"]),
-    windy_grid_world  = alias(["prob", "grid_world"]),
-    play_episode      = play_goal_conditioned_episode,
-    alg               = xargs(QLearningConcatenated,
-                              """action_space observation_space
-                              reward_range rng egreedy_prob""".split()))
-
-mb_grid_world_play = partial(
-    grid_world_play,
-    project_name      = PROJECT_NAME,
-    confname          = "mb_grid_world_play",
-    egreedy_prob      = xargspartial(egreedy_prob_exp, dict(nepisodes="max_steps")),
-    action_space      = alias(["prob", "action_space"]),
-    observation_space = alias(["prob", "observation_space"]),
-    reward_range      = alias(["prob", "reward_range"]),
-    windy_grid_world  = alias(["prob", "grid_world"]),
-    qlearning         = xargs(QLearningDiscrete,
-                              """action_space observation_space
-                              reward_range rng egreedy_prob""".split()),
-    alg               = xargs(ModelBasedTabular,
-                              """qlearning action_space observation_space
-                              reward_range rng egreedy_prob""".split()))
-
 ComputeMetricsFromLogReplayNoLatency = partial(
     ComputeMetricsFromLogReplay,
     metric_observer_keys = """distineff_observer reward_observer""".split())
@@ -97,11 +56,13 @@ AgentVisHumanMultiObserver = partial(
                 AgentVisObserver.show_ax_human, ["image_file_fmt"])),
         "log_file_path log_file_dir windy_grid_world".split()))
 
+
 AgentVisHumanMultiObserverXargs = xargs(
     AgentVisHumanMultiObserver,
     """prob logger_factory log_file_path
     logging_encdec log_file_dir
     windy_grid_world visualizer_observer nepisodes""".split())
+
 
 NoVisNoLatencyMultiObserver = xargs(
     partial(MultiObserver,
@@ -111,6 +72,56 @@ NoVisNoLatencyMultiObserver = xargs(
     """log_file_dir log_file_path prob
     logger_factory logging_encdec windy_grid_world
     nepisodes""".split())
+
+NoLatencyMultiObserver = xargs(
+    partial(MultiObserver,
+            observer_keys = """logging_observer metrics_observers
+                               visualizer_observer""".split(),
+            metrics_observers = xargs(
+                ComputeMetricsFromLogReplayNoLatency,
+                """logging_observer log_file_reader prob""".split())),
+    """log_file_dir log_file_path prob
+    logger_factory logging_encdec windy_grid_world visualizer_observer
+    nepisodes""".split())
+
+ql_grid_world_play = partial(
+    _ql_grid_world_play,
+    observer          = NoVisNoLatencyMultiObserver,
+    visualizer_observer = xargs(
+        QLearningLogger,
+        "logger image_file_fmt log_file_reader".split()))
+
+fw_grid_world_play = partial(
+    _fw_grid_world_play,
+    observer            = NoLatencyMultiObserver,
+    visualizer_observer = xargs(
+        FloydWarshallLogger,
+        "logger image_file_fmt log_file_reader".split()))
+
+qlcat_grid_world_play = partial(
+    grid_world_play,
+    project_name      = PROJECT_NAME,
+    confname          = "qlcat_grid_world_play",
+    egreedy_prob      = xargspartial(egreedy_prob_exp,
+                                     dict(nepisodes="max_steps")),
+    play_episode      = play_goal_conditioned_episode,
+    observer          = NoVisNoLatencyMultiObserver,
+    alg               = xargs(QLearningConcatenated,
+                              """action_space observation_space
+                              reward_range rng egreedy_prob""".split()))
+
+mb_grid_world_play = partial(
+    grid_world_play,
+    project_name      = PROJECT_NAME,
+    confname          = "mb_grid_world_play",
+    egreedy_prob      = xargspartial(egreedy_prob_exp, dict(nepisodes="max_steps")),
+    observer          = NoVisNoLatencyMultiObserver,
+    qlearning         = xargs(QLearningDiscrete,
+                              """action_space observation_space
+                              reward_range rng egreedy_prob""".split()),
+    alg               = xargs(ModelBasedTabular,
+                              """qlearning action_space observation_space
+                              reward_range rng egreedy_prob""".split()))
 
 
 @extended_kwprop
@@ -152,7 +163,7 @@ def tab_algs_grid_worlds(
                 rng       = rng,
                 nepisodes = nepisodes,
                 play_episode = play_goal_conditioned_episode,
-                observer  = NoVisNoLatencyMultiObserver,
+                #observer  = NoVisNoLatencyMultiObserver,
                 #observer  = xargs(NoOPObserver),
                 #observer = AgentVisHumanMultiObserverXargs,
                 confname = confname)

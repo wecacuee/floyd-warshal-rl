@@ -316,7 +316,7 @@ class FloydWarshallLogger(NoOPObserver):
                            path_cost    = self.alg.path_cost,
                            net_value    = self.net_value(),
                            grid_shape   = self.prob.grid_shape,
-                           goal_pose    = self.prob.goal_pose,
+                           goal_pose    = self.prob.goal_obs,
                            hash_state   = self.alg.hash_state
                       ))
 
@@ -324,8 +324,9 @@ class FloydWarshallLogger(NoOPObserver):
         self.on_new_step_with_pose_steps(
             obs, rew, action, self.prob.pose, self.prob.steps)
 
-    def on_new_episode(self, episode_n):
+    def on_new_episode(self, episode_n, obs=None, goal_obs=None):
         self.episode_n = episode_n
+        self.goal_pose = goal_obs
 
     def on_play_end(self):
         logging.shutdown()

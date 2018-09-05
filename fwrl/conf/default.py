@@ -13,26 +13,27 @@ import functools
 import numpy as np
 
 from umcog.confutils import (extended_kwprop, KWProp as prop, xargs,
-                           xargmem, xargsonce, xargspartial,
-                           parse_args_update_kwasattr, KWAsAttr)
+                             xargmem, xargsonce, xargspartial,
+                             parse_args_update_kwasattr, KWAsAttr, alias)
 
 from umcog.memoize import LambdaMethodMemoizer, MEMOIZE_METHOD
 
 from ..alg.floyd_warshall_grid import (FloydWarshallAlgDiscrete,
-                                     FloydWarshallLogger)
+                                       FloydWarshallLogger)
 from ..alg.qlearning import QLearningDiscrete, QLearningLogger
 from ..alg.qlearning import (post_process_from_log_conf as
-                           ql_post_process_from_log_conf,
-                           post_process_generic, post_process_data_iter)
+                             ql_post_process_from_log_conf,
+                             post_process_generic, post_process_data_iter)
 
 from ..alg.floyd_warshall_grid import (post_process_from_log_conf as
-                                     fw_post_process_from_log_conf)
+                                       fw_post_process_from_log_conf)
 
 from ..game.play import (MultiObserver, play, LogFileReader, NoOPObserver,
                          Renderer, play_episode)
 from ..game.logging import NPJSONEncDec, LogFileConf
 from ..prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
-                                     DrawAgentGridWorldFromLogs, AgentVisObserver)
+                                     DrawAgentGridWorldFromLogs,
+                                     AgentVisObserver)
 from ..game.vis_imgs_to_video import ImgsToVideoObs
 
 PROJECT_NAME = "floyd_warshall_rl"
@@ -48,7 +49,8 @@ AgentVisMultiObserver = functools.partial(
     agent_vis_observer = xargs(
         AgentVisObserver,
         "log_file_path log_file_dir windy_grid_world".split()),
-    imgs_to_vid_observers = xargs(ImgsToVideoObs, ["log_file_dir", "nepisodes"]),
+    imgs_to_vid_observers = xargs(ImgsToVideoObs,
+                                  ["log_file_dir", "nepisodes"]),
     # Needs: log_file_dir log_file_path windy_grid_world nepisodes
     # metric_observer_keys
 )
@@ -94,6 +96,10 @@ def grid_world_play(
         shape          = (9,9),
         prob           = xargsonce(AgentInGridWorld.from_random_maze,
                                   "rng shape max_steps".split()),
+        action_space      = alias(["prob", "action_space"]),
+        observation_space = alias(["prob", "observation_space"]),
+        reward_range      = alias(["prob", "reward_range"]),
+        windy_grid_world  = alias(["prob", "grid_world"]),
         project_name   = PROJECT_NAME,
         maze_file_path = prop(lambda s:
                               s.maze_file_path_t.format(self=s)),
