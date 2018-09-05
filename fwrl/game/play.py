@@ -1,9 +1,8 @@
 from __future__ import absolute_import, division, print_function
 import os
 import logging
-import json
 from contextlib import closing
-from functools import lru_cache, partial, wraps
+from functools import wraps
 import numpy as np
 import operator
 from collections import OrderedDict
@@ -12,8 +11,8 @@ from enum import Enum
 from umcog import draw
 from umcog.memoize import MEMOIZE_METHOD
 from umcog.confutils import extended_kwprop, KWProp as prop, xargs
-from .logging import LogFileConf
 from .metrics import ComputeMetricsFromLogReplay
+
 
 class Space(object):
     def values():
@@ -40,6 +39,7 @@ class Problem(object):
     action_space = Space()
     observation_space = Space()
     reward_range = Space()
+
     def step(self, action):
         raise NotImplementedError()
 
@@ -66,7 +66,7 @@ class Problem(object):
 
     def done(self):
         raise NotImplementedError()
-    
+
 
 class Alg(object):
     action_space = Space()
@@ -140,13 +140,15 @@ class LoggingObserver(NoOPObserver):
     def info(self, tag, dct):
         self._logger.debug("", extra=dict(tag=tag, data=dct))
 
-    def on_new_episode(self, episode_n):
+    def on_new_episode(self, episode_n, obs):
         self.last_episode_n = episode_n
         self.info(self.human_tag,
                   dict(msg=" +++++++++++++++++ New episode: {episode_n} +++++++++++++".format(
                       episode_n=episode_n)))
         self.info(self.new_episode_tag,
-                  dict(episode_n=episode_n, goal_obs=self.prob.goal_obs.tolist()))
+                  dict(episode_n=episode_n,
+                       obs=obs.tolist(),
+                       goal_obs=self.prob.goal_obs.tolist()))
 
     def on_goal_hit(self, current_step):
         self.info(self.goal_hit_tag,
@@ -161,7 +163,8 @@ class LoggingObserver(NoOPObserver):
                            episode_n = int(self.last_episode_n),
                            steps     = int(prob_steps)))
 
-    def on_new_step_with_pose_steps(self, obs,rew, act, pose, steps, info, **kw):
+    def on_new_step_with_pose_steps(self, obs, rew, act, pose, steps, info,
+                                    **kw):
         if steps % self.log_interval == 0:
             self.info(self.new_step_tag,
                       dict(episode_n = int(self.last_episode_n),
@@ -310,14 +313,15 @@ class Renderer(Enum):
                                call_prob = 0.1)
     log = lambda prob: prob.render(mode = 'log')
 
+
 def play_episode(alg, prob, observer, episode_n,
                  renderer = Renderer.noop,
                  # 5 million steps in one episode is a lot
                  max_steps = 5000000):
     prob.episode_reset(episode_n)
     alg.episode_reset(episode_n)
-    observer.on_new_episode(episode_n)
     obs = prob.observation()
+    observer.on_new_episode(episode_n, obs)
     act = alg.update(obs, None, None, None, dict())
     reward = 0
     for step_n in range(max_steps):

@@ -43,7 +43,7 @@ class RewardObserver:
         self.rewards_all_episodes = []
         self.rewards = []
 
-    def on_new_episode(self, episode_n=None, **kwargs):
+    def on_new_episode(self, episode_n=None, obs=None, **kwargs):
         if len(self.rewards):
             self.rewards_all_episodes.append(self.rewards)
         self.rewards = []
@@ -62,6 +62,7 @@ class RewardObserver:
         info("Reward quartiles: "
              + text_quartile(quartiles(total_rewards_all_episodes)))
 
+
 class LatencyObserver:
     def __init__(self, prob):
         self.prob = prob
@@ -70,11 +71,11 @@ class LatencyObserver:
         self.obs_history                   = []
         super().__init__()
 
-    def on_new_episode(self, episode_n=None, **kwargs):
+    def on_new_episode(self, episode_n=None, obs=None, **kwargs):
         if self.times_to_goal_hit:
             self.times_to_goal_hit_all_episodes.append(self.times_to_goal_hit)
         self.times_to_goal_hit = []
-        self.obs_history = []
+        self.obs_history = [obs]
 
     def on_goal_hit(self, steps=None, **kwargs):
         time_to_hit = len(self.obs_history)
@@ -109,53 +110,43 @@ class DistineffObs:
         self.goal_was_hit_on_last_step = False
         self.goal_obs                 = None
 
-    def on_new_episode(self, episode_n=None, goal_obs=None, **kwargs):
+    def on_new_episode(self, episode_n=None, goal_obs=None, obs=None, **kwargs):
         if len(self.distineff_per_episode):
             self.distineff_all_episodes.append(
                 self.distineff_per_episode)
         self.distineff_per_episode     = []
-        self.pose_history              = []
+        self.pose_history              = [obs]
         self.goal_was_hit_on_last_step = True
         self.goal_obs                 = goal_obs
         self.episode_n                 = episode_n
-        self.last_spawn_pose                = None
 
-    def on_respawn(self, pose=None, steps=None):
+    def on_respawn(self):
         self.goal_was_hit_on_last_step = False
-        if len(self.pose_history):
-            diffs = np.diff(np.array(self.pose_history), axis=0)
-            distance_traveled = np.sum(np.abs(diffs))
-            shortest_distance, _ = self.prob.shortest_path(
-                start = self.last_spawn_pose,
-                end = self.goal_obs)
-            assert shortest_distance != 0, "shortest distance cannot be zero"
-            distineff = distance_traveled / shortest_distance
-            if distineff < 1.0:
-                info("""[Error]: Distineff should not be less than one. Find out why? Entering debug mode""")
-                import pdb; pdb.set_trace()
-            self.distineff_per_episode.append(distineff)
+        diffs = np.diff(np.array(self.pose_history), axis=0)
+        distance_traveled = np.sum(np.abs(diffs))
+        shortest_distance, _ = self.prob.shortest_path(
+            start = self.pose_history[0],
+            end = self.goal_obs)
+        assert shortest_distance != 0, "shortest distance cannot be zero"
+        distineff = distance_traveled / shortest_distance
+        assert distineff >= 1.0, """[Error]: Distineff should not be less than one. Find out why? Entering debug mode"""
+        self.distineff_per_episode.append(distineff)
 
         self.pose_history = []
-        self.last_spawn_pose = None
 
     def on_goal_hit(self, **kwargs):
-        self.goal_was_hit_on_last_step = True
+        self.on_respawn()
 
     def on_new_spawn(self, pose, episode_n, steps):
         # reset the start step but append nothing to time_to_hit
         # Do not reset the pose history as a penalty to not being able to hit
         # goal while getting respawned.
         #self.pose_history = []
-        self.last_spawn_pose = pose
+        pass
 
     def on_new_step_with_pose_steps(self, obs=None, act=None,
                                     rew=None, pose=None, steps=None,
                                     episode_n=None, **kwargs):
-        if self.goal_was_hit_on_last_step and np.any(pose != self.goal_obs):
-            self.on_respawn(pose, steps)
-
-        if self.last_spawn_pose is None:
-            self.last_spawn_pose = pose
         self.pose_history.append(np.array(pose))
 
     def on_new_step(self, obs, act, rew, info):
@@ -163,14 +154,16 @@ class DistineffObs:
         self.on_new_step_with_pose_steps(self, obs, act, rew, self.prob.pose)
 
     def on_play_end(self):
-        self.on_new_episode(len(self.distineff_all_episodes)+1)
+        self.on_new_episode(len(self.distineff_all_episodes) + 1)
         print(self.distineff_all_episodes)
         alldistineff = sum(map(lambda l: l[1:],
                                self.distineff_all_episodes), [])
-        info("", extra=dict(tag = "distineff_all_episodes",
-                            data = dict(distineff_all_episodes = alldistineff)))
-        info("Distance inefficiency quartiles: "
-                 + text_quartile(quartiles(alldistineff)))
+        info("", extra=dict(
+            tag = "distineff_all_episodes",
+            data = dict(distineff_all_episodes = alldistineff)))
+        info("Distance inefficiency quartiles: " +
+             text_quartile(quartiles(alldistineff)))
+
 
 class ComputeMetricsFromLogReplay:
     @extended_kwprop
@@ -179,8 +172,8 @@ class ComputeMetricsFromLogReplay:
                  log_file_reader = None,
                  metric_observer_keys = """latency_quartiles distineff_observer
                                            reward_observer """.split(),
-                 metrics_observers = prop(lambda s : [getattr(s, k)
-                                                      for k in s.metric_observer_keys]),
+                 metrics_observers = prop(lambda s: [
+                     getattr(s, k) for k in s.metric_observer_keys]),
                  latency_observer = xargs(LatencyObserver, ["prob"]),
                  distineff_observer = xargs(DistineffObs, ["prob"]),
                  reward_observer    = xargs(RewardObserver, ["prob"])):
@@ -190,9 +183,10 @@ class ComputeMetricsFromLogReplay:
         super().__init__()
 
     def __getattr__(self, attr):
-        return lambda *args, **kwargs : 0
+        return lambda *args, **kwargs: 0
 
     def on_play_end(self):
         self.logging_observer.replay_observers_from_logs(
             self.metrics_observers, self.log_file_reader)
+
 
