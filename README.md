@@ -46,6 +46,7 @@
   max latency 18.433734939759034
 *** TODO Compare sample efficiency of Q-learning vs FWRL
 *** TODO Q-learning with state and goal concatenated
+*** TODO visualize value/policy in each case
 *** TODO HER
 *** TODO Random mazes
 *** TODO Lavaworld
