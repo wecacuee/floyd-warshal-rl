@@ -79,9 +79,9 @@ qlcat_grid_world_test = partial(
 )
 
 
-def train_and_test(train_fun, test_fun):
-    obs = train_fun()
-    test_fun(alg = obs.observers['logging_observer'].alg)
+def train_and_test(train_fun, test_fun, kw):
+    obs = train_fun(**kw)
+    test_fun(alg = obs.observers['logging_observer'].alg, **kw)
 
 qlcat_grid_world_train_and_test = partial(
     train_and_test,
@@ -102,6 +102,7 @@ fw_grid_world_test = partial(
     qlearning = xargsonce(QLearningConcatenated,
                           """action_space observation_space
                           reward_range rng egreedy_prob""".split()),
+    algname = "fw",
     alg  = xargsonce(FloydWarshallAlgDiscrete, ["qlearning"]))
 
 fw_grid_world_train_and_test = partial(

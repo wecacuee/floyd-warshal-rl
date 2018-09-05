@@ -600,8 +600,9 @@ def render_block(ax, pose, cellsize, color):
     pose_top_left = pose * cellsize
     draw.rectangle(ax, pose_top_left, pose_top_left + cellsize,
                    color=color, thickness = -1)
+    border_color = (np.asarray(color) * 0.1).tolist()
     draw.rectangle(ax, pose_top_left, pose_top_left + cellsize,
-                   color=draw.color_from_rgb((0,0,0)), thickness = 1)
+                   color=border_color, thickness = 4)
     return ax
 
 
