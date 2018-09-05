@@ -1,16 +1,19 @@
-if not __package__: __package__ = "fwrl.conf"
 from functools import partial
 from itertools import repeat
 import collections
 
 import numpy as np
 
-from umcog.confutils import xargs, xargsonce, xargspartial, extended_kwprop, alias
+from umcog.confutils import (xargs, xargsonce, xargspartial, extended_kwprop,
+                             alias)
 from umcog.misc import kwmap, kwcompose
-from ..alg.qlearning import Renderer as QRenderer, QLearningLogger, QLearningDiscrete
+
+from ..alg.qlearning import (Renderer as QRenderer, QLearningLogger,
+                             QLearningDiscrete)
 from ..alg.floyd_warshall_grid import FloydWarshallLogger
 from ..alg.modelbased import ModelBasedTabular
 from ..alg.common import egreedy_prob_exp
+from ..alg.qlearning import QLearningConcatenated
 from ..prob.windy_grid_world import AgentInGridWorld, AgentVisObserver
 from ..game.play  import Renderer, NoOPObserver, MultiObserver
 from ..game.metrics import ComputeMetricsFromLogReplay
@@ -30,7 +33,7 @@ def isiterable(e):
 
 
 def scalars_repeat(**kw):
-    return {k : (v if isiterable(v) else repeat(v))
+    return {k: (v if isiterable(v) else repeat(v))
             for k, v in kw.items()}
 
 
@@ -50,6 +53,20 @@ fw_grid_world_play = partial(_fw_grid_world_play,
                                  partial(FloydWarshallLogger,
                                          renderer = QRenderer.human),
                                  "logger image_file_fmt log_file_reader".split()))
+
+qlcat_grid_world_play = partial(
+    grid_world_play,
+    project_name      = PROJECT_NAME,
+    confname          = "qlcat_grid_world_play",
+    egreedy_prob      = xargspartial(egreedy_prob_exp, dict(nepisodes="max_steps")),
+    action_space      = alias(["prob", "action_space"]),
+    observation_space = alias(["prob", "observation_space"]),
+    reward_range      = alias(["prob", "reward_range"]),
+    windy_grid_world  = alias(["prob", "grid_world"]),
+    play_episode      = play_goal_conditioned_episode,
+    alg               = xargs(QLearningConcatenated,
+                              """action_space observation_space
+                              reward_range rng egreedy_prob""".split()))
 
 mb_grid_world_play = partial(
     grid_world_play,
@@ -99,26 +116,26 @@ NoVisNoLatencyMultiObserver = xargs(
 @extended_kwprop
 def tab_algs_grid_worlds(
         seed      = 0,
-        nepisodes = 20,
+        nepisodes = 50,
         max_steps = [
             40,
             40,
-            #400,
-            #400,
+            400,
+            400,
         ],
         maze_name = [
             "rect-maze",
             "i-maze",
-            #"4-room-windy-world",
-            #"4-room-grid-world",
+            "4-room-windy-world",
+            "4-room-grid-world",
         ],
         rng       = xargs(np.random.RandomState, ["seed"]),
         probs      = xargsonce(
             AgentInGridWorlds_from_maze_names_repeat,
             "rng max_steps maze_name".split()),
-        alg_names = ["mb", "ql", "fw"],
-        gw_plays = [mb_grid_world_play, _ql_grid_world_play,
-                    _fw_grid_world_play],
+        alg_names = ["qlcat", "mb", "ql", "fw"],
+        gw_plays = [qlcat_grid_world_play, mb_grid_world_play,
+                    _ql_grid_world_play, _fw_grid_world_play],
 ):
     return_vals = []
     prob_args = list(zip(maze_name, probs, max_steps))

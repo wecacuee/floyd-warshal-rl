@@ -100,8 +100,7 @@ class QLearningDiscrete(Alg):
                 + self.action_value[state_g])
 
     def policy(self, obs):
-        state = self._state_from_obs(obs)
-        state_idx = self.hash_state[tuple(state)]
+        state_idx = self._state_idx_from_obs(obs, None, None)
         return self.q_policy(state_idx)
 
     def q_policy(self, state_idx):
@@ -164,6 +163,36 @@ class QLearningDiscrete(Alg):
 
     def set_goal_obs(self, obs):
         self.goal_state = self._state_idx_from_obs(obs, None, None)
+
+
+class QLearningConcatenated(QLearningDiscrete):
+    def reset(self):
+        super(QLearningConcatenated, self).reset()
+        self.goal_obs = None
+
+    def episode_reset(self, episode_n):
+        # self.action_value[:]= self.init_value
+        # Copy everything from QLearningDiscrete.episode_reset except self.action_value
+        self.last_state_idx = None
+        self.step = 0
+
+    def set_goal_obs(self, obs):
+        self.goal_obs = obs
+        self.goal_state = self._state_idx_from_obs(obs, None, None)
+
+    def _state_idx_from_obs(self, obs, act, rew):
+        if self.goal_obs is None:
+            raise RuntimeError("set_goal_obs")
+        state = tuple(self._state_from_obs(obs))
+        goal_state = tuple(self._state_from_obs(self.goal_obs))
+        if (state, goal_state) not in self.hash_state:
+            # A new state has been visited
+            state_idx = self.hash_state[(state, goal_state)] = max(
+                self.hash_state.values(), default=-1) + 1
+            self.action_value = self._resize_action_value(state_idx + 1)
+        else:
+            state_idx = self.hash_state[(state, goal_state)]
+        return state_idx
 
 
 class QLearningVis(NoOPObserver):
