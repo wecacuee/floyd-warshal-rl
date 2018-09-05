@@ -32,7 +32,7 @@
 *** DONE Fix the respawning on hitting the goal.
 *** DONE Randomize the goal on new episode
   py/prob/windy_grid_world.py
-*** TODO Evalute in comparison to Q-learning with fresh explorer and finder, Q-learning with goal state.
+*** Evalute in comparison to Q-learning with fresh explorer and finder, Q-learning with goal state.
 *** Implement latency 1: > 1
   in terms of latency and distance inefficiency.
   Floyd rewards: 773.0 = sum([35.0, 33.0, 145.0, 11.0, 91.0, 123.0, 54.0, 237.0, 44.0])
@@ -44,7 +44,10 @@
   Latency : 6.001897273610246;
   min latency 1.135483870967742;
   max latency 18.433734939759034
-*** TODO Compare sample efficiency of Q-learning vs FWRL
+*** DONE Run experiments in goal-conditioned mode
+    CLOSED: [2018-09-04 Tue 22:40]
+*** DONE Compare sample efficiency of Q-learning vs FWRL
+    CLOSED: [2018-09-04 Tue 22:41]
 *** TODO Q-learning with state and goal concatenated
 *** TODO visualize value/policy in each case
 *** TODO HER

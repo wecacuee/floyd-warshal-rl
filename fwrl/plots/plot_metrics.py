@@ -90,7 +90,8 @@ def main(algos = "ql mb fw".split(),
                     for k in algos}
         log_data = {k: load_data_from_log_file(str(log_file))
                     for k, log_file in log_files.items()}
-        log_dir = list(log_files.values())[0].parent
+        log_dir = log_files[algos[0]].parent
+        print("Saving plots in {}".format(log_dir))
         plot_metrics(log_data,
                      figname = figname[prob],
                      figdir = log_dir,
