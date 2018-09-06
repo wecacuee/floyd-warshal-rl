@@ -17,7 +17,8 @@ from PIL import Image
 
 from umcog import draw
 from umcog.memoize import MEMOIZE_METHOD, MethodMemoizer
-from umcog.confutils import (extended_kwprop, KWProp as prop, xargs, xargspartial, xargmem)
+from umcog.confutils import (extended_kwprop, KWProp as prop, xargs,
+                             xargspartial, xargmem)
 from umcog.misc import prod
 
 from ..game.play import (Space, Problem, NoOPObserver,
@@ -190,10 +191,12 @@ class FreeSpaceHandler:
              cell_code, potential_cell_code):
         return potential_next_pose, potential_reward + self.free_space_reward, potential_done, info
 
-    def render(self, canvas, pose, grid_size, cell_code,
+    def render(self, canvas, pose, cellsize, cell_code,
                color = draw.color_from_rgb((255,255,255)), thickness = -1):
-        #render_block(canvas, pose, grid_size, color = color)
-        pass
+        pose_top_left = pose * cellsize
+        border_color = (255 - np.asarray(color)).tolist()
+        draw.rectangle(canvas, pose_top_left, pose_top_left + cellsize,
+                       color=border_color, thickness = 2)
 
 
 class WindHandler:
@@ -602,20 +605,28 @@ def render_block(ax, pose, cellsize, color):
                    color=color, thickness = -1)
     border_color = (np.asarray(color) * 0.1).tolist()
     draw.rectangle(ax, pose_top_left, pose_top_left + cellsize,
-                   color=border_color, thickness = 4)
+                   color=border_color, thickness = 2)
     return ax
 
 
 def render_agent(ax, pose, cellsize, color=draw.color_from_rgb((0, 0, 255))):
-    return render_block(ax, pose, cellsize, color)
+    render_block(ax, pose, cellsize, color)
+    pose_top_left = pose * cellsize
+    text_color = (255 - np.asarray(color)).tolist()
+    draw.putText(ax, "S", pose_top_left + cellsize * np.array([0.5, 0.6]),
+                 fontScale = cellsize / 2 ,
+                 color=text_color)
+    return ax
 
 
 def render_goal(ax, pose, cellsize, color=draw.color_from_rgb((0, 255, 0))):
     render_block(ax, pose, cellsize, color)
     pose_top_left = pose * cellsize
+
+    text_color = (255 - np.asarray(color)).tolist()
     draw.putText(ax, "G", pose_top_left + cellsize * np.array([0.5, 0.6]),
-                 fontScale = cellsize/ 2 ,
-                 color=draw.color_from_rgb((255, 0, 255)))
+                 fontScale = cellsize / 2 ,
+                 color=text_color)
     return ax
 
 

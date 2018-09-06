@@ -22,6 +22,7 @@ class NPJSONEncDec(object):
             object_hook = ChainedEncoders(
                 encoders = [NumpyEncoder(), DictEncoder()]).loads_hook)
 
+
 class JSONLoggingFormatter(logging.Formatter):
     def __init__(self, enc, sep = "\t", **kwargs) :
         self.enc  = enc
@@ -111,7 +112,7 @@ def LogFileConf(
         exp_name_template     = "{self.run_month}_{self.gitrev}_{self.confname}",
         log_file_dir_template = "{self.data_dir}/{self.project_name}/{self.exp_name}",
         log_file_template     = "{self.log_file_dir}/{self.run_time}.log",
-        run_full_time_format  = "%Y%m%d-%H%M%S",
+        run_full_time_format  = "%Y%m%d-%H%M%S.%f",
     ):
     return log_file_conf
 

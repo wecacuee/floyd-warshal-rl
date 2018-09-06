@@ -46,10 +46,10 @@ qlcat_grid_world_train = partial(
                                    "start_pose_gen", "wrap_step"]),
     goal_pose_gen     = KWProp(
         lambda s: partial(fixed_goal_pose_gen,
-                          iter([(3, 3), (3, 1)]))),
+                          iter([(2, 2), (2, 0)]))),
     start_pose_gen     = KWProp(
         lambda s: partial(fixed_start_pose_gen,
-                          iter([(1, 1), (1, 3)]))),
+                          iter([(0, 0), (0, 2)]))),
     wrap_step         = wrap_step_done,
     project_name      = PROJECT_NAME,
     algname           = "qlcat",
@@ -71,10 +71,10 @@ qlcat_grid_world_test = partial(
     play_episode      = partial(test_episode, max_steps = 40),
     goal_pose_gen     = KWProp(
         lambda s: partial(fixed_goal_pose_gen,
-                          iter([(3, 3)]))),
+                          iter([(2, 2)]))),
     start_pose_gen     = KWProp(
         lambda s: partial(fixed_start_pose_gen,
-                          iter([(1, 3)]))),
+                          iter([(0, 2)]))),
 
 )
 
@@ -118,3 +118,5 @@ def runall(fs):
 grid_world_train_and_test_all = partial(
     runall,
     fs = [qlcat_grid_world_train_and_test, fw_grid_world_train_and_test])
+
+main = grid_world_train_and_test_all
