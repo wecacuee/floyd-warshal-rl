@@ -8,7 +8,6 @@ from functools import lru_cache
 from argparse import Namespace
 
 import setuptools
-import sys
 import logging
 LOG = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ def CONF():
     return Namespace(project_name="floyd_warshall_rl",
                      mid_dir="/z/home/dhiman/mid/",
                      project_mid_dir="{mid_dir}/{project_name}",
-                     mode    = "devel", # not implemented
+                     mode    = "devel",  # not implemented
                      builddir="build",
                      install_requires=[
                          "numpy>=1.14.0",

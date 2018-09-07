@@ -57,11 +57,13 @@ class QLearningDiscrete(Alg):
         self.discount             = discount
         self.reset()
 
-    def episode_reset(self, episode_n):
+    def episode_reset(self, episode_n, episode_info):
         self.episode_n = episode_n
         self.action_value[:]= self.init_value
         self.last_state_idx = None
         self.step = 0
+        if "goal_obs" in episode_info:
+            self.set_goal_obs(episode_info["goal_obs"])
 
     def reset(self):
         self.episode_n = 0
@@ -109,14 +111,14 @@ class QLearningDiscrete(Alg):
         # directly compute policy from state_idx
         return q_policy(state_idx, self.action_value, self.rng)
 
-    def _hit_goal(self, obs, act, rew, done, info):
-        return info.get("hit_goal", False)
+    def _hit_goal(self, obs, act, rew, done):
+        return rew >= self.goal_reward
 
     def on_hit_goal(self, obs, act, rew):
         self.last_state_idx = None
 
-    def is_terminal_step(self, obs, act, rew, done, info):
-        return done or info.get("new_spawn", False)
+    def is_terminal_step(self, obs, act, rew, done):
+        return done
 
     def get_action_value_dct(self):
         assert self.action_value.shape[0] == len(self.hash_state)
@@ -145,11 +147,11 @@ class QLearningDiscrete(Alg):
         if stm1 is None:
             return self.egreedy(self.policy(obs))
 
-        if self._hit_goal(obs, act, rew, done, info):
+        if self._hit_goal(obs, act, rew, done):
             self.on_hit_goal(obs, act, rew)
 
         # terminal step
-        ts = self.is_terminal_step(obs, act, rew, done, info)
+        ts = self.is_terminal_step(obs, act, rew, done)
 
         # Abbreviate the variables
         qm = self.action_value_momentum

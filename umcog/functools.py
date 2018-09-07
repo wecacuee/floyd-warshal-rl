@@ -2,10 +2,10 @@ import operator
 from functools import update_wrapper, partial, reduce, wraps
 from itertools import tee, islice
 from typing import (TypeVar, Callable, Iterable, Mapping, Any, Tuple, Union,
-                    Sequence, Iterator, MutableMapping)
+                    Sequence, Iterator, MutableMapping, Hashable, Optional,
+                    List)
 from numbers import Number
 
-T = TypeVar('T')
 
 def slidingiter(iterable : Iterable, stride : int, size : int) -> Iterable[Tuple]:
     """
@@ -72,6 +72,7 @@ def prod(seq : Iterable[Number]) -> Number:
     return reduce(operator.mul, seq, first)
 
 
+T = TypeVar('T')
 def identity(xyz: T) -> T:
     """
     >>> identity(1)
@@ -80,7 +81,8 @@ def identity(xyz: T) -> T:
     return xyz
 
 
-def const(xyz: T) -> Callable[[], T]:
+T2 = TypeVar('T2')
+def const(xyz: T2) -> Callable[[], T2]:
     """
     >>> one = const(1)
     >>> one()
@@ -94,7 +96,8 @@ def list_reducer(acc, x):
     return acc
 
 
-def head(xs: Union[Iterable[T], Iterator[T]]) -> T:
+T3 = TypeVar('T3')
+def head(xs: Union[Iterable[T3], Iterator[T3]]) -> T3:
     """
     >>> head([1, 2, 3])
     1
@@ -124,7 +127,8 @@ def getitem(xs: Sequence, n):
 second = partial(getitem, n = 1)
 
 
-def tail(xs: Union[Iterable[T], Iterator[T]]) -> Iterable[T]:
+T4 = TypeVar('T4')
+def tail(xs: Union[Iterable[T4], Iterator[T4]]) -> Iterable[T4]:
     """
     >>> list(tail([1, 2, 3]))
     [2, 3]
@@ -139,18 +143,18 @@ def tail(xs: Union[Iterable[T], Iterator[T]]) -> Iterable[T]:
 
 rest = tail
 
-A = TypeVar('A')
+def list_gen():
+    return list()
+
+H = TypeVar('H', bound=Hashable)
 B = TypeVar('B')
-C = TypeVar('C')
 D = TypeVar('D')
-
-
-def groupby(iter_: Iterable[A],
-            keyfun: Callable[[A], B] = head,
-            valfun: Callable[[A], C]  = second,
-            default_gen: Callable[[], D] = list,
-            reducer: Callable[[D, C], D] = list_reducer,
-            grouped_init: Callable[[], MutableMapping[B, D]] = dict):
+def groupby(iter_: Iterable,
+            keyfun: Callable[[Any], H] = head,
+            valfun: Callable[[Any], D]  = second,
+            default_gen: Callable[[], B] = list_gen,
+            reducer: Callable[[B, D], B] = list_reducer,
+            grouped_init: Callable[[], MutableMapping[H, B]] = dict) -> MutableMapping[H, B]:
     """
     >>> groupby([(1, 'a'), (2, 'b'), (1, 'aa'), (3, 'c')])
     {1: ['a', 'aa'], 2: ['b'], 3: ['c']}

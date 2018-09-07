@@ -35,10 +35,12 @@ class FloydWarshallAlgDiscrete(object):
         #return 10 * self.qlearning.reward_range[1]
         return np.inf
 
-    def episode_reset(self, episode_n):
+    def episode_reset(self, episode_n, episode_info):
         self.qlearning.episode_reset(episode_n)
         self.goal_state    = None
         self.last_state_idx = None
+        if "goal_obs" in episode_info:
+            self.set_goal_obs(episode_info["goal_obs"])
 
     def reset(self):
         self.qlearning.reset()
@@ -71,17 +73,17 @@ class FloydWarshallAlgDiscrete(object):
                     episode_n = self.qlearning.episode_n,
                     steps = self.qlearning.step)
 
-    def update(self, obs, act, rew, done, info):
+    def update(self, obs, act, rew, done):
         stm1 = self.last_state_idx
         st = self._state_idx_from_obs(obs, act, rew)
         self.last_state_idx = st
 
-        if self.qlearning._hit_goal(obs, act, rew, done, info):
+        if self.qlearning._hit_goal(obs, act, rew, done):
             self.goal_state = stm1
             self.consistency_update()
             return self.qlearning.egreedy(self.policy(obs))
 
-        self.qlearning.update(obs, act, rew, done, info)
+        self.qlearning.update(obs, act, rew, done)
 
         if stm1 is None:
             return self.qlearning.egreedy(self.policy(obs))
@@ -219,17 +221,6 @@ class FloydWarshallVisualizer(QLearningVis):
             grid_shape)
         self.goal_pose = goal_pose
         return ax
-
-
-    def on_new_goal_pose(self, goal_pose):
-        self.visualize_all(ax,
-                           action_value = lambda s, a: (
-                               action_value[s, a] if action_value.size else None),
-                           policy = self.alg.policy,
-                           path_cost = self.alg.path_cost,
-                           net_value = lambda s, a: (
-                               self.alg.net_value(s)[a] if action_value.size else None),
-                           hash_state = self.alg.hash_state)
 
 
 

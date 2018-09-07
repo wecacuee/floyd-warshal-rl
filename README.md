@@ -48,11 +48,13 @@
     CLOSED: [2018-09-04 Tue 22:40]
 *** DONE Compare sample efficiency of Q-learning vs FWRL
     CLOSED: [2018-09-04 Tue 22:41]
-*** TODO Q-learning with state and goal concatenated
-*** TODO visualize value/policy in each case
+*** DONE Q-learning with state and goal concatenated
+    CLOSED: [2018-09-05 Wed 22:09]
+*** DONE visualize value/policy in each case
+    CLOSED: [2018-09-05 Wed 22:09]
+*** TODO Lavaworld
 *** TODO HER
 *** TODO Random mazes
-*** TODO Lavaworld
 ** Experimental setup
 
 *** Problem setup

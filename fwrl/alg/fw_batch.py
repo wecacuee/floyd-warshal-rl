@@ -80,11 +80,13 @@ class FWTabularBatch(object):
         self.reset()
 
     @property
-    def per_edge_cost(self, safety_factor = 10):
+    def per_edge_cost(self):
+        safety_factor = 10
         return self.goal_reward / (safety_factor*self.max_steps)
 
     @property
-    def unexplored_fw_init(self, safety_factor = 10):
+    def unexplored_fw_init(self):
+        safety_factor = 10
         return self.goal_reward / safety_factor
 
     def episode_reset(self, episode_n):

@@ -8,48 +8,55 @@ import operator
 from collections import OrderedDict
 from enum import Enum
 
+from typing import Iterable, Generic, Mapping, TypeVar, Any, Tuple
+
 from umcog import draw
 from umcog.memoize import MEMOIZE_METHOD
 from umcog.confutils import extended_kwprop, KWProp as prop, xargs
 from .metrics import ComputeMetricsFromLogReplay
 
 
-class Space(object):
-    def values():
-        raise NotImplementedError()
+T = TypeVar('T')
 
+class Space(Generic[T]):
     @property
-    def size():
-        raise NotImplementedError()
+    def size(self) -> int:
+        ...
 
-    def sample(self):
-        raise NotImplementedError()
+    def values(self) -> Iterable[T]:
+        ...
 
-    def contains(self, x):
-        raise NotImplementedError()
+    def sample(self) -> T:
+        ...
 
-    def to_jsonable(self, sample_n):
+    def contains(self, x: T) -> bool:
+        ...
+
+    def to_jsonable(self, sample_n: T) -> Any:
         return sample_n
 
-    def from_jsonable(self, sample_n):
+    def from_jsonable(self, sample_n: T) -> Any:
         return sample_n
 
+Obs = TypeVar('Obs')
+Act = TypeVar('Act')
 
-class Problem(object):
-    action_space = Space()
-    observation_space = Space()
-    reward_range = Space()
 
-    def step(self, action):
+class Problem(Generic[Obs, Act]):
+    action_space: Space[Act]
+    observation_space: Space[Obs]
+    reward_range: Space
+
+    def step(self, action: Act) -> Tuple[Obs, float, Obs, Mapping]:
         raise NotImplementedError()
 
-    def observation(self):
+    def observation(self) ->  Obs:
         raise NotImplementedError()
 
-    def reset(self):
+    def reset(self) -> Obs:
         raise NotImplementedError()
 
-    def episode_reset(self, episode_n):
+    def episode_reset(self, episode_n: int) -> Mapping:
         raise NotImplementedError()
 
     def render(self):
@@ -68,24 +75,21 @@ class Problem(object):
         raise NotImplementedError()
 
 
-class Alg(object):
-    action_space = Space()
-    observation_space = Space()
-    reward_range = Space()
+class Alg(Generic[Obs, Act]):
+    action_space: Space[Act]
+    observation_space: Space[Obs]
+    reward_range: Space
 
-    def set_goal_obs(self, goal_obs):
+    def update(self, obs: Obs, act: Act, reward: float) -> Act:
         raise NotImplementedError()
 
-    def update(self, obs, act, reward):
-        raise NotImplementedError()
-
-    def policy(self, obs):
+    def policy(self, obs: Obs) -> Act:
         raise NotImplementedError()
 
     def reset(self):
         raise NotImplementedError()
 
-    def episode_reset(self, episode_n):
+    def episode_reset(self, episode_n: int, episode_info: Mapping):
         raise NotImplementedError()
 
     def close(self):
@@ -320,19 +324,19 @@ def play_episode(alg, prob, observer, episode_n,
                  renderer = Renderer.noop,
                  # 5 million steps in one episode is a lot
                  max_steps = 5000000):
-    prob.episode_reset(episode_n)
-    alg.episode_reset(episode_n)
+    episode_info = prob.episode_reset(episode_n)
+    alg.episode_reset(episode_n, episode_info)
     obs = prob.observation()
     observer.on_new_episode(episode_n=episode_n, obs=obs,
                             goal_obs=prob.goal_obs)
-    act = alg.update(obs, None, None, None, dict())
+    act = alg.update(obs, None, None, None)
     reward = 0
     for step_n in range(max_steps):
         obs, rew, done, info = prob.step(act)
         reward += rew
         observer.on_new_step(obs=obs, rew=rew, action=act, info=info)
 
-        act = alg.update(obs, act, rew, done, info)
+        act = alg.update(obs, act, rew, done)
 
         renderer(prob)
         if done:
@@ -343,8 +347,8 @@ def play_episode(alg, prob, observer, episode_n,
     return reward
 
 
-def play(alg,
-         prob,
+def play(alg: Alg,
+         prob: Problem,
          observer = NOOP_OBSERVER,
          nepisodes = 1,
          logger_factory = default_logger_factory,
@@ -358,7 +362,7 @@ def play(alg,
     """
     logger = logger_factory(__name__)
     if len(logging.root.handlers) >= 2 and hasattr(logging.root.handlers[1], "baseFilename"):
-        logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))
+        logger.info("Logging to file : {}".format(logging.root.handlers[1].baseFilename))  # type: ignore
     observer.set_prob(prob)
     observer.set_alg(alg)
     observer.on_play_start()

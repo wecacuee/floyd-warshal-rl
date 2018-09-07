@@ -3,7 +3,7 @@ from pathlib import Path
 import random
 from PIL import Image, ImageTk
 from tkinter import Tk, Label
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -14,6 +14,7 @@ from collections import namedtuple
 from ..game.play import (Problem)
 
 EpisodeData = namedtuple('EpisodeData', "obs reward done info".split())
+
 
 class GymProblem(Problem):
     def __init__(self, gym, seed = 0):

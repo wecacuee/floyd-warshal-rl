@@ -129,24 +129,28 @@ def tab_algs_grid_worlds(
         seed      = 0,
         nepisodes = 50,
         max_steps = [
-            40,
-            40,
-            400,
-            400,
+            4000,
+            #40,
+            #40,
+            #400,
+            #400,
         ],
         maze_name = [
-            "rect-maze",
-            "i-maze",
-            "4-room-windy-world",
-            "4-room-grid-world",
+            "4-room-lava-world",
+            #"rect-maze",
+            #"i-maze",
+            #"4-room-windy-world",
+            #"4-room-grid-world",
         ],
         rng       = xargs(np.random.RandomState, ["seed"]),
         probs      = xargsonce(
             AgentInGridWorlds_from_maze_names_repeat,
             "rng max_steps maze_name".split()),
         alg_names = ["qlcat", "mb", "ql", "fw"],
-        gw_plays = [qlcat_grid_world_play, mb_grid_world_play,
-                    _ql_grid_world_play, _fw_grid_world_play],
+        gw_plays = [#qlcat_grid_world_play,
+                    #mb_grid_world_play,
+                    #_ql_grid_world_play,
+                    _fw_grid_world_play],
 ):
     return_vals = []
     prob_args = list(zip(maze_name, probs, max_steps))

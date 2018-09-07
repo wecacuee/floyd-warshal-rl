@@ -11,7 +11,7 @@ if USE_MATPLOTLIB:
     from .mpl2cv2 import MPLAsCV
     backend = MPLAsCV()
 else:
-    import cv2 as backend
+    import cv2 as backend  # type: ignore
     white_img = cv2_white_img
     to_ndarray = lambda im : im
     from_ndarray = lambda arr : arr

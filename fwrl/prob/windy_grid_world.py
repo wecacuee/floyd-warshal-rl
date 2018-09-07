@@ -667,6 +667,11 @@ class AgentRenderer:
     default = agent_renderer
     human = partial(agent_renderer, mode = 'human')
 
+
+def episode_info_goal_obs(prob):
+    return dict(goal_obs = prob.goal_obs)
+
+
 class AgentInGridWorld(Problem):
     def __init__(self,
                  grid_world,
@@ -680,7 +685,8 @@ class AgentInGridWorld(Problem):
                  no_render = False,
                  log_file_dir = "/tmp/",
                  reward_range = (1, 10),
-                 renderer = AgentRenderer.default
+                 renderer = AgentRenderer.default,
+                 episode_info_cb = episode_info_goal_obs
     ):
         self.grid_world        = grid_world
         self.goal_pose_gen     = goal_pose_gen
@@ -695,6 +701,7 @@ class AgentInGridWorld(Problem):
         self.log_file_dir      = log_file_dir
         self.observation_space = observation_space # Obs2DSpace
         self.renderer          = agent_renderer
+        self.episode_info_cb   = episode_info
         #Loc2DSpace(
         #    lower_bound = np.array([0, 0]),
         #    upper_bound = np.array(grid_world.shape),
@@ -827,6 +834,7 @@ class AgentInGridWorld(Problem):
         self._done         = False
         self._last_reward  = self.grid_world_goal.free_space_reward
         self.episode_n = 0
+        return self.episode_info_cb(self)
 
     def done(self):
         return self._done
