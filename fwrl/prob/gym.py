@@ -13,11 +13,11 @@ import gym
 from collections import namedtuple
 from ..game.play import (Problem)
 
-EpisodeData = namedtuple('EpisodeData', "obs reward done info".split())
+EpisodeData = namedtuple('EpisodeData', "obs reward done info".split())  # type: ignore
 
 
 class GymProblem(Problem):
-    def __init__(self, gym, seed = 0):
+    def __init__(self, gym: gym.Env, seed: int = 0) -> None:
         self._gym              = gym
         self.action_space      = gym.action_space
         self.observation_space = gym.observation_space
@@ -102,7 +102,7 @@ class RenderShow(RenderIO):
 
 
 class RenderSave(RenderIO):
-    def __init__(self, img_save_dir: Path = Path("rewards")):
+    def __init__(self, img_save_dir: Path = Path("rewards")) -> None:
         self.img_save_dir = img_save_dir
         self.count = 0
 
