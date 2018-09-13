@@ -240,8 +240,8 @@ class AttrPartial(functools.partial):
     def __getattr__(self, k):
         val = self.keywords.get(k, self._get_default(k))
         attrval = (type(self)(val)
-                if isinstance(val, Callable) and not isinstance(val, type(self))
-                else val)
+                   if isinstance(val, Callable) and not self.isinstance(val)
+                   else val)
         self.keywords[k] = attrval
         return attrval
 
@@ -250,7 +250,7 @@ class AttrPartial(functools.partial):
 
     @classmethod
     def isinstance(cls, obj):
-        pass
+        return hasattr(obj, '_attrPartial') and obj._attrPartial is cls._attrPartial
 
 
 def extended_kwprop(func):
