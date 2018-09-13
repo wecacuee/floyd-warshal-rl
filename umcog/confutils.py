@@ -79,6 +79,7 @@ class KWProp:
 
     def __repr__(self):
         return "{self.__class__.__name__}({self.fget})".format(self=self)
+
     @classmethod
     def isinstance(cls, obj):
         return hasattr(obj, '_kwprop') and obj._kwprop is cls._kwprop
@@ -214,6 +215,7 @@ class KWAsAttr:
 
 
 class AttrPartial(functools.partial):
+    _attrPartial = object()
     """
     Lets you access the default kwargs of function as it's attributes.
 
@@ -245,6 +247,10 @@ class AttrPartial(functools.partial):
 
     def __setattr__(self, k, v):
         self.keywords[k] = v
+
+    @classmethod
+    def isinstance(cls, obj):
+        pass
 
 
 def extended_kwprop(func):

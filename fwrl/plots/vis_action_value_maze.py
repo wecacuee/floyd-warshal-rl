@@ -153,5 +153,5 @@ vis_action_value_rnd_maze = partial(
 
 vis_action_value_maze_example = partial(
     vis_action_value_maze,
-    logfile = "/z/home/dhiman/mid//floyd_warshall_rl/201808_7a324cf_fw-4-room-grid-world/08-021509.log",
+    logfile = "/z/home/dhiman/mid//floyd-warshall-rl/201808_7a324cf_fw-4-room-grid-world/08-021509.log",
     image_file_fmt_t= "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png")
