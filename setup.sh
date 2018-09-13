@@ -1,4 +1,4 @@
-export PROJECT_NAME=floyd_warshall_rl
+export PROJECT_NAME=floyd-warshall-rl
 
 THISFILE="${BASH_SOURCE[0]}"
 if [[ -z "$THISFILE" ]]; then

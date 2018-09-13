@@ -4,10 +4,7 @@
 ** Getting started
 *** For first time project setup
 
-    ./onetime_setup.py
     source setup.sh
-
-    To edit configurations, edit `onetime_setup.py`
 
 *** Everytime you return the project run
 
@@ -55,6 +52,7 @@
 *** TODO Lavaworld
 *** TODO HER
 *** TODO Random mazes
+*** TODO modify openai/baselines/her.py
 ** Experimental setup
 
 *** Problem setup

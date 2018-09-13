@@ -18,7 +18,7 @@ from itertools import chain
 import json
 import functools
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Callable
 
 from .memoize import method_memoizer
 
@@ -211,6 +211,40 @@ class KWAsAttr:
             """.split()).format(self=self)
         else:
             return self.__class__.__name__ + "(" + repr(self.__wrapped__) + ")"
+
+
+class AttrPartial(functools.partial):
+    """
+    Lets you access the default kwargs of function as it's attributes.
+
+    >>> def two(one = 1): return one + 1
+    >>> AttrPartial(two).one
+    1
+
+    >>> two2 = AttrPartial(two)
+    >>> two2.one = 2
+    >>> two2()
+    3
+    >>> def one(zero = 0): return zero + 1
+    >>> two3 = AttrPartial(extended_kwprop(two))
+    >>> two3.one = xargs(one)
+    >>> two3.one.zero = -1
+    >>> two3()
+    1
+    """
+    def _get_default(self, k):
+        return func_kwonlydefaults(self.func)[k]
+
+    def __getattr__(self, k):
+        val = self.keywords.get(k, self._get_default(k))
+        attrval = (type(self)(val)
+                if isinstance(val, Callable) and not isinstance(val, type(self))
+                else val)
+        self.keywords[k] = attrval
+        return attrval
+
+    def __setattr__(self, k, v):
+        self.keywords[k] = v
 
 
 def extended_kwprop(func):

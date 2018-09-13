@@ -18,7 +18,7 @@ if sys.version_info.major != 3:
 
 @lru_cache()
 def CONF():
-    return Namespace(project_name="floyd_warshall_rl",
+    return Namespace(project_name="floyd-warshall-rl",
                      mid_dir="/z/home/dhiman/mid/",
                      project_mid_dir="{mid_dir}/{project_name}",
                      mode    = "devel",  # not implemented
@@ -145,20 +145,19 @@ def setup():
         packages=setuptools.find_packages(),
         install_requires=setup_install_requires(conf.install_requires),
         dependency_links=[
-            "http://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl",
+            "https://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl",
             "git+https://github.com/mrahtz/gym-moving-dot#egg=gym_moving_dot-1.0.0"
 
         ],
         python_requires='~=3.6',
         entry_points={
             'console_scripts': [
-                #'floyd_warshall_rl=fwrl.conf.default:main',
                 #'fwrl-4-room-gw=fwrl.conf.four_room_grid_world:main',
                 #'fwrl-qlnet-cartpole=fwrl.conf.qlnet_cartpole:demo',
                 #'fw-batch-gw-play=fwrl.conf.fw_batch_fw:main',
-                'fwrl-tab-algs-gw-play=fwrl.conf.tab_algs_grid_worlds:main',
-                'fwrl-qlnet-scrolling-play=fwrl.conf.qlnet_scrolling_gw:play_rlinnet_scrolling',
-                'fwrl-qlnet-linnet-scrolling-play=fwrl.conf.qlnet_scrolling_gw:play_linnet_scrolling',
+                #'fwrl-tab-algs-gw-play=fwrl.conf.tab_algs_grid_worlds:main',
+                #'fwrl-qlnet-scrolling-play=fwrl.conf.qlnet_scrolling_gw:play_rlinnet_scrolling',
+                #'fwrl-qlnet-linnet-scrolling-play=fwrl.conf.qlnet_scrolling_gw:play_linnet_scrolling',
             ],
         },
         include_package_data = True,
