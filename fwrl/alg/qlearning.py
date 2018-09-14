@@ -45,6 +45,7 @@ class QLearningDiscrete(Alg):
                  egreedy_prob          = partial(egreedy_prob_exp, nepisodes = 200),
                  action_value_momentum = 0.0, # Low momentum changes more frequently
                  discount              = 1.00, # step cost
+                 goal_reward           = 10
     ):
         self.action_space         = action_space
         self.observation_space    = observation_space
@@ -55,6 +56,7 @@ class QLearningDiscrete(Alg):
         assert reward_range[0] >= 0, "Reward range"
         self.init_value           = discount * reward_range[0]
         self.discount             = discount
+        self.goal_reward          = goal_reward
         self.reset()
 
     def episode_reset(self, episode_n, episode_info):
@@ -69,7 +71,7 @@ class QLearningDiscrete(Alg):
         self.episode_n = 0
         self.action_value    = self._default_action_value(0)
         self.hash_state     = dict()
-        self.episode_reset(0)
+        self.episode_reset(0, dict())
 
     def _default_action_value(self, state_size):
         return self.init_value * np.ones((state_size, self.action_space.size))
@@ -129,7 +131,7 @@ class QLearningDiscrete(Alg):
                     episode_n = self.episode_n,
                     steps = self.step)
 
-    def update(self, obs, act, rew, done, info):
+    def update(self, obs, act, rew, done):
         self.step += 1
         # Protocol defined by: game.play:play_episode()
         # - act = alg.policy(obs)
@@ -183,7 +185,7 @@ class QLearningConcatenated(QLearningDiscrete):
         super(QLearningConcatenated, self).reset()
         self.goal_obs = None
 
-    def episode_reset(self, episode_n):
+    def episode_reset(self, episode_n, episode_info):
         # self.action_value[:]= self.init_value
         # Copy everything from QLearningDiscrete.episode_reset except self.action_value
         self.episode_n = episode_n

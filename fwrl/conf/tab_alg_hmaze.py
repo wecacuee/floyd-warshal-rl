@@ -5,10 +5,9 @@ import numpy as np
 from umcog.confutils import xargspartial, xargsonce, xargs, KWProp
 
 from ..alg.common import egreedy_prob_exp
-from ..alg.qlearning import QLearningConcatenated
+from ..alg.qlearning import QLearningConcatenated, QLearningDiscrete
 from ..alg.floyd_warshall_grid import FloydWarshallAlgDiscrete
-from ..game.goal_conditioned import train_episode, test_episode
-from ..game.play import MultiObserver
+from ..game.play import MultiObserver, train_episode, test_episode
 from ..prob.windy_grid_world import (AgentInGridWorld, wrap_step_done)
 from ..plots.vis_action_value_maze import VisMazeActionValueObsFromAlg
 
@@ -41,8 +40,9 @@ qlcat_grid_world_train = partial(
     grid_world_play,
     nepisodes         = 2,
     maze_name         = "h-maze",
-    prob              = xargsonce(AgentInGridWorld.from_maze_name,
-                                  ["maze_name", "goal_pose_gen",
+    shape             = (15, 15),
+    prob              = xargsonce(AgentInGridWorld.from_random_maze,
+                                  ["shape", "goal_pose_gen",
                                    "start_pose_gen", "wrap_step"]),
     goal_pose_gen     = KWProp(
         lambda s: partial(fixed_goal_pose_gen,
@@ -58,9 +58,11 @@ qlcat_grid_world_train = partial(
                                      dict(nepisodes="max_steps")),
     play_episode      = partial(train_episode, max_steps = 40),
     observer          = LogVisMultiObserverXargs,
+    image_file_fmt_t  = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
     visualizer_observer = xargs(VisMazeActionValueObsFromAlg,
-                                ["log_file_dir", "windy_grid_world"]),
-    alg               = xargsonce(QLearningConcatenated,
+                                ["log_file_dir", "windy_grid_world",
+                                 "image_file_fmt_t"]),
+    alg               = xargsonce(QLearningDiscrete,
                                   """action_space observation_space
                                   reward_range rng egreedy_prob""".split()))
 

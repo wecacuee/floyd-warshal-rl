@@ -701,7 +701,7 @@ class AgentInGridWorld(Problem):
         self.log_file_dir      = log_file_dir
         self.observation_space = observation_space # Obs2DSpace
         self.renderer          = agent_renderer
-        self.episode_info_cb   = episode_info
+        self.episode_info_cb   = episode_info_cb
         #Loc2DSpace(
         #    lower_bound = np.array([0, 0]),
         #    upper_bound = np.array(grid_world.shape),

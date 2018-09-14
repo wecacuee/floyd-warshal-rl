@@ -36,7 +36,7 @@ class FloydWarshallAlgDiscrete(object):
         return np.inf
 
     def episode_reset(self, episode_n, episode_info):
-        self.qlearning.episode_reset(episode_n)
+        self.qlearning.episode_reset(episode_n, episode_info)
         self.goal_state    = None
         self.last_state_idx = None
         if "goal_obs" in episode_info:
