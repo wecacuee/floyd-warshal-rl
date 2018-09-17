@@ -18,6 +18,7 @@ from ..game.play  import Renderer, NoOPObserver, MultiObserver
 from ..game.metrics import ComputeMetricsFromLogReplay
 from ..game.goal_conditioned import (
     play_episode as play_goal_conditioned_episode)
+from ..plots.vis_action_value_maze import VisMazeActionValueObsFromAlg
 from .default import (grid_world_play,
                       ql_grid_world_play as _ql_grid_world_play,
                       fw_grid_world_play as _fw_grid_world_play,
@@ -91,12 +92,26 @@ ql_grid_world_play = partial(
         QLearningLogger,
         "logger image_file_fmt log_file_reader".split()))
 
+ql_grid_world_play_viz_maze = partial(
+    _ql_grid_world_play,
+    observer            = NoVisNoLatencyMultiObserver,
+    visualizer_observer = xargs(
+        VisMazeActionValueObsFromAlg,
+        ["log_file_dir", "windy_grid_world"]))
+
 fw_grid_world_play = partial(
     _fw_grid_world_play,
     observer            = NoLatencyMultiObserverXargs,
     visualizer_observer = xargs(
         FloydWarshallLogger,
         "logger image_file_fmt log_file_reader".split()))
+
+fw_grid_world_play_viz_maze = partial(
+    _fw_grid_world_play,
+    observer            = NoVisNoLatencyMultiObserver,
+    visualizer_observer = xargs(
+        VisMazeActionValueObsFromAlg,
+        ["log_file_dir", "windy_grid_world"]))
 
 qlcat_grid_world_play = partial(
     grid_world_play,

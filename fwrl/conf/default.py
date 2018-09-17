@@ -36,7 +36,7 @@ from ..prob.windy_grid_world import (AgentInGridWorld, WindyGridWorld,
                                      AgentVisObserver)
 from ..game.vis_imgs_to_video import ImgsToVideoObs
 
-PROJECT_NAME = "floyd_warshall_rl"
+PROJECT_NAME = "floyd-warshall-rl"
 
 random_state = np.random.RandomState
 

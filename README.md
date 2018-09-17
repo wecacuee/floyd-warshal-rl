@@ -174,7 +174,7 @@ dhiman@lens:.../mid/floyd_warshall_rl$
 3. F(i, l, j) = max_a Q(s, a) - Q(s, a)
 
 * Issues
-** FIXME:Start and goal location outside the maze
+** DONE:Start and goal location outside the maze
   + Run
   ```python
   from fwrl.conf.tab_alg_hmaze import main; main()
@@ -183,3 +183,4 @@ dhiman@lens:.../mid/floyd_warshall_rl$
     The goals and start location are visualized outside the maze. The mazes do
     not have any loops.
   + Example visualization:  /z/home/dhiman/mid//floyd_warshall_rl/201809_04b6e2c_qlcat-h-maze/action_value_on_maze_0_41.png
+  + Real issue: The start and end location were deterministic

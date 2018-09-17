@@ -36,27 +36,30 @@ LogVisMultiObserverXargs = xargs(
     nepisodes""".split())
 
 
-qlcat_grid_world_train = partial(
-    grid_world_play,
-    nepisodes         = 2,
+hmaze_det_train_kwargs = dict(
     maze_name         = "h-maze",
-    shape             = (15, 15),
-    prob              = xargsonce(AgentInGridWorld.from_random_maze,
-                                  ["shape", "goal_pose_gen",
-                                   "start_pose_gen", "wrap_step"]),
+    prob              = xargsonce(AgentInGridWorld.from_maze_name,
+                                  ["maze_name", "start_pose_gen",
+                                   "goal_pose_gen", "wrap_step"]),
+    wrap_step         = wrap_step_done,
     goal_pose_gen     = KWProp(
         lambda s: partial(fixed_goal_pose_gen,
                           iter([(2, 2), (2, 0)]))),
     start_pose_gen     = KWProp(
         lambda s: partial(fixed_start_pose_gen,
                           iter([(0, 0), (0, 2)]))),
-    wrap_step         = wrap_step_done,
+)
+
+qlcat_grid_world_train = partial(
+    grid_world_play,
+    nepisodes         = 2,
+    shape             = (15, 15),
     project_name      = PROJECT_NAME,
     algname           = "qlcat",
     confname          = xargs(hyphenjoin, ["algname", "maze_name"]),
     egreedy_prob      = xargspartial(egreedy_prob_exp,
                                      dict(nepisodes="max_steps")),
-    play_episode      = partial(train_episode, max_steps = 40),
+    play_episode      = partial(train_episode, max_steps = 400),
     observer          = LogVisMultiObserverXargs,
     image_file_fmt_t  = "{self.log_file_dir}/{{tag}}_{{episode}}_{{step}}.png",
     visualizer_observer = xargs(VisMazeActionValueObsFromAlg,
@@ -64,21 +67,26 @@ qlcat_grid_world_train = partial(
                                  "image_file_fmt_t"]),
     alg               = xargsonce(QLearningDiscrete,
                                   """action_space observation_space
-                                  reward_range rng egreedy_prob""".split()))
+                                  reward_range rng egreedy_prob""".split()),
+    **hmaze_det_train_kwargs
+)
+
+
+hmaze_det_test_kwargs = dict(
+    goal_pose_gen     = KWProp(
+        lambda s: partial(fixed_goal_pose_gen,
+                          iter([(2, 2)]))),
+    start_pose_gen     = KWProp(
+        lambda s: partial(fixed_start_pose_gen,
+                          iter([(0, 2)]))))
+
 
 qlcat_grid_world_test = partial(
     qlcat_grid_world_train,
     alg = None,
     nepisodes         = 1,
     play_episode      = partial(test_episode, max_steps = 40),
-    goal_pose_gen     = KWProp(
-        lambda s: partial(fixed_goal_pose_gen,
-                          iter([(2, 2)]))),
-    start_pose_gen     = KWProp(
-        lambda s: partial(fixed_start_pose_gen,
-                          iter([(0, 2)]))),
-
-)
+    **hmaze_det_test_kwargs)
 
 
 def train_and_test(train_fun, test_fun, kw = dict()):

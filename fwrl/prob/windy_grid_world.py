@@ -668,6 +668,10 @@ class AgentRenderer:
     human = partial(agent_renderer, mode = 'human')
 
 
+def episode_info_empty(prob):
+    return dict()
+
+
 def episode_info_goal_obs(prob):
     return dict(goal_obs = prob.goal_obs)
 
