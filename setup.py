@@ -145,9 +145,8 @@ def setup():
         packages=setuptools.find_packages(),
         install_requires=setup_install_requires(conf.install_requires),
         dependency_links=[
-            "https://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl",
+            "https://download.pytorch.org/whl/cu80/torch-0.4.1-cp36-cp36m-linux_x86_64.whl#egg=pytorch-0.4.1",
             "git+https://github.com/mrahtz/gym-moving-dot#egg=gym_moving_dot-1.0.0"
-
         ],
         python_requires='~=3.6',
         entry_points={

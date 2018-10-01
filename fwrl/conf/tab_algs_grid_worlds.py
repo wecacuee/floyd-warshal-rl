@@ -16,8 +16,6 @@ from ..alg.qlearning import QLearningConcatenated
 from ..prob.windy_grid_world import AgentInGridWorld, AgentVisObserver
 from ..game.play  import Renderer, NoOPObserver, MultiObserver
 from ..game.metrics import ComputeMetricsFromLogReplay
-from ..game.goal_conditioned import (
-    play_episode as play_goal_conditioned_episode)
 from ..plots.vis_action_value_maze import VisMazeActionValueObsFromAlg
 from .default import (grid_world_play,
                       ql_grid_world_play as _ql_grid_world_play,
@@ -119,7 +117,6 @@ qlcat_grid_world_play = partial(
     confname          = "qlcat_grid_world_play",
     egreedy_prob      = xargspartial(egreedy_prob_exp,
                                      dict(nepisodes="max_steps")),
-    play_episode      = play_goal_conditioned_episode,
     observer          = NoVisNoLatencyMultiObserver,
     alg               = xargs(QLearningConcatenated,
                               """action_space observation_space
@@ -181,7 +178,6 @@ def tab_algs_grid_worlds(
                 max_steps = max_stps,
                 rng       = rng,
                 nepisodes = nepisodes,
-                play_episode = play_goal_conditioned_episode,
                 #observer  = NoVisNoLatencyMultiObserver,
                 #observer  = xargs(NoOPObserver),
                 #observer = AgentVisHumanMultiObserverXargs,

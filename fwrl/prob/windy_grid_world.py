@@ -611,11 +611,11 @@ def render_block(ax, pose, cellsize, color):
 
 def render_agent(ax, pose, cellsize, color=draw.color_from_rgb((0, 0, 255))):
     render_block(ax, pose, cellsize, color)
-    pose_top_left = pose * cellsize
-    text_color = (255 - np.asarray(color)).tolist()
-    draw.putText(ax, "S", pose_top_left + cellsize * np.array([0.5, 0.6]),
-                 fontScale = cellsize / 2 ,
-                 color=text_color)
+    # pose_top_left = pose * cellsize
+    # text_color = (255 - np.asarray(color)).tolist()
+    # draw.putText(ax, "S", pose_top_left + cellsize * np.array([0.5, 0.6]),
+    #             fontScale = cellsize / 2 ,
+    #             color=text_color)
     return ax
 
 
@@ -653,6 +653,7 @@ def agent_renderer(self, canvas, canvas_gen = canvas_gen, grid_size = 50,
         canvas, self.grid_world_goal, self.pose, grid_size)
     if wait_time != 0 and mode == 'human':
         draw.imshow(self.__class__.__name__, canvas)
+        draw.waitKey(wait_time)
     if self.log_file_dir is not None and mode == 'log':
         draw.imwrite(
             str(
@@ -704,7 +705,7 @@ class AgentInGridWorld(Problem):
         self.no_render         = no_render
         self.log_file_dir      = log_file_dir
         self.observation_space = observation_space # Obs2DSpace
-        self.renderer          = agent_renderer
+        self.renderer          = renderer
         self.episode_info_cb   = episode_info_cb
         #Loc2DSpace(
         #    lower_bound = np.array([0, 0]),
