@@ -34,17 +34,43 @@ def _kwcompose(*fs,
                **kw):
     if len(fs) < 2:
         raise ValueError("Need at least one function to compose")
-    return reduce(apply_one, reversed(fs), kw)
+    return reduce(apply_one, reversed(fs[:-1]), fs[-1](**kw))
 
 
-def kwcompose(*a, **kw):
-    return partial(_kwcompose, *a, **kw)
+def kwcompose(*fs, apply_one=_apply_kw):
+    """
+    >>> def foo(**kw):
+    ...     kw['foo'] = 1
+    ...     kw.setdefault('ran', []).append('foo')
+    ...     return kw
+    >>> def bar(**kw):
+    ...     kw['bar'] = 1
+    ...     kw.setdefault('ran', []).append('bar')
+    ...     return kw
+    >>> foobar = kwcompose(foo, bar)
+    >>> foobar(ran = ['x'])
+    {'ran': ['x', 'bar', 'foo'], 'bar': 1, 'foo': 1}
+    """
+    return partial(_kwcompose, *fs, apply_one=apply_one)
 
 
 def _apply_rev(ret, f):
     return f(ret)
 
 compose = partial(kwcompose, apply_one = _apply_rev)
+"""
+>>> def foo(kw):
+...     kw['foo'] = 1
+...     kw.setdefault('ran', []).append('foo')
+...     return kw
+>>> def bar(**kw):
+...     kw['bar'] = 1
+...     kw.setdefault('ran', []).append('bar')
+...     return kw
+>>> foobar = compose(foo, bar)
+>>> foobar(ran = ['x'])
+{'ran': ['x', 'bar', 'foo'], 'bar': 1, 'foo': 1}
+"""
 
 
 def dictzip(kwiterables : Mapping[Any, Iterable]) -> Iterable[Mapping]:

@@ -5,7 +5,6 @@ from functools import partial
 import numpy as np
 
 from umcog.confutils import extended_kwprop, KWProp, xargsonce, alias
-from umcog.misc import compose
 
 from ..prob.windy_grid_world import AgentInGridWorld, AgentVisObserver
 from ..prob.scrolling_grid_world import AgentInScrollingGW

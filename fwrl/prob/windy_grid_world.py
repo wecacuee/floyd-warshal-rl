@@ -441,6 +441,19 @@ class WindyGridWorld:
                        rng  = prop(lambda s: np.random.RandomState(s.seed)),
                        **kwargs
     ):
+        """
+        >>> agw = AgentInGridWorld.from_maze_name(maze_name = "4-room-grid-world", seed=0)
+        >>> agw.episode_reset(0)
+        {'goal_obs': array([3, 3])}
+        >>> for _ in range(5):
+        ...     obs, rew, done, info = agw.step(agw.action_space.sample())
+        ...     print(obs)
+        [7 8]
+        [7 9]
+        [6 9]
+        [6 8]
+        [6 9]
+        """
         return cls(rng = rng, maze = maze, **kwargs)
 
     @classmethod

@@ -12,7 +12,6 @@ import gym
 import gym_moving_dot
 
 from umcog.confutils import extended_kwprop, KWProp, xargsonce, alias
-from umcog.misc import compose
 
 from ..alg.qlnet import QLearningNetAgent, RLinNet, MLP, QConvNet
 from ..game.logging import LogFileConf
